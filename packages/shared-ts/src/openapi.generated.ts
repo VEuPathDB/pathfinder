@@ -743,51 +743,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/results/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Preview Results
-         * @description Preview step results.
-         *
-         *     Returns a sample of records and total count for the specified step.
-         *     The strategy must have been pushed to WDK first.
-         */
-        post: operations["preview_results_api_v1_results_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/results/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Download Results
-         * @description Get download URL for step results.
-         *
-         *     Creates a temporary result on VEuPathDB and returns a download URL.
-         */
-        post: operations["download_results_api_v1_results_download_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/experiments/": {
         parameters: {
             query?: never;
@@ -1640,8 +1595,6 @@ export type components = {
             model?: string | null;
             /** Reasoningeffort */
             reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
-            /** Referencestrategyid */
-            referenceStrategyId?: string | null;
             /** Mentions */
             mentions?: components["schemas"]["ChatMention"][];
         };
@@ -1870,39 +1823,6 @@ export type components = {
          * @description Dependent parameter values response.
          */
         DependentParamsResponse: components["schemas"]["JSONArray"];
-        /**
-         * DownloadRequest
-         * @description Request to download results.
-         */
-        DownloadRequest: {
-            /**
-             * Strategyid
-             * Format: uuid
-             */
-            strategyId: string;
-            /** Stepid */
-            stepId: string;
-            /**
-             * Format
-             * @default csv
-             */
-            format: string;
-            /** Attributes */
-            attributes?: string[] | null;
-        };
-        /**
-         * DownloadResponse
-         * @description Download response with URL.
-         */
-        DownloadResponse: {
-            /** Downloadurl */
-            downloadUrl: string;
-            /**
-             * Expiresat
-             * Format: date-time
-             */
-            expiresAt: string;
-        };
         /**
          * EnrichmentCompareRequest
          * @description Request to compare enrichment results across experiments.
@@ -2157,10 +2077,10 @@ export type components = {
             countOnlyLeaves: boolean;
             initialDisplayValue?: components["schemas"]["JSONValue"] | null;
             vocabulary?: components["schemas"]["JSONValue"] | null;
-            /** Minvalue */
-            minValue?: number | null;
-            /** Maxvalue */
-            maxValue?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Max */
+            max?: number | null;
             /**
              * Isnumber
              * @default false
@@ -2309,35 +2229,6 @@ export type components = {
              * Format: date-time
              */
             createdAt: string;
-        };
-        /**
-         * PreviewRequest
-         * @description Request to preview results.
-         */
-        PreviewRequest: {
-            /**
-             * Strategyid
-             * Format: uuid
-             */
-            strategyId: string;
-            /** Stepid */
-            stepId: string;
-            /**
-             * Limit
-             * @default 100
-             */
-            limit: number;
-        };
-        /**
-         * PreviewResponse
-         * @description Preview results response.
-         */
-        PreviewResponse: {
-            /** Totalcount */
-            totalCount: number;
-            records: components["schemas"]["JSONArray"];
-            /** Columns */
-            columns: string[];
         };
         /**
          * RecordTypeResponse
@@ -4370,72 +4261,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StepReportRunResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_results_api_v1_results_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PreviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PreviewResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_results_api_v1_results_download_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DownloadRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DownloadResponse"];
                 };
             };
             /** @description Validation Error */
