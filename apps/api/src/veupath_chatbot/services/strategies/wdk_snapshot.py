@@ -20,6 +20,12 @@ from .step_builders import build_steps_data_from_ast
 logger = get_logger(__name__)
 
 
+def extract_wdk_is_saved(payload: JSONObject) -> bool:
+    """Extract ``payload["isSaved"]`` with isinstance guard, defaults False."""
+    raw = payload.get("isSaved") if isinstance(payload, dict) else None
+    return bool(raw) if isinstance(raw, bool) else False
+
+
 def _extract_record_type(wdk_strategy: JSONObject) -> str:
     """Extract the record type (urlSegment) from a WDK strategy payload.
 
@@ -87,36 +93,6 @@ def _extract_estimated_size(step_info: JSONObject) -> int | None:
     if isinstance(value, int):
         return value
     return None
-
-
-def _attach_counts_from_wdk_strategy(
-    steps_data: JSONArray, wdk_strategy: JSONObject
-) -> None:
-    """Enrich local ``steps_data`` with ``estimatedSize`` from the WDK payload.
-
-    WDK's ``steps`` is always a dict keyed by string step-ID.
-
-    :param steps_data: Local steps data to enrich.
-    :param wdk_strategy: WDK strategy with steps dict.
-    """
-    steps_info_raw = wdk_strategy.get("steps")
-    if not isinstance(steps_info_raw, dict) or not steps_info_raw:
-        return
-    steps_info: JSONObject = steps_info_raw
-
-    for step_value in steps_data:
-        if not isinstance(step_value, dict):
-            continue
-        step = as_json_object(step_value)
-        wdk_step_id = step.get("wdkStepId")
-        if wdk_step_id is None:
-            continue
-        step_info_raw = steps_info.get(str(wdk_step_id))
-        if not isinstance(step_info_raw, dict):
-            continue
-        count = _extract_estimated_size(as_json_object(step_info_raw))
-        if count is not None:
-            step["resultCount"] = count
 
 
 def _build_node_from_wdk(

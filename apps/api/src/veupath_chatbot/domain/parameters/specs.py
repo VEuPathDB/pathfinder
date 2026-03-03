@@ -85,3 +85,57 @@ def find_input_step_param(specs: dict[str, ParamSpecNormalized]) -> str | None:
         if spec.param_type == "input-step":
             return spec.name
     return None
+
+
+def find_missing_required_params(
+    param_specs: JSONArray,
+    parameters: JSONObject,
+) -> list[str]:
+    """Find required parameters that are missing or empty in the given values.
+
+    Shared by ``validation.py`` and ``param_validation.py`` to keep the
+    required-check logic in a single place.
+
+    :param param_specs: Raw WDK parameter spec dicts.
+    :param parameters: Parameter values to check.
+    :returns: List of missing required parameter names.
+    """
+    required_specs: list[JSONObject] = []
+    for p in param_specs:
+        if not isinstance(p, dict):
+            continue
+        is_required_raw = p.get("isRequired")
+        allow_empty_raw = p.get("allowEmptyValue")
+        is_required = (
+            bool(is_required_raw) if isinstance(is_required_raw, bool) else False
+        )
+        allow_empty = (
+            bool(allow_empty_raw) if isinstance(allow_empty_raw, bool) else True
+        )
+        if is_required or not allow_empty:
+            required_specs.append(p)
+
+    missing: list[str] = []
+    for spec in required_specs:
+        if not isinstance(spec, dict):
+            continue
+        name_raw = spec.get("name")
+        name = name_raw if isinstance(name_raw, str) else None
+        if not name:
+            continue
+        if name not in parameters:
+            missing.append(name)
+            continue
+        value = parameters.get(name)
+        type_raw = spec.get("type")
+        param_type = (type_raw if isinstance(type_raw, str) else "").lower()
+        if param_type == "multi-pick-vocabulary":
+            if value in (None, "", "[]") or (
+                isinstance(value, list) and len(value) == 0
+            ):
+                missing.append(name)
+            continue
+        if value in (None, "", [], {}):
+            missing.append(name)
+
+    return missing

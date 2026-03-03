@@ -4,55 +4,22 @@ from __future__ import annotations
 
 from typing import cast
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from pydantic import BaseModel, Field
 
-from veupath_chatbot.platform.errors import NotFoundError
+from veupath_chatbot.platform.errors import NotFoundError, ValidationError
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.experiment.store import get_experiment_store
 from veupath_chatbot.services.experiment.types import (
     experiment_summary_to_json,
     experiment_to_json,
 )
-from veupath_chatbot.transport.http.deps import ExperimentDep
+from veupath_chatbot.transport.http.deps import CurrentUser, ExperimentDep
 
 router = APIRouter()
 
 
 # -- Non-parametric routes (must be defined before /{experiment_id}) ----------
-
-
-@router.get("/importable-strategies")
-async def list_importable_strategies(siteId: str) -> list[JSONObject]:
-    """List Pathfinder strategies available for import into experiments."""
-    from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-    from veupath_chatbot.integrations.veupathdb.strategy_api import (
-        is_internal_wdk_strategy_name,
-    )
-
-    api = get_strategy_api(siteId)
-    raw = await api.list_strategies()
-    results: list[JSONObject] = []
-    if not isinstance(raw, list):
-        return results
-    for strat in raw:
-        if not isinstance(strat, dict):
-            continue
-        name = strat.get("name")
-        if isinstance(name, str) and is_internal_wdk_strategy_name(name):
-            continue
-        results.append(
-            {
-                "wdkStrategyId": strat.get("strategyId"),
-                "name": strat.get("name", ""),
-                "recordType": strat.get("recordClassName"),
-                "stepCount": strat.get("leafAndTransformStepCount"),
-                "estimatedSize": strat.get("estimatedSize"),
-                "lastModified": strat.get("lastModified"),
-                "isSaved": strat.get("isSaved", False),
-            }
-        )
-    return results
 
 
 class CreateStrategyRequest(BaseModel):
@@ -68,7 +35,9 @@ class CreateStrategyRequest(BaseModel):
 
 
 @router.post("/create-strategy")
-async def create_strategy(request: CreateStrategyRequest) -> JSONObject:
+async def create_strategy(
+    request: CreateStrategyRequest, user_id: CurrentUser
+) -> JSONObject:
     """Create a WDK strategy from a step tree definition.
 
     Materialises the step tree (creates WDK steps and a strategy) and returns
@@ -80,7 +49,10 @@ async def create_strategy(request: CreateStrategyRequest) -> JSONObject:
     )
 
     if not isinstance(request.step_tree, dict):
-        raise NotFoundError(title="stepTree must be a JSON object")
+        raise ValidationError(
+            title="Invalid step tree",
+            detail="stepTree must be a JSON object",
+        )
 
     api = get_strategy_api(request.site_id)
     root = await _materialize_step_tree(api, request.step_tree, request.record_type)
@@ -105,7 +77,9 @@ async def create_strategy(request: CreateStrategyRequest) -> JSONObject:
 
 
 @router.get("/importable-strategies/{strategy_id}/details")
-async def get_strategy_details(strategy_id: int, siteId: str) -> JSONObject:
+async def get_strategy_details(
+    strategy_id: int, siteId: str, user_id: CurrentUser
+) -> JSONObject:
     """Fetch full strategy step tree for import into the multi-step builder.
 
     The WDK ``GET /strategies/{id}`` response includes:
@@ -202,6 +176,7 @@ async def get_strategy_details(strategy_id: int, siteId: str) -> JSONObject:
 
 @router.get("/")
 async def list_experiments(
+    user_id: CurrentUser,
     siteId: str | None = None,
 ) -> list[JSONObject]:
     """List all experiments, optionally filtered by site."""
@@ -211,7 +186,7 @@ async def list_experiments(
 
 
 @router.get("/{experiment_id}")
-async def get_experiment(exp: ExperimentDep) -> JSONObject:
+async def get_experiment(exp: ExperimentDep, user_id: CurrentUser) -> JSONObject:
     """Get full experiment details including all results."""
     return experiment_to_json(exp)
 
@@ -220,6 +195,7 @@ async def get_experiment(exp: ExperimentDep) -> JSONObject:
 async def update_experiment(
     exp: ExperimentDep,
     request_body: dict[str, object],
+    user_id: CurrentUser,
 ) -> JSONObject:
     """Update experiment metadata (e.g. notes)."""
     if "notes" in request_body:
@@ -232,8 +208,8 @@ async def update_experiment(
     return experiment_to_json(exp)
 
 
-@router.delete("/{experiment_id}")
-async def delete_experiment(exp: ExperimentDep) -> JSONObject:
+@router.delete("/{experiment_id}", status_code=204, response_class=Response)
+async def delete_experiment(exp: ExperimentDep, user_id: CurrentUser) -> Response:
     """Delete an experiment and clean up its WDK strategy."""
     from veupath_chatbot.services.experiment.materialization import (
         cleanup_experiment_strategy,
@@ -243,4 +219,4 @@ async def delete_experiment(exp: ExperimentDep) -> JSONObject:
 
     store = get_experiment_store()
     await store.adelete(exp.id)
-    return {"success": True}
+    return Response(status_code=204)

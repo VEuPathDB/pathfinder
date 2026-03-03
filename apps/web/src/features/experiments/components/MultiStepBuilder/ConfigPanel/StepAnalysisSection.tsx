@@ -1,5 +1,7 @@
 import type { StepAnalysisPhase } from "@pathfinder/shared";
 import { FlaskConical } from "lucide-react";
+import { Checkbox } from "@/lib/components/ui/Checkbox";
+import { Label } from "@/lib/components/ui/Label";
 
 export interface StepAnalysisConfig {
   enabled: boolean;
@@ -51,41 +53,39 @@ export function StepAnalysisSection({
 
   return (
     <div>
-      <label className="flex items-center gap-2 text-xs font-medium text-foreground">
-        <input
-          type="checkbox"
+      <Label className="flex items-center gap-2 text-xs font-normal text-foreground">
+        <Checkbox
           checked={stepAnalysis.enabled}
-          onChange={(e) =>
-            onStepAnalysisChange({ ...stepAnalysis, enabled: e.target.checked })
+          onCheckedChange={(checked) =>
+            onStepAnalysisChange({ ...stepAnalysis, enabled: checked === true })
           }
-          className="rounded border-input"
+          className="h-3.5 w-3.5"
         />
         <FlaskConical className="h-3 w-3 text-primary" />
         Analyze Strategy
-      </label>
+      </Label>
       <p className="mt-0.5 pl-5 text-[10px] text-muted-foreground">
         Evaluate each step, compare operators, measure contributions, and sweep
         parameters to understand your strategy.
       </p>
 
       {stepAnalysis.enabled && (
-        <div className="mt-2 space-y-1.5 pl-5">
+        <div className="mt-2 space-y-2 pl-5">
           {STEP_ANALYSIS_OPTIONS.map((opt) => (
-            <label
+            <Label
               key={opt.phase}
-              className="flex items-start gap-2 text-xs text-foreground"
+              className="flex items-start gap-2 text-xs font-normal text-foreground"
             >
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={stepAnalysis.phases.has(opt.phase)}
-                onChange={() => togglePhase(opt.phase)}
-                className="mt-0.5 rounded border-input"
+                onCheckedChange={() => togglePhase(opt.phase)}
+                className="mt-0.5 h-3.5 w-3.5"
               />
               <div>
                 <span>{opt.label}</span>
                 <p className="text-[10px] text-muted-foreground">{opt.description}</p>
               </div>
-            </label>
+            </Label>
           ))}
         </div>
       )}

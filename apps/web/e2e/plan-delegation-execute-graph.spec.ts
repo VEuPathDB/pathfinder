@@ -1,21 +1,21 @@
 import { test, expect } from "@playwright/test";
 import { gotoHome, sendMessage, openGraphEditor } from "./helpers";
 
-test("plan → delegation draft → build in executor → sub-kani activity → graph view", async ({
+test("delegation draft → build in executor → sub-kani activity → graph view", async ({
   page,
 }) => {
-  // This test exercises a multi-step flow (plan → delegate → execute → graph)
+  // This test exercises a multi-step flow (delegation draft → execute → graph)
   // and can be slow under parallel test load.
   test.slow();
 
   await gotoHome(page);
 
-  // Trigger deterministic delegation draft from mock provider (plan mode).
+  // Trigger deterministic delegation draft from mock provider.
   await sendMessage(page, "please create delegation draft");
 
   // Wait for the mock response to finish streaming first — under parallel
   // test load the API can take 10-20s to start delivering SSE events.
-  await expect(page.getByText("[mock:plan]").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("[mock]").first()).toBeVisible({ timeout: 30_000 });
 
   // The delegation draft is emitted as a planning_artifact *after* the
   // assistant_message event, so it should be available by the time the

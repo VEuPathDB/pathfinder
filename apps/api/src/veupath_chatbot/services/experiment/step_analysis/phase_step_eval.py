@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
 
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.experiment.helpers import ProgressCallback
 from veupath_chatbot.services.experiment.step_analysis._evaluation import (
     _evaluate_single_step,
     _evaluate_tree_against_controls,
@@ -22,8 +22,6 @@ from veupath_chatbot.services.experiment.types import (
     StepEvaluation,
     step_evaluation_to_json,
 )
-
-ProgressCallback = Callable[[JSONObject], Awaitable[None]]
 
 logger = get_logger(__name__)
 

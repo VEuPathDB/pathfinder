@@ -225,9 +225,13 @@ async def client(
     patch_app_db_engine: None,
     db_cleaner: None,
 ) -> AsyncGenerator[httpx.AsyncClient]:
+    from veupath_chatbot.platform.redis import close_redis, init_redis
+
+    await init_redis()
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+    await close_redis()
 
 
 @pytest.fixture

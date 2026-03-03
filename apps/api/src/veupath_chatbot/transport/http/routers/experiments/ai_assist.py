@@ -10,7 +10,9 @@ from fastapi.responses import StreamingResponse
 
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.transport.http.deps import CurrentUser
 from veupath_chatbot.transport.http.schemas.experiments import AiAssistRequest
+from veupath_chatbot.transport.http.sse import SSE_HEADERS
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -26,7 +28,9 @@ logger = get_logger(__name__)
         }
     },
 )
-async def ai_assist(request: AiAssistRequest) -> StreamingResponse:
+async def ai_assist(
+    request: AiAssistRequest, user_id: CurrentUser
+) -> StreamingResponse:
     """AI assistant for the experiment wizard.
 
     Streams a response with tool-use activity (web/literature search, site
@@ -61,9 +65,5 @@ async def ai_assist(request: AiAssistRequest) -> StreamingResponse:
     return StreamingResponse(
         _generate(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers=SSE_HEADERS,
     )

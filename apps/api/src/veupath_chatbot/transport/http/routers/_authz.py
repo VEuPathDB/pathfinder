@@ -2,30 +2,26 @@
 
 from uuid import UUID
 
-from veupath_chatbot.persistence.models import Strategy
-from veupath_chatbot.persistence.repo import StrategyRepository
+from veupath_chatbot.persistence.models import StreamProjection
+from veupath_chatbot.persistence.repositories.stream import StreamRepository
 from veupath_chatbot.platform.errors import ErrorCode, ForbiddenError, NotFoundError
 
 
-async def get_strategy_or_404(
-    strategy_repo: StrategyRepository, strategy_id: UUID
-) -> Strategy:
-    strategy = await strategy_repo.get_by_id(strategy_id)
-    if not strategy:
+async def get_projection_or_404(
+    stream_repo: StreamRepository, stream_id: UUID
+) -> StreamProjection:
+    projection = await stream_repo.get_projection(stream_id)
+    if not projection:
         raise NotFoundError(
             code=ErrorCode.STRATEGY_NOT_FOUND, title="Strategy not found"
         )
-    return strategy
+    return projection
 
 
-def require_strategy_owner(strategy: Strategy, user_id: UUID) -> None:
-    if strategy.user_id != user_id:
+async def get_owned_projection_or_404(
+    stream_repo: StreamRepository, stream_id: UUID, user_id: UUID
+) -> StreamProjection:
+    projection = await get_projection_or_404(stream_repo, stream_id)
+    if not projection.stream or projection.stream.user_id != user_id:
         raise ForbiddenError()
-
-
-async def get_owned_strategy_or_404(
-    strategy_repo: StrategyRepository, strategy_id: UUID, user_id: UUID
-) -> Strategy:
-    strategy = await get_strategy_or_404(strategy_repo, strategy_id)
-    require_strategy_owner(strategy, user_id)
-    return strategy
+    return projection

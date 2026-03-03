@@ -13,12 +13,11 @@ can consume stable rules without re-implementing coercion.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 from veupath_chatbot.domain.parameters._decode_values import decode_values
+from veupath_chatbot.domain.parameters._value_helpers import ParameterValueMixin
 from veupath_chatbot.domain.parameters.specs import ParamSpecNormalized
-from veupath_chatbot.domain.parameters.vocab_utils import flatten_vocab
 from veupath_chatbot.platform.errors import ValidationError
 from veupath_chatbot.platform.types import (
     JSONArray,
@@ -32,7 +31,7 @@ FAKE_ALL_SENTINEL = "@@fake@@"
 
 
 @dataclass(frozen=True)
-class ParameterCanonicalizer:
+class ParameterCanonicalizer(ParameterValueMixin):
     """Canonicalize parameter values using canonical parameter specs."""
 
     specs: dict[str, ParamSpecNormalized]
@@ -145,81 +144,6 @@ class ParameterCanonicalizer:
 
         # Unknown param type: preserve value as-is (best-effort).
         return value
-
-    def _handle_empty(self, spec: ParamSpecNormalized, value: JSONValue) -> JSONValue:
-        if spec.allow_empty_value:
-            return ""
-        if spec.param_type in {"multi-pick-vocabulary", "single-pick-vocabulary"}:
-            self._validate_single_required(spec)
-        return value
-
-    def _validate_multi_count(
-        self, spec: ParamSpecNormalized, values: list[str]
-    ) -> None:
-        if not values and spec.allow_empty_value:
-            return
-        min_count = spec.min_selected_count or 0
-        max_count = spec.max_selected_count
-        if len(values) < min_count:
-            raise ValidationError(
-                title="Invalid parameter value",
-                detail=f"Parameter '{spec.name}' requires at least {min_count} value(s).",
-                errors=[{"param": spec.name, "value": list(values)}],
-            )
-        if max_count is not None and len(values) > max_count:
-            raise ValidationError(
-                title="Invalid parameter value",
-                detail=f"Parameter '{spec.name}' allows at most {max_count} value(s).",
-                errors=[{"param": spec.name, "value": list(values)}],
-            )
-
-    def _validate_single_required(self, spec: ParamSpecNormalized) -> None:
-        if spec.allow_empty_value:
-            return
-        min_count = spec.min_selected_count
-        if min_count is not None and min_count <= 0:
-            return
-        raise ValidationError(
-            title="Invalid parameter value",
-            detail=f"Parameter '{spec.name}' requires a value.",
-            errors=[{"param": spec.name}],
-        )
-
-    def _match_vocab_value(self, spec: ParamSpecNormalized, value: str) -> str:
-        vocab = spec.vocabulary
-        if not vocab:
-            return value
-        value_norm = value.strip() if isinstance(value, str) else str(value)
-
-        def numeric_equivalent(a: str | None, b: str | None) -> bool:
-            if not a or not b:
-                return False
-            try:
-                fa = float(str(a).strip())
-                fb = float(str(b).strip())
-            except Exception:
-                return False
-            if not (math.isfinite(fa) and math.isfinite(fb)):
-                return False
-            return math.isclose(fa, fb, rel_tol=1e-9, abs_tol=1e-12)
-
-        entries = flatten_vocab(vocab, prefer_term=True)
-        for entry in entries:
-            display = entry.get("display")
-            raw_value = entry.get("value")
-            if value_norm == (display or ""):
-                return raw_value or display or value
-            if value_norm == (raw_value or ""):
-                return raw_value or value
-            if numeric_equivalent(value_norm, display):
-                return raw_value or display or value
-            if numeric_equivalent(value_norm, raw_value):
-                return raw_value or value
-        raise ValidationError(
-            title="Invalid parameter value",
-            detail=f"Parameter '{spec.name}' does not accept '{value}'.",
-            errors=[{"param": spec.name, "value": value}],
-        )
 
     def _enforce_leaf_values(
         self, spec: ParamSpecNormalized, values: list[str]
@@ -357,10 +281,3 @@ class ParameterCanonicalizer:
         data = as_json_object(data_value) if isinstance(data_value, dict) else {}
         term = data.get("term")
         return str(term) if isinstance(term, str) else None
-
-    def _stringify(self, value: JSONValue) -> str:
-        if value is None:
-            return ""
-        if isinstance(value, bool):
-            return "true" if value else "false"
-        return str(value)

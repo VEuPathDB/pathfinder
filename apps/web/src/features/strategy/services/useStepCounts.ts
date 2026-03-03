@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useDebouncedCallback } from "use-debounce";
 import type { StrategyPlan } from "@pathfinder/shared";
 
 export type StepCountsResponse = { counts?: Record<string, number | null> };
@@ -28,6 +29,37 @@ export function useStepCounts(args: {
   const lastRequestKeyRef = useRef<string | null>(null);
   const requestIdRef = useRef(0);
 
+  const debouncedFetchCounts = useDebouncedCallback(() => {
+    if (!plan || !planHash) return;
+
+    const stepIdsKey = stepIds.slice().sort().join("|");
+    const requestKey = `${planHash}:${stepIdsKey}:${refreshKey}`;
+    lastRequestKeyRef.current = requestKey;
+    const requestId = (requestIdRef.current += 1);
+
+    const loading: Record<string, number | null | undefined> = {};
+    for (const stepId of stepIds) loading[stepId] = undefined;
+    setStepCounts(loading);
+
+    fetchCounts(siteId, plan)
+      .then((response) => {
+        if (requestId !== requestIdRef.current) return;
+        const counts = response.counts || {};
+        const next: Record<string, number | null> = {};
+        for (const stepId of stepIds) {
+          next[stepId] = counts[stepId] ?? null;
+        }
+        setStepCounts(next);
+      })
+      .catch((err) => {
+        console.error("[useStepCounts]", err);
+        if (requestId !== requestIdRef.current) return;
+        const next: Record<string, number | null> = {};
+        for (const stepId of stepIds) next[stepId] = null;
+        setStepCounts(next);
+      });
+  }, debounceMs);
+
   useEffect(() => {
     if (stepIds.length === 0) return;
 
@@ -47,34 +79,7 @@ export function useStepCounts(args: {
     const requestKey = `${planHash}:${stepIdsKey}:${refreshKey}`;
     if (lastRequestKeyRef.current === requestKey) return;
 
-    const timeout = window.setTimeout(() => {
-      lastRequestKeyRef.current = requestKey;
-      const requestId = (requestIdRef.current += 1);
-
-      const loading: Record<string, number | null | undefined> = {};
-      for (const stepId of stepIds) loading[stepId] = undefined;
-      setStepCounts(loading);
-
-      fetchCounts(siteId, plan)
-        .then((response) => {
-          if (requestId !== requestIdRef.current) return;
-          const counts = response.counts || {};
-          const next: Record<string, number | null> = {};
-          for (const stepId of stepIds) {
-            next[stepId] = counts[stepId] ?? null;
-          }
-          setStepCounts(next);
-        })
-        .catch((err) => {
-          console.error("[useStepCounts]", err);
-          if (requestId !== requestIdRef.current) return;
-          const next: Record<string, number | null> = {};
-          for (const stepId of stepIds) next[stepId] = null;
-          setStepCounts(next);
-        });
-    }, debounceMs);
-
-    return () => window.clearTimeout(timeout);
+    debouncedFetchCounts();
   }, [
     siteId,
     plan,
@@ -84,5 +89,6 @@ export function useStepCounts(args: {
     fetchCounts,
     debounceMs,
     refreshKey,
+    debouncedFetchCounts,
   ]);
 }

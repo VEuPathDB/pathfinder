@@ -4,33 +4,22 @@
 
 import { create } from "zustand";
 import { setAuthTokenGetter } from "@/lib/api/auth";
-import type { ChatMode } from "@pathfinder/shared";
 
 interface SessionState {
   selectedSite: string;
   selectedSiteDisplayName: string;
   strategyId: string | null;
-  planSessionId: string | null;
   authToken: string | null;
   veupathdbSignedIn: boolean;
   veupathdbName: string | null;
   chatIsStreaming: boolean;
 
-  /**
-   * Links plan sessions to strategies they graduated into.
-   * Key = planSessionId, Value = strategyId.
-   * Used by the sidebar to hide graduated plans and show strategy instead.
-   */
-  linkedConversations: Record<string, string>;
-
-  /** Monotonic counter; bump to tell sidebar to refresh. */
-  planListVersion: number;
   /** Monotonic counter; bump to tell sidebar to reload chat preview. */
   chatPreviewVersion: number;
   /** Transient node selection payload from graph -> chat. */
   pendingAskNode: Record<string, unknown> | null;
   /** Prefill content for the message composer. */
-  composerPrefill: { mode: ChatMode; message: string } | null;
+  composerPrefill: { message: string } | null;
 
   /** Whether the VEuPathDB auth token has been refreshed in this session. */
   authRefreshed: boolean;
@@ -40,82 +29,105 @@ interface SessionState {
   setSelectedSite: (siteId: string) => void;
   setSelectedSiteInfo: (siteId: string, displayName: string) => void;
   setStrategyId: (id: string | null) => void;
-  setPlanSessionId: (id: string | null) => void;
   setAuthToken: (token: string | null) => void;
   setVeupathdbAuth: (signedIn: boolean, name?: string | null) => void;
   setChatIsStreaming: (value: boolean) => void;
-  /** Link a plan session to a strategy it graduated into. */
-  linkConversation: (planSessionId: string, strategyId: string) => void;
 
   // Signal setters
-  bumpPlanListVersion: () => void;
   bumpChatPreviewVersion: () => void;
   setPendingAskNode: (payload: Record<string, unknown> | null) => void;
-  setComposerPrefill: (payload: { mode: ChatMode; message: string } | null) => void;
+  setComposerPrefill: (payload: { message: string } | null) => void;
   setAuthRefreshed: (value: boolean) => void;
   setAuthStatusKnown: (value: boolean) => void;
 }
 
 const AUTH_TOKEN_STORAGE_KEY = "pathfinder-auth-token";
-const LINKED_CONVERSATIONS_KEY = "pathfinder-linked-conversations";
+const SELECTED_SITE_KEY = "pathfinder-selected-site";
+const SELECTED_SITE_DISPLAY_KEY = "pathfinder-selected-site-display";
+const STRATEGY_ID_KEY_PREFIX = "pathfinder-strategy-id:";
 
 const getInitialAuthToken = () => {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 };
 
-const getInitialLinkedConversations = (): Record<string, string> => {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(LINKED_CONVERSATIONS_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
-  } catch {
-    return {};
-  }
+const getInitialSelectedSite = () => {
+  if (typeof window === "undefined") return "plasmodb";
+  return window.localStorage.getItem(SELECTED_SITE_KEY) || "plasmodb";
 };
 
-export const useSessionStore = create<SessionState>()((set) => ({
-  selectedSite: "plasmodb",
-  selectedSiteDisplayName: "PlasmoDB",
-  strategyId: null,
-  planSessionId: null,
+const getInitialSelectedSiteDisplayName = () => {
+  if (typeof window === "undefined") return "PlasmoDB";
+  return window.localStorage.getItem(SELECTED_SITE_DISPLAY_KEY) || "PlasmoDB";
+};
+
+const getInitialStrategyId = () => {
+  if (typeof window === "undefined") return null;
+  const site = getInitialSelectedSite();
+  return window.localStorage.getItem(`${STRATEGY_ID_KEY_PREFIX}${site}`);
+};
+
+export const useSessionStore = create<SessionState>()((set, get) => ({
+  selectedSite: getInitialSelectedSite(),
+  selectedSiteDisplayName: getInitialSelectedSiteDisplayName(),
+  strategyId: getInitialStrategyId(),
   authToken: getInitialAuthToken(),
   veupathdbSignedIn: false,
   veupathdbName: null,
   chatIsStreaming: false,
-  linkedConversations: getInitialLinkedConversations(),
 
   // Signals
-  planListVersion: 0,
   chatPreviewVersion: 0,
   pendingAskNode: null,
   composerPrefill: null,
   authRefreshed: false,
   authStatusKnown: false,
 
-  setSelectedSite: (siteId) =>
-    set((s) =>
-      s.selectedSite === siteId
-        ? { selectedSite: siteId }
-        : {
-            selectedSite: siteId,
-            strategyId: null,
-            planSessionId: null,
-          },
-    ),
-  setSelectedSiteInfo: (siteId, displayName) =>
-    set((s) =>
-      s.selectedSite === siteId
-        ? { selectedSite: siteId, selectedSiteDisplayName: displayName }
-        : {
-            selectedSite: siteId,
-            selectedSiteDisplayName: displayName,
-            strategyId: null,
-            planSessionId: null,
-          },
-    ),
-  setStrategyId: (id) => set({ strategyId: id }),
-  setPlanSessionId: (id) => set({ planSessionId: id }),
+  setSelectedSite: (siteId) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(SELECTED_SITE_KEY, siteId);
+    }
+    set((s) => {
+      if (s.selectedSite === siteId) return { selectedSite: siteId };
+      // Restore last-used strategy for the new site.
+      const restored =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem(`${STRATEGY_ID_KEY_PREFIX}${siteId}`)
+          : null;
+      return { selectedSite: siteId, strategyId: restored };
+    });
+  },
+  setSelectedSiteInfo: (siteId, displayName) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(SELECTED_SITE_KEY, siteId);
+      window.localStorage.setItem(SELECTED_SITE_DISPLAY_KEY, displayName);
+    }
+    set((s) => {
+      if (s.selectedSite === siteId) {
+        return { selectedSite: siteId, selectedSiteDisplayName: displayName };
+      }
+      const restored =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem(`${STRATEGY_ID_KEY_PREFIX}${siteId}`)
+          : null;
+      return {
+        selectedSite: siteId,
+        selectedSiteDisplayName: displayName,
+        strategyId: restored,
+      };
+    });
+  },
+  setStrategyId: (id) => {
+    const site = get().selectedSite;
+    if (typeof window !== "undefined") {
+      if (id) {
+        window.localStorage.setItem(`${STRATEGY_ID_KEY_PREFIX}${site}`, id);
+      } else {
+        window.localStorage.removeItem(`${STRATEGY_ID_KEY_PREFIX}${site}`);
+      }
+    }
+    set({ strategyId: id });
+  },
   setAuthToken: (token) => {
     if (typeof window !== "undefined") {
       if (token) {
@@ -129,17 +141,8 @@ export const useSessionStore = create<SessionState>()((set) => ({
   setVeupathdbAuth: (signedIn, name = null) =>
     set({ veupathdbSignedIn: signedIn, veupathdbName: name }),
   setChatIsStreaming: (value) => set({ chatIsStreaming: value }),
-  linkConversation: (planSessionId, strategyId) =>
-    set((s) => {
-      const next = { ...s.linkedConversations, [planSessionId]: strategyId };
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(LINKED_CONVERSATIONS_KEY, JSON.stringify(next));
-      }
-      return { linkedConversations: next };
-    }),
 
   // Signal setters
-  bumpPlanListVersion: () => set((s) => ({ planListVersion: s.planListVersion + 1 })),
   bumpChatPreviewVersion: () =>
     set((s) => ({ chatPreviewVersion: s.chatPreviewVersion + 1 })),
   setPendingAskNode: (payload) => set({ pendingAskNode: payload }),

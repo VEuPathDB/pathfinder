@@ -58,6 +58,14 @@ class CompilationResult:
         }
 
 
+def _extract_wdk_step_id(result: JSONObject) -> int:
+    """Extract and validate a numeric WDK step ID from an API response."""
+    wdk_step_id_value = result.get("id")
+    if not isinstance(wdk_step_id_value, (int, float)):
+        raise ValueError(f"Expected numeric step ID, got {wdk_step_id_value}")
+    return int(wdk_step_id_value)
+
+
 class StrategyCompiler:
     """Compiles strategy AST to WDK API calls."""
 
@@ -217,10 +225,7 @@ class StrategyCompiler:
             parameters=parameters,
             custom_name=step.display_name,
         )
-        wdk_step_id_value = result.get("id")
-        if not isinstance(wdk_step_id_value, (int, float)):
-            raise ValueError(f"Expected numeric step ID, got {wdk_step_id_value}")
-        wdk_step_id = int(wdk_step_id_value)
+        wdk_step_id = _extract_wdk_step_id(result)
 
         self._compiled_steps[step.id] = CompiledStep(
             local_id=step.id,
@@ -258,10 +263,7 @@ class StrategyCompiler:
                 custom_name=step.display_name,
             )
 
-        wdk_step_id_value = result.get("id")
-        if not isinstance(wdk_step_id_value, (int, float)):
-            raise ValueError(f"Expected numeric step ID, got {wdk_step_id_value}")
-        wdk_step_id = int(wdk_step_id_value)
+        wdk_step_id = _extract_wdk_step_id(result)
         self._compiled_steps[step.id] = CompiledStep(
             local_id=step.id,
             wdk_step_id=wdk_step_id,
@@ -318,10 +320,7 @@ class StrategyCompiler:
             record_type=record_type,
             custom_name=step.display_name,
         )
-        wdk_step_id_value = result.get("id")
-        if not isinstance(wdk_step_id_value, (int, float)):
-            raise ValueError(f"Expected numeric step ID, got {wdk_step_id_value}")
-        wdk_step_id = int(wdk_step_id_value)
+        wdk_step_id = _extract_wdk_step_id(result)
 
         self._compiled_steps[step.id] = CompiledStep(
             local_id=step.id,
@@ -416,6 +415,43 @@ class StrategyCompiler:
             )
 
         return normalized
+
+
+async def apply_step_decorations(
+    strategy: StrategyAST,
+    compiled_map: dict[str, int],
+    api: StrategyAPI,
+) -> None:
+    """Apply filters, analyses, and reports to compiled WDK steps.
+
+    Post-compilation step: walks the strategy AST and applies any
+    declared decorations (filters, analyses, reports) to each step's
+    WDK counterpart.
+    """
+    for step in strategy.get_all_steps():
+        wdk_step_id = compiled_map.get(step.id)
+        if wdk_step_id is None:
+            continue
+        for step_filter in step.filters:
+            await api.set_step_filter(
+                step_id=wdk_step_id,
+                filter_name=step_filter.name,
+                value=step_filter.value,
+                disabled=step_filter.disabled,
+            )
+        for analysis in step.analyses:
+            await api.run_step_analysis(
+                step_id=wdk_step_id,
+                analysis_type=analysis.analysis_type,
+                parameters=analysis.parameters,
+                custom_name=analysis.custom_name,
+            )
+        for report in step.reports:
+            await api.run_step_report(
+                step_id=wdk_step_id,
+                report_name=report.report_name,
+                config=report.config,
+            )
 
 
 async def compile_strategy(

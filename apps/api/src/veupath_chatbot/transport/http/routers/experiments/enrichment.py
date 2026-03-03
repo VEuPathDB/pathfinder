@@ -8,7 +8,7 @@ from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.experiment.custom_enrichment import run_custom_enrichment
 from veupath_chatbot.services.experiment.store import get_experiment_store
-from veupath_chatbot.transport.http.deps import ExperimentDep
+from veupath_chatbot.transport.http.deps import CurrentUser, ExperimentDep
 from veupath_chatbot.transport.http.schemas.experiments import (
     CustomEnrichRequest,
     RunEnrichmentRequest,
@@ -22,6 +22,7 @@ logger = get_logger(__name__)
 async def run_enrichment(
     exp: ExperimentDep,
     request: RunEnrichmentRequest,
+    user_id: CurrentUser,
 ) -> list[JSONObject]:
     """Run enrichment analysis on an existing experiment's results."""
     from veupath_chatbot.services.experiment.enrichment import (
@@ -66,6 +67,7 @@ async def run_enrichment(
 async def custom_enrichment(
     exp: ExperimentDep,
     request: CustomEnrichRequest,
+    user_id: CurrentUser,
 ) -> JSONObject:
     """Test enrichment of a custom gene set against the experiment results."""
     return run_custom_enrichment(exp, request.gene_ids, request.gene_set_name)

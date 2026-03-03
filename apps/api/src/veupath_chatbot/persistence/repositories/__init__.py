@@ -1,11 +1,11 @@
 """Per-domain repository modules."""
 
 from .control_set import ControlSetRepository
-from .strategy import StrategyRepository
+from .stream import StreamRepository
 from .user import UserRepository
 
 __all__ = [
     "ControlSetRepository",
-    "StrategyRepository",
+    "StreamRepository",
     "UserRepository",
 ]

@@ -6,18 +6,18 @@ import {
   expectIdleComposer,
 } from "./helpers";
 
-test("execute: send message and see streamed response", async ({ page }) => {
+test("chat: send message and see streamed response", async ({ page }) => {
   await gotoHomeWithStrategy(page);
 
   await sendMessage(page, "hello from e2e");
 
-  await expect(page.getByText(/\[mock:execute\]/).first()).toBeVisible({
+  await expect(page.getByText(/\[mock\]/).first()).toBeVisible({
     timeout: 20_000,
   });
   await expect(page.getByText("hello from e2e", { exact: true }).first()).toBeVisible();
 });
 
-test("execute: stop streaming returns to idle composer", async ({ page }) => {
+test("chat: stop streaming returns to idle composer", async ({ page }) => {
   await gotoHomeWithStrategy(page);
 
   await sendMessage(page, "slow please");
@@ -27,8 +27,8 @@ test("execute: stop streaming returns to idle composer", async ({ page }) => {
   await expectIdleComposer(page);
 });
 
-test("execute: shows error for failed SSE and recovers", async ({ page }) => {
-  // Fail only the first chat request.
+test("chat: shows error for failed POST and recovers", async ({ page }) => {
+  // Fail only the first chat request (the POST that starts the operation).
   await page.route(
     "**/api/v1/chat",
     async (route) => {
@@ -44,12 +44,13 @@ test("execute: shows error for failed SSE and recovers", async ({ page }) => {
   await gotoHomeWithStrategy(page);
 
   await sendMessage(page, "please fail once");
-  await expect(page.getByText("SSE request failed", { exact: false })).toBeVisible();
+  // The error message comes from requestJson; match broadly for HTTP error text.
+  await expect(page.getByText(/HTTP 500|error|failed/i).first()).toBeVisible();
   await expectIdleComposer(page);
 
   // Next request should succeed.
   await sendMessage(page, "hello after failure");
-  await expect(page.getByText(/\[mock:execute\]/).first()).toBeVisible({
+  await expect(page.getByText(/\[mock\]/).first()).toBeVisible({
     timeout: 20_000,
   });
 });

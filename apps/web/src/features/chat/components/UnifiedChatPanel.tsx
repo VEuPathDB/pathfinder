@@ -16,7 +16,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePrevious } from "@/lib/hooks/usePrevious";
 import type {
-  ChatMode,
   Message,
   StrategyPlan,
   ToolCall,
@@ -48,6 +47,7 @@ import { useGraphSnapshot } from "@/features/chat/hooks/useGraphSnapshot";
 import { useUnifiedChatDataLoading } from "@/features/chat/hooks/useUnifiedChatDataLoading";
 import { useUnifiedChatStreamingArgs } from "@/features/chat/components/unifiedChatStreamingArgs";
 import { attachThinkingToLastAssistant } from "@/features/chat/utils/attachThinkingToLastAssistant";
+import { useOperationRecovery } from "@/features/chat/hooks/useOperationRecovery";
 import { X } from "lucide-react";
 
 interface UnifiedChatPanelProps {
@@ -69,9 +69,6 @@ export function UnifiedChatPanel({
   const selectedSiteDisplayName = useSessionStore((s) => s.selectedSiteDisplayName);
   const veupathdbName = useSessionStore((s) => s.veupathdbName);
 
-  // Always execute mode — the backend auto-determines planning vs execution
-  // based on strategy context. Every conversation is backed by a strategy.
-  const chatMode: ChatMode = "execute";
   const firstName = veupathdbName?.split(" ")[0];
   const displayName = selectedSiteDisplayName || siteId;
 
@@ -215,6 +212,7 @@ export function UnifiedChatPanel({
     isStreaming,
     setIsStreaming,
     optimizationProgress,
+    setOptimizationProgress,
   } = useChatStreaming(streamingArgs);
 
   // Sync streaming state globally
@@ -232,19 +230,49 @@ export function UnifiedChatPanel({
   );
 
   // --- Data loading ---
+  const handleStrategyNotFound = useCallback(() => {
+    setStrategyIdGlobal(null);
+  }, [setStrategyIdGlobal]);
+
   useUnifiedChatDataLoading({
-    chatMode,
-    planSessionId: null,
     strategyId,
-    isStreaming: isStreaming,
     sessionRef,
     setMessages,
-    setSessionArtifacts: () => {},
     setApiError,
     setSelectedModelId: models.setSelectedModelId,
     thinking,
-    handleError,
     loadGraph,
+    onStrategyNotFound: handleStrategyNotFound,
+  });
+
+  // --- Operation recovery (reconnect to in-flight ops on refresh) ---
+  useOperationRecovery({
+    strategyId,
+    siteId,
+    isStreaming,
+    setIsStreaming,
+    setMessages,
+    setUndoSnapshots,
+    thinking,
+    currentStrategy,
+    setStrategyId: setStrategyIdGlobal,
+    addStrategy,
+    addExecutedStrategy,
+    setWdkInfo,
+    setStrategy,
+    setStrategyMeta,
+    clearStrategy,
+    addStep,
+    loadGraph,
+    parseToolArguments,
+    parseToolResult,
+    applyGraphSnapshot,
+    getStrategy,
+    attachThinkingToLastAssistant: handleAttachThinking,
+    onApiError: handleError
+      ? (msg: string) => handleError(new Error(msg), msg)
+      : undefined,
+    setOptimizationProgress,
   });
 
   // --- Feature hooks ---
@@ -253,7 +281,6 @@ export function UnifiedChatPanel({
   useResetOnStrategyChange({
     strategyId,
     previousStrategyId,
-    isStreaming: isStreaming,
     resetThinking: thinking.reset,
     setIsStreaming: setIsStreaming,
     setMessages,
@@ -279,7 +306,6 @@ export function UnifiedChatPanel({
         siteId={siteId}
         displayName={displayName}
         firstName={firstName}
-        mode={chatMode}
         isStreaming={isStreaming}
         messages={messages}
         undoSnapshots={undoSnapshots}
@@ -348,7 +374,6 @@ export function UnifiedChatPanel({
           disabled={isStreaming}
           isStreaming={isStreaming}
           onStop={stopStreaming}
-          mode={chatMode}
           models={models.modelCatalog}
           selectedModelId={models.selectedModelId}
           onModelChange={models.setSelectedModelId}

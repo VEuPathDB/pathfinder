@@ -1,5 +1,6 @@
 # VEuPathDB Sites Configuration
-# Base URLs and project ID mappings for all VEuPathDB resources
+# Base URLs and project ID mappings for all VEuPathDB resources.
+# Override this file at runtime with env: VEUPATHDB_SITES_CONFIG=/path/to/your.yaml
 
 sites:
   # Portal (queries across all component sites)

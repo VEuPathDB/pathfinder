@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { FileText, FlaskConical, Square, X } from "lucide-react";
 import type {
   ChatMention,
-  ChatMode,
   ModelCatalogEntry,
   ModelSelection,
   ReasoningEffort,
@@ -19,8 +18,6 @@ import { MentionAutocomplete } from "./message/MentionAutocomplete";
 interface MessageComposerProps {
   onSend: (message: string, mentions?: ChatMention[]) => void;
   disabled?: boolean;
-  /** Current mode — used for composer prefill matching (plan vs execute). */
-  mode?: ChatMode;
   isStreaming?: boolean;
   onStop?: () => void;
   /** Available models from the catalog. */
@@ -40,7 +37,6 @@ interface MessageComposerProps {
 export function MessageComposer({
   onSend,
   disabled,
-  mode = "execute",
   isStreaming = false,
   onStop,
   models = [],
@@ -59,19 +55,19 @@ export function MessageComposer({
   const mentionStartRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Allow external prefill (e.g. from planning mode "Build in executor").
+  // Allow external prefill (e.g. from graph node "Ask about" action).
   const composerPrefill = useSessionStore((s) => s.composerPrefill);
   const setComposerPrefill = useSessionStore((s) => s.setComposerPrefill);
   useEffect(() => {
     if (!composerPrefill) return;
-    if (composerPrefill.mode !== mode) return;
-    const apply = () => {
+    // Defer the state update to avoid synchronous setState in effect body.
+    const id = requestAnimationFrame(() => {
       setMessage(composerPrefill.message);
       setComposerPrefill(null);
-      setTimeout(() => textareaRef.current?.focus(), 0);
-    };
-    apply();
-  }, [composerPrefill, mode, setComposerPrefill]);
+      textareaRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [composerPrefill, setComposerPrefill]);
 
   // Auto-resize textarea
   useEffect(() => {

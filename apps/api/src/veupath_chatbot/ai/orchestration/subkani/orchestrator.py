@@ -13,6 +13,7 @@ from typing import cast
 
 from kani.engines.openai import OpenAIEngine
 from kani.models import ChatMessage, ChatRole
+from shared_py.defaults import DEFAULT_STREAM_NAME
 
 from veupath_chatbot.ai.agents.subtask import SubtaskAgent
 from veupath_chatbot.ai.orchestration.delegation import (
@@ -67,10 +68,10 @@ async def run_subkani_task(
         graph = strategy_session.get_graph(None)
         graph_id = graph.id if graph else None
     if not graph_id:
-        graph = strategy_session.create_graph("Draft Strategy")
+        graph = strategy_session.create_graph(DEFAULT_STREAM_NAME)
         graph_id = graph.id
     elif not strategy_session.get_graph(graph_id):
-        graph = strategy_session.create_graph("Draft Strategy", graph_id=graph_id)
+        graph = strategy_session.create_graph(DEFAULT_STREAM_NAME, graph_id=graph_id)
         graph_id = graph.id
 
     clean_history = [
@@ -289,7 +290,6 @@ async def delegate_strategy_subtasks(
     ) -> JSONObject:
         kind = node.get("kind")
         if kind == "combine":
-            del dependency_context
             combine = node
             input_refs_raw = combine.get("inputs")
             input_refs = input_refs_raw if isinstance(input_refs_raw, list) else []

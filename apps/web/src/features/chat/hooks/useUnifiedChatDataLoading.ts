@@ -1,104 +1,165 @@
-import { useEffect, startTransition } from "react";
+import { useCallback, useEffect, useRef, startTransition } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { getPlanSession, getStrategy } from "@/lib/api/client";
+import { APIError, getStrategy } from "@/lib/api/client";
 import { mergeMessages } from "@/features/chat/utils/mergeMessages";
-import type {
-  ChatMode,
-  Message,
-  PlanningArtifact,
-  StrategyWithMeta,
-} from "@pathfinder/shared";
+import type { Message, StrategyWithMeta } from "@pathfinder/shared";
 import type { useThinkingState } from "@/features/chat/hooks/useThinkingState";
 import type { StreamingSession } from "@/features/chat/streaming/StreamingSession";
-import { usePrevious } from "@/lib/hooks/usePrevious";
+import { useSessionStore } from "@/state/useSessionStore";
 
 interface UseUnifiedChatDataLoadingParams {
-  chatMode: ChatMode;
-  planSessionId: string | null;
   strategyId: string | null;
-  isStreaming: boolean;
   sessionRef: { current: StreamingSession | null };
   setMessages: Dispatch<SetStateAction<Message[]>>;
-  setSessionArtifacts: Dispatch<SetStateAction<PlanningArtifact[]>>;
   setApiError: Dispatch<SetStateAction<string | null>>;
   setSelectedModelId: Dispatch<SetStateAction<string | null>>;
   thinking: ReturnType<typeof useThinkingState>;
-  handleError: (error: unknown, fallback: string) => void;
   loadGraph: (graphId: string) => void;
+  /** Called when the strategy no longer exists (404). */
+  onStrategyNotFound?: () => void;
 }
 
 export function useUnifiedChatDataLoading({
-  chatMode,
-  planSessionId,
   strategyId,
-  isStreaming,
   sessionRef,
   setMessages,
-  setSessionArtifacts,
   setApiError,
   setSelectedModelId,
   thinking,
-  handleError,
   loadGraph,
+  onStrategyNotFound,
 }: UseUnifiedChatDataLoadingParams) {
-  const prevPlanSessionId = usePrevious(planSessionId);
+  const authToken = useSessionStore((s) => s.authToken);
 
-  useEffect(() => {
-    if (chatMode !== "plan") return;
-    if (!planSessionId) {
-      if (isStreaming) return;
-      startTransition(() => setMessages([]));
-      return;
-    }
-    if (isStreaming) return;
+  // Track whether the last load attempt failed (for auth retry).
+  const loadFailedRef = useRef(false);
+  const prevAuthRef = useRef(authToken);
 
-    if (prevPlanSessionId !== planSessionId) {
-      startTransition(() => {
-        setMessages([]);
-        setSessionArtifacts([]);
-        setApiError(null);
+  const applyStrategy = useCallback(
+    (strategy: StrategyWithMeta, targetStrategyId: string) => {
+      const incoming = strategy.messages || [];
+      console.log("[DataLoading] applyStrategy", {
+        strategyId: targetStrategyId,
+        incomingMessages: incoming.length,
+        hasModelId: !!strategy.modelId,
+        hasThinking: !!strategy.thinking,
       });
-      thinking.reset();
-    }
-
-    getPlanSession(planSessionId)
-      .then((ps) => {
-        setMessages((prev) => mergeMessages(prev, ps.messages || []));
-        setSessionArtifacts(ps.planningArtifacts || []);
-        if (ps.modelId) setSelectedModelId(ps.modelId);
-        if (ps.thinking) {
-          thinking.applyThinkingPayload(ps.thinking);
-        }
-      })
-      .catch((error) => {
-        handleError(error, "Failed to load plan.");
+      setMessages((prev) => {
+        const result = mergeMessages(prev, incoming);
+        console.log("[DataLoading] mergeMessages", {
+          prevLen: prev.length,
+          incomingLen: incoming.length,
+          resultLen: result.length,
+        });
+        return result;
       });
+      if (strategy.modelId) setSelectedModelId(strategy.modelId);
+      if (strategy.thinking) {
+        thinking.applyThinkingPayload(strategy.thinking);
+      }
+      if (strategy.id && !sessionRef.current?.snapshotApplied) {
+        loadGraph(strategy.id);
+      }
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatMode, planSessionId, isStreaming]);
+    [setMessages, setSelectedModelId, loadGraph],
+  );
 
+  // Primary data loading effect — runs on strategyId change.
   useEffect(() => {
-    if (chatMode !== "execute") return;
     if (!strategyId) {
-      if (isStreaming) return;
       startTransition(() => setMessages([]));
+      loadFailedRef.current = false;
       return;
     }
-    if (isStreaming) return;
 
+    let cancelled = false;
+
+    const loadWithRetry = async () => {
+      console.log("[DataLoading] loadWithRetry START", { strategyId });
+      try {
+        const strategy = await getStrategy(strategyId);
+        if (cancelled) return;
+        console.log("[DataLoading] getStrategy OK", {
+          strategyId,
+          messageCount: strategy.messages?.length ?? "null/undefined",
+          name: strategy.name,
+        });
+        loadFailedRef.current = false;
+        setApiError(null);
+        applyStrategy(strategy, strategyId);
+      } catch (err) {
+        if (cancelled) return;
+
+        if (err instanceof APIError && err.status === 404) {
+          console.warn("[DataLoading] Strategy not found (404), clearing selection");
+          onStrategyNotFound?.();
+          return;
+        }
+
+        console.warn("[DataLoading] First load FAILED, retrying:", err);
+        try {
+          const strategy = await getStrategy(strategyId);
+          if (cancelled) return;
+          console.log("[DataLoading] Retry OK", {
+            strategyId,
+            messageCount: strategy.messages?.length ?? "null/undefined",
+          });
+          loadFailedRef.current = false;
+          setApiError(null);
+          applyStrategy(strategy, strategyId);
+        } catch (retryErr) {
+          if (cancelled) return;
+          console.error("[DataLoading] Retry ALSO failed:", retryErr);
+          loadFailedRef.current = true;
+          setApiError(
+            retryErr instanceof APIError
+              ? `Could not load conversation (${retryErr.status}).`
+              : "Could not load conversation.",
+          );
+        }
+      }
+    };
+
+    void loadWithRetry();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strategyId]);
+
+  // Auth-token retry: if a previous load failed and a new auth token arrives,
+  // retry loading. This handles the case where the stored JWT expires while
+  // the user is chatting — the first load after refresh fails with 401, then
+  // refreshAuth obtains a new token but the primary effect doesn't re-run.
+  useEffect(() => {
+    if (prevAuthRef.current === authToken) return;
+    prevAuthRef.current = authToken;
+    if (!authToken || !strategyId || !loadFailedRef.current) return;
+
+    console.log("[DataLoading] Retrying after auth token change", { strategyId });
+    loadFailedRef.current = false;
+
+    let cancelled = false;
     getStrategy(strategyId)
-      .then((strategy: StrategyWithMeta) => {
-        setMessages((prev) => mergeMessages(prev, strategy.messages || []));
-        if (strategy.modelId) setSelectedModelId(strategy.modelId);
-        if (!isStreaming && strategy.thinking) {
-          thinking.applyThinkingPayload(strategy.thinking);
-        }
-        if (strategy.id && !sessionRef.current?.snapshotApplied) {
-          loadGraph(strategy.id);
-        }
+      .then((strategy) => {
+        if (cancelled) return;
+        console.log("[DataLoading] Auth-retry OK", {
+          strategyId,
+          messageCount: strategy.messages?.length ?? "null/undefined",
+        });
+        setApiError(null);
+        applyStrategy(strategy, strategyId);
       })
       .catch((err) => {
-        console.warn("[UnifiedChat] Failed to fetch strategy messages:", err);
+        if (cancelled) return;
+        console.error("[DataLoading] Auth-retry failed:", err);
+        loadFailedRef.current = true;
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatMode, strategyId, isStreaming]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, strategyId, applyStrategy, setApiError]);
 }

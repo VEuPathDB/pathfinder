@@ -3,6 +3,7 @@
  */
 
 import { create } from "zustand";
+import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import type { StrategyPlan, StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
 import {
   getRootSteps,
@@ -12,6 +13,14 @@ import {
 } from "@/lib/strategyGraph";
 
 const MAX_HISTORY = 50;
+
+function buildStepsById(steps: StrategyStep[]): Record<string, StrategyStep> {
+  const result: Record<string, StrategyStep> = {};
+  for (const step of steps) {
+    result[step.id] = step;
+  }
+  return result;
+}
 
 const pushHistory = (state: StrategyState, strategy: StrategyWithMeta | null) => {
   if (!strategy) {
@@ -80,7 +89,7 @@ function buildStrategy(
 
   return {
     id: existing?.id || "draft",
-    name: existing?.name || "Draft Strategy",
+    name: existing?.name || DEFAULT_STREAM_NAME,
     siteId: existing?.siteId || "plasmodb",
     recordType: existing?.recordType || steps[0]?.recordType || "gene",
     steps,
@@ -326,13 +335,9 @@ export const useStrategyStore = create<StrategyState>((set, get) => ({
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
       const strategy = history[newIndex];
-      const stepsById: Record<string, StrategyStep> = {};
-      for (const step of strategy.steps) {
-        stepsById[step.id] = step;
-      }
       set({
         strategy,
-        stepsById,
+        stepsById: buildStepsById(strategy.steps),
         historyIndex: newIndex,
       });
     }
@@ -343,13 +348,9 @@ export const useStrategyStore = create<StrategyState>((set, get) => ({
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
       const strategy = history[newIndex];
-      const stepsById: Record<string, StrategyStep> = {};
-      for (const step of strategy.steps) {
-        stepsById[step.id] = step;
-      }
       set({
         strategy,
-        stepsById,
+        stepsById: buildStepsById(strategy.steps),
         historyIndex: newIndex,
       });
     }

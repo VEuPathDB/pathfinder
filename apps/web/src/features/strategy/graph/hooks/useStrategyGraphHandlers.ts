@@ -102,7 +102,8 @@ export function useStrategyGraphHandlers(options: UseStrategyGraphHandlersOption
       search: Parameters<typeof computeOrthologInsert>[0]["search"],
       options: Parameters<typeof computeOrthologInsert>[0]["options"],
     ) => {
-      const selectedId = selectedNodeIds[0]!;
+      const selectedId = selectedNodeIds[0];
+      if (!selectedId) return;
       const stepsList = draftStrategy?.steps || strategy?.steps || [];
       const { newStep, downstreamPatch } = computeOrthologInsert({
         selectedId,

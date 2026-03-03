@@ -1,13 +1,23 @@
-"""SSE event generators for experiment execution."""
+"""Background task launchers for experiment execution — CQRS version.
+
+Events are persisted to Redis Streams. Operations are registered in PostgreSQL.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import copy
-from collections.abc import AsyncIterator, Awaitable, Callable
+import json
+from uuid import UUID, uuid4
 
+from veupath_chatbot.persistence.repositories.stream import StreamRepository
+from veupath_chatbot.persistence.repositories.user import UserRepository
+from veupath_chatbot.persistence.session import async_session_factory
 from veupath_chatbot.platform.logging import get_logger
+from veupath_chatbot.platform.redis import get_redis
+from veupath_chatbot.platform.tasks import spawn
 from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.experiment.helpers import ProgressCallback
 from veupath_chatbot.services.experiment.service import run_experiment
 from veupath_chatbot.services.experiment.types import (
     BatchExperimentConfig,
@@ -15,53 +25,123 @@ from veupath_chatbot.services.experiment.types import (
     ExperimentConfig,
     experiment_to_json,
 )
-from veupath_chatbot.transport.http.sse import sse_stream
 
 logger = get_logger(__name__)
 
+# Synthetic stream for experiment operations (experiments don't have
+# a conversation stream — they share a fixed UUID).
+_EXPERIMENT_STREAM_ID = UUID("00000000-0000-0000-0000-000000000001")
+_EXPERIMENT_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
-def experiment_sse_generator(
-    config: ExperimentConfig,
-) -> AsyncIterator[str]:
-    """SSE event stream for a single experiment execution."""
 
-    async def _producer(send: Callable[[JSONObject], Awaitable[None]]) -> None:
+async def _emit_to_redis(
+    operation_id: str,
+    event_type: str,
+    event_data: JSONObject,
+) -> None:
+    """Emit a single event to the experiment Redis stream."""
+    redis = get_redis()
+    await redis.xadd(
+        f"op:{operation_id}",
+        {
+            "op": operation_id.encode(),
+            "type": event_type.encode(),
+            "data": json.dumps(event_data, default=str).encode(),
+        },
+    )
+
+
+def _make_progress_callback(
+    operation_id: str,
+) -> ProgressCallback:
+    """Build a progress callback that emits events to a Redis stream."""
+    return lambda evt: _emit_to_redis(
+        operation_id,
+        evt.get("type", "experiment_progress")
+        if isinstance(evt, dict)
+        else "experiment_progress",
+        evt.get("data", evt) if isinstance(evt, dict) else evt,
+    )
+
+
+async def _finalize_operation(operation_id: str, *, failed: bool) -> None:
+    """Mark an experiment operation as completed or failed."""
+    async with async_session_factory() as session:
+        repo = StreamRepository(session)
+        if failed:
+            await repo.fail_operation(operation_id)
+        else:
+            await repo.complete_operation(operation_id)
+        await session.commit()
+
+
+async def _register_experiment_operation(operation_id: str, op_type: str) -> None:
+    """Register an experiment operation in the DB before spawning.
+
+    Ensures the experiment stream exists (creates it on first use) and
+    registers the operation so the subscribe endpoint can find it
+    immediately.
+    """
+    async with async_session_factory() as session:
+        repo = StreamRepository(session)
+        stream = await repo.get_by_id(_EXPERIMENT_STREAM_ID)
+        if not stream:
+            user_repo = UserRepository(session)
+            await user_repo.get_or_create(_EXPERIMENT_USER_ID)
+            await repo.create(
+                user_id=_EXPERIMENT_USER_ID,
+                site_id="system",
+                stream_id=_EXPERIMENT_STREAM_ID,
+                name="Experiments",
+            )
+        await repo.register_operation(operation_id, _EXPERIMENT_STREAM_ID, op_type)
+        await session.commit()
+
+
+async def start_experiment(config: ExperimentConfig) -> str:
+    """Launch a single experiment as a background task. Returns operation ID."""
+    operation_id = f"op_{uuid4().hex[:12]}"
+    await _register_experiment_operation(operation_id, "experiment")
+
+    async def _run() -> None:
+        failed = False
         try:
-            result = await run_experiment(config, progress_callback=send)
-            await send(
-                {
-                    "type": "experiment_complete",
-                    "data": experiment_to_json(result),
-                }
+            result = await run_experiment(
+                config,
+                progress_callback=_make_progress_callback(operation_id),
+            )
+            await _emit_to_redis(
+                operation_id,
+                "experiment_complete",
+                experiment_to_json(result),
             )
         except Exception as exc:
+            failed = True
             logger.error("Experiment failed", error=str(exc), exc_info=True)
-            await send(
-                {
-                    "type": "experiment_error",
-                    "data": {"error": str(exc)},
-                }
-            )
+            await _emit_to_redis(operation_id, "experiment_error", {"error": str(exc)})
         finally:
-            await send({"type": "experiment_end", "data": {}})
+            await _emit_to_redis(operation_id, "experiment_end", {})
+            await _finalize_operation(operation_id, failed=failed)
 
-    return sse_stream(_producer, {"experiment_end"})
+    spawn(_run())
+    return operation_id
 
 
-def batch_sse_generator(
-    batch_config: BatchExperimentConfig,
-) -> AsyncIterator[str]:
-    """SSE event stream for cross-organism batch experiments."""
-    from veupath_chatbot.services.experiment.store import get_experiment_store as _store
+async def start_batch_experiment(batch_config: BatchExperimentConfig) -> str:
+    """Launch a batch experiment as a background task. Returns operation ID."""
+    from veupath_chatbot.services.experiment.store import get_experiment_store
 
+    operation_id = f"op_{uuid4().hex[:12]}"
     batch_id = f"batch_{int(asyncio.get_running_loop().time() * 1000)}"
+    await _register_experiment_operation(operation_id, "batch")
 
-    async def _producer(send: Callable[[JSONObject], Awaitable[None]]) -> None:
+    async def _run() -> None:
+        failed = False
         try:
             base = batch_config.base_config
             org_param = batch_config.organism_param_name
-            results = []
-            store = _store()
+            results: list[Experiment] = []
+            store = get_experiment_store()
 
             for target in batch_config.target_organisms:
                 params = dict(base.parameters)
@@ -73,9 +153,11 @@ def batch_sse_generator(
                     search_name=base.search_name,
                     parameters=params,
                     positive_controls=target.positive_controls
-                    or list(base.positive_controls),
+                    if target.positive_controls is not None
+                    else list(base.positive_controls),
                     negative_controls=target.negative_controls
-                    or list(base.negative_controls),
+                    if target.negative_controls is not None
+                    else list(base.negative_controls),
                     controls_search_name=base.controls_search_name,
                     controls_param_name=base.controls_param_name,
                     controls_value_format=base.controls_value_format,
@@ -99,7 +181,10 @@ def batch_sse_generator(
                 )
 
                 try:
-                    exp = await run_experiment(org_config, progress_callback=send)
+                    exp = await run_experiment(
+                        org_config,
+                        progress_callback=_make_progress_callback(operation_id),
+                    )
                     exp.batch_id = batch_id
                     store.save(exp)
                     results.append(exp)
@@ -110,37 +195,38 @@ def batch_sse_generator(
                         error=str(exc),
                     )
 
-            await send(
+            await _emit_to_redis(
+                operation_id,
+                "batch_complete",
                 {
-                    "type": "batch_complete",
-                    "data": {
-                        "batchId": batch_id,
-                        "experiments": [experiment_to_json(e) for e in results],
-                    },
-                }
+                    "batchId": batch_id,
+                    "experiments": [experiment_to_json(e) for e in results],
+                },
             )
         except Exception as exc:
+            failed = True
             logger.error("Batch experiment failed", error=str(exc), exc_info=True)
-            await send(
-                {
-                    "type": "batch_error",
-                    "data": {"error": str(exc)},
-                }
-            )
+            await _emit_to_redis(operation_id, "batch_error", {"error": str(exc)})
+        finally:
+            await _finalize_operation(operation_id, failed=failed)
 
-    return sse_stream(_producer, {"batch_complete", "batch_error"})
+    spawn(_run())
+    return operation_id
 
 
-def benchmark_sse_generator(
+async def start_benchmark(
     base_config: ExperimentConfig,
     control_sets: list[tuple[str, list[str], list[str], str | None, bool]],
-) -> AsyncIterator[str]:
-    """SSE event stream for benchmark suite experiments running in parallel."""
-    from veupath_chatbot.services.experiment.store import get_experiment_store as _store
+) -> str:
+    """Launch a benchmark suite as a background task. Returns operation ID."""
+    from veupath_chatbot.services.experiment.store import get_experiment_store
 
+    operation_id = f"op_{uuid4().hex[:12]}"
     benchmark_id = f"bench_{int(asyncio.get_running_loop().time() * 1000)}"
+    await _register_experiment_operation(operation_id, "benchmark")
 
-    async def _producer(send: Callable[[JSONObject], Awaitable[None]]) -> None:
+    async def _run() -> None:
+        failed = False
         try:
 
             async def _run_one(
@@ -157,11 +243,14 @@ def benchmark_sse_generator(
                 cfg.control_set_id = control_set_id
 
                 try:
-                    exp = await run_experiment(cfg, progress_callback=send)
+                    exp = await run_experiment(
+                        cfg,
+                        progress_callback=_make_progress_callback(operation_id),
+                    )
                     exp.benchmark_id = benchmark_id
                     exp.control_set_label = label
                     exp.is_primary_benchmark = is_primary
-                    store = _store()
+                    store = get_experiment_store()
                     store.save(exp)
                     return exp
                 except Exception as exc:
@@ -178,22 +267,20 @@ def benchmark_sse_generator(
             ]
             results = await asyncio.gather(*tasks)
             completed = [r for r in results if r is not None]
-            await send(
+            await _emit_to_redis(
+                operation_id,
+                "benchmark_complete",
                 {
-                    "type": "benchmark_complete",
-                    "data": {
-                        "benchmarkId": benchmark_id,
-                        "experiments": [experiment_to_json(e) for e in completed],
-                    },
-                }
+                    "benchmarkId": benchmark_id,
+                    "experiments": [experiment_to_json(e) for e in completed],
+                },
             )
         except Exception as exc:
+            failed = True
             logger.error("Benchmark suite failed", error=str(exc), exc_info=True)
-            await send(
-                {
-                    "type": "benchmark_error",
-                    "data": {"error": str(exc)},
-                }
-            )
+            await _emit_to_redis(operation_id, "benchmark_error", {"error": str(exc)})
+        finally:
+            await _finalize_operation(operation_id, failed=failed)
 
-    return sse_stream(_producer, {"benchmark_complete", "benchmark_error"})
+    spawn(_run())
+    return operation_id

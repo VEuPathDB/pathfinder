@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from qdrant_client import AsyncQdrantClient
@@ -72,6 +74,15 @@ class QdrantStore:
             else None,
         )
 
+    @asynccontextmanager
+    async def _connect(self) -> AsyncIterator[AsyncQdrantClient]:
+        """Create and properly close an AsyncQdrantClient."""
+        client = self._client()
+        try:
+            yield client
+        finally:
+            await client.close()
+
     async def ensure_collection(
         self,
         *,
@@ -82,44 +93,44 @@ class QdrantStore:
         """Create collection if missing; validate vector size if present."""
         from qdrant_client.models import Distance, VectorParams
 
-        client = self._client()
-        exists = await client.collection_exists(collection_name=name)
-        if not exists:
-            dist = {
-                "Cosine": Distance.COSINE,
-                "Dot": Distance.DOT,
-                "Euclid": Distance.EUCLID,
-                "Manhattan": Distance.MANHATTAN,
-            }.get(distance)
-            if dist is None:
-                raise ValueError(f"Unsupported distance: {distance}")
-            await client.create_collection(
-                collection_name=name,
-                vectors_config=VectorParams(size=vector_size, distance=dist),
-            )
-            return
+        async with self._connect() as client:
+            exists = await client.collection_exists(collection_name=name)
+            if not exists:
+                dist = {
+                    "Cosine": Distance.COSINE,
+                    "Dot": Distance.DOT,
+                    "Euclid": Distance.EUCLID,
+                    "Manhattan": Distance.MANHATTAN,
+                }.get(distance)
+                if dist is None:
+                    raise ValueError(f"Unsupported distance: {distance}")
+                await client.create_collection(
+                    collection_name=name,
+                    vectors_config=VectorParams(size=vector_size, distance=dist),
+                )
+                return
 
-        info = await client.get_collection(collection_name=name)
-        # Validate vector size to prevent silent corruption.
-        current = info.config.params.vectors
-        # `current` can be either VectorParams or a dict of named vectors.
-        if current is not None:
-            if hasattr(current, "size"):
-                size = int(current.size)
-                if size != int(vector_size):
-                    raise InternalError(
-                        title="Vector store misconfigured",
-                        detail=f"Qdrant collection {name} has vector size {size}, expected {vector_size}",
-                    )
-            elif isinstance(current, dict) and current:
-                any_vec = next(iter(current.values()))
-                if hasattr(any_vec, "size"):
-                    size = int(any_vec.size)
+            info = await client.get_collection(collection_name=name)
+            # Validate vector size to prevent silent corruption.
+            current = info.config.params.vectors
+            # `current` can be either VectorParams or a dict of named vectors.
+            if current is not None:
+                if hasattr(current, "size"):
+                    size = int(current.size)
                     if size != int(vector_size):
                         raise InternalError(
                             title="Vector store misconfigured",
                             detail=f"Qdrant collection {name} has vector size {size}, expected {vector_size}",
                         )
+                elif isinstance(current, dict) and current:
+                    any_vec = next(iter(current.values()))
+                    if hasattr(any_vec, "size"):
+                        size = int(any_vec.size)
+                        if size != int(vector_size):
+                            raise InternalError(
+                                title="Vector store misconfigured",
+                                detail=f"Qdrant collection {name} has vector size {size}, expected {vector_size}",
+                            )
 
     async def upsert(
         self,
@@ -131,7 +142,6 @@ class QdrantStore:
         from qdrant_client.models import PointStruct
         from veupath_chatbot.platform.types import as_json_object
 
-        client = self._client()
         q_points: list[PointStruct] = []
         for p_value in points:
             if not isinstance(p_value, dict):
@@ -169,10 +179,16 @@ class QdrantStore:
                 )
         if not q_points:
             return
-        await client.upsert(collection_name=collection, points=q_points)
+        async with self._connect() as client:
+            await client.upsert(collection_name=collection, points=q_points)
 
     async def get(self, *, collection: str, point_id: str) -> JSONObject | None:
-        client = self._client()
+        async with self._connect() as client:
+            return await self._get_with_client(client, collection, point_id)
+
+    async def _get_with_client(
+        self, client: AsyncQdrantClient, collection: str, point_id: str
+    ) -> JSONObject | None:
         try:
             res = await client.retrieve(collection_name=collection, ids=[point_id])
         except Exception as exc:
@@ -343,29 +359,29 @@ class QdrantStore:
                 must_not=must_not_conditions if must_not_conditions else None,
             )
 
-        client = self._client()
-        # qdrant-client async API uses `query_points` (not `search`) in newer versions.
-        try:
-            hits = await client.query_points(
-                collection_name=collection,
-                query=query_vector,
-                query_filter=f,
-                limit=max(int(limit), 1),
-                with_payload=True,
-            )
-        except Exception as exc:
-            # Most common: 404 missing collection when ingestion hasn't run yet.
-            _maybe_log_qdrant_error("search", collection=collection, error=exc)
-            return []
-        points = hits.points or []
-        return [
-            {
-                "id": str(p.id),
-                "score": float(p.score) if p.score is not None else 0.0,
-                "payload": p.payload or {},
-            }
-            for p in points
-        ]
+        async with self._connect() as client:
+            # qdrant-client async API uses `query_points` (not `search`) in newer versions.
+            try:
+                hits = await client.query_points(
+                    collection_name=collection,
+                    query=query_vector,
+                    query_filter=f,
+                    limit=max(int(limit), 1),
+                    with_payload=True,
+                )
+            except Exception as exc:
+                # Most common: 404 missing collection when ingestion hasn't run yet.
+                _maybe_log_qdrant_error("search", collection=collection, error=exc)
+                return []
+            points = hits.points or []
+            return [
+                {
+                    "id": str(p.id),
+                    "score": float(p.score) if p.score is not None else 0.0,
+                    "payload": p.payload or {},
+                }
+                for p in points
+            ]
 
 
 def _maybe_log_qdrant_error(op: str, *, collection: str, error: Exception) -> None:

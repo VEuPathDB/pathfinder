@@ -26,7 +26,9 @@ paths:
       description: 'Readiness check - is the service ready to accept requests?
 
 
-        In production, this should check database and cache connectivity.'
+        Checks database connectivity and Qdrant availability (if RAG is enabled).
+
+        Returns 503 if any dependency is unreachable.'
       operationId: readiness_check_health_ready_get
       responses:
         '200':
@@ -114,10 +116,7 @@ paths:
       tags:
       - sites
       summary: Get Searches
-      description: 'Get searches available on a site.
-
-
-        Optionally filter by record type.'
+      description: Get searches available on a site, optionally filtered by record type.
       operationId: get_searches_api_v1_sites__siteId__searches_get
       parameters:
       - name: siteId
@@ -510,160 +509,6 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - APIKeyCookie: []
-  /api/v1/plans:
-    get:
-      tags:
-      - plans
-      summary: List Plans
-      operationId: list_plans_api_v1_plans_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: siteId
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Siteid
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PlanSessionSummaryResponse'
-                title: Response List Plans Api V1 Plans Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/plans/open:
-    post:
-      tags:
-      - plans
-      summary: Open Plan
-      operationId: open_plan_api_v1_plans_open_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OpenPlanSessionRequest'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OpenPlanSessionResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - APIKeyCookie: []
-  /api/v1/plans/{planSessionId}:
-    get:
-      tags:
-      - plans
-      summary: Get Plan
-      operationId: get_plan_api_v1_plans__planSessionId__get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: planSessionId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Plansessionid
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlanSessionResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    delete:
-      tags:
-      - plans
-      summary: Delete Plan
-      operationId: delete_plan_api_v1_plans__planSessionId__delete
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: planSessionId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Plansessionid
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties:
-                  type: boolean
-                title: Response Delete Plan Api V1 Plans  Plansessionid  Delete
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    patch:
-      tags:
-      - plans
-      summary: Update Plan
-      operationId: update_plan_api_v1_plans__planSessionId__patch
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: planSessionId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Plansessionid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdatePlanSessionRequest'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlanSessionSummaryResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/strategies:
     get:
       tags:
@@ -1593,12 +1438,7 @@ paths:
       tags:
       - experiments
       summary: Compute Overlap
-      description: 'Compute pairwise gene set overlap between experiments.
-
-
-        For each experiment the result gene set is the union of TP and FP genes.
-
-        Returns Jaccard similarity, shared/unique genes, and membership counts.'
+      description: Compute pairwise gene set overlap between experiments.
       operationId: compute_overlap_api_v1_experiments_overlap_post
       requestBody:
         content:
@@ -1624,12 +1464,7 @@ paths:
       tags:
       - experiments
       summary: Compare Enrichment
-      description: 'Compare enrichment results across experiments.
-
-
-        Builds a term-by-experiment matrix of fold-enrichment scores.
-
-        Optionally filters to a single analysis type.'
+      description: Compare enrichment results across experiments.
       operationId: compare_enrichment_api_v1_experiments_enrichment_compare_post
       requestBody:
         content:
@@ -1750,33 +1585,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/experiments/{experiment_id}/re-evaluate:
-    post:
-      tags:
-      - experiments
-      summary: Re Evaluate Experiment
-      description: Re-run control evaluation against the (possibly modified) strategy.
-      operationId: re_evaluate_experiment_api_v1_experiments__experiment_id__re_evaluate_post
-      parameters:
-      - name: experiment_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Experiment Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/experiments/{experiment_id}/custom-enrich:
     post:
       tags:
@@ -1797,6 +1605,33 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CustomEnrichRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSONObject'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/experiments/{experiment_id}/re-evaluate:
+    post:
+      tags:
+      - experiments
+      summary: Re Evaluate Experiment
+      description: Re-run control evaluation against the (possibly modified) strategy.
+      operationId: re_evaluate_experiment_api_v1_experiments__experiment_id__re_evaluate_post
+      parameters:
+      - name: experiment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Experiment Id
       responses:
         '200':
           description: Successful Response
@@ -2296,18 +2131,18 @@ paths:
       description: Get distribution data for an attribute using filter summary.
       operationId: get_experiment_distribution_api_v1_experiments__experiment_id__results_distributions__attribute_name__get
       parameters:
-      - name: experiment_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Experiment Id
       - name: attribute_name
         in: path
         required: true
         schema:
           type: string
           title: Attribute Name
+      - name: experiment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Experiment Id
       responses:
         '200':
           description: Successful Response
@@ -2750,11 +2585,13 @@ components:
             type: string
           type: array
           title: Positivecontrols
+          nullable: true
         negativeControls:
           items:
             type: string
           type: array
           title: Negativecontrols
+          nullable: true
       type: object
       required:
       - organism
@@ -2821,12 +2658,6 @@ components:
             format: uuid
           - type: 'null'
           title: Strategyid
-        planSessionId:
-          anyOf:
-          - type: string
-            format: uuid
-          - type: 'null'
-          title: Plansessionid
         siteId:
           type: string
           title: Siteid
@@ -2835,13 +2666,6 @@ components:
           maxLength: 200000
           minLength: 1
           title: Message
-        mode:
-          type: string
-          enum:
-          - execute
-          - plan
-          title: Mode
-          default: execute
         provider:
           anyOf:
           - type: string
@@ -3459,9 +3283,6 @@ components:
         mode:
           anyOf:
           - type: string
-            enum:
-            - execute
-            - plan
           - type: 'null'
           title: Mode
         citations:
@@ -3492,36 +3313,6 @@ components:
       - timestamp
       title: MessageResponse
       description: Chat message.
-    OpenPlanSessionRequest:
-      properties:
-        planSessionId:
-          anyOf:
-          - type: string
-            format: uuid
-          - type: 'null'
-          title: Plansessionid
-        siteId:
-          type: string
-          title: Siteid
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
-      type: object
-      required:
-      - siteId
-      title: OpenPlanSessionRequest
-    OpenPlanSessionResponse:
-      properties:
-        planSessionId:
-          type: string
-          format: uuid
-          title: Plansessionid
-      type: object
-      required:
-      - planSessionId
-      title: OpenPlanSessionResponse
     OpenStrategyRequest:
       properties:
         strategyId:
@@ -3891,82 +3682,6 @@ components:
       required:
       - plan
       title: PlanNormalizeResponse
-    PlanSessionResponse:
-      properties:
-        id:
-          type: string
-          format: uuid
-          title: Id
-        siteId:
-          type: string
-          title: Siteid
-        title:
-          type: string
-          title: Title
-        messages:
-          anyOf:
-          - items:
-              $ref: '#/components/schemas/MessageResponse'
-            type: array
-          - type: 'null'
-          title: Messages
-        thinking:
-          anyOf:
-          - $ref: '#/components/schemas/ThinkingResponse'
-          - type: 'null'
-        planningArtifacts:
-          anyOf:
-          - $ref: '#/components/schemas/JSONArray'
-          - type: 'null'
-        modelId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Modelid
-        updatedAt:
-          type: string
-          format: date-time
-          title: Updatedat
-        createdAt:
-          type: string
-          format: date-time
-          title: Createdat
-      type: object
-      required:
-      - id
-      - siteId
-      - title
-      - updatedAt
-      - createdAt
-      title: PlanSessionResponse
-    PlanSessionSummaryResponse:
-      properties:
-        id:
-          type: string
-          format: uuid
-          title: Id
-        siteId:
-          type: string
-          title: Siteid
-        title:
-          type: string
-          title: Title
-        updatedAt:
-          type: string
-          format: date-time
-          title: Updatedat
-        createdAt:
-          type: string
-          format: date-time
-          title: Createdat
-      type: object
-      required:
-      - id
-      - siteId
-      - title
-      - updatedAt
-      - createdAt
-      title: PlanSessionSummaryResponse
     RecordTypeResponse:
       properties:
         name:
@@ -4841,15 +4556,6 @@ components:
       - arguments
       title: ToolCallResponse
       description: Tool call information.
-    UpdatePlanSessionRequest:
-      properties:
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
-      type: object
-      title: UpdatePlanSessionRequest
     UpdateStrategyRequest:
       properties:
         name:

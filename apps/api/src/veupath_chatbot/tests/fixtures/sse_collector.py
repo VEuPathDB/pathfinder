@@ -127,8 +127,8 @@ async def collect_chat_stream(
 ) -> ChatStreamResult:
     """Send a chat request and collect all SSE events.
 
-    Uses the real HTTP endpoint so the full pipeline runs:
-    agent creation → tool dispatch → live WDK calls → event processing → persistence.
+    Uses the CQRS pattern: POST /chat returns 202 with an operationId,
+    then GET /operations/{operationId}/subscribe streams SSE events.
 
     :param client: HTTP client for the request.
     :param message: Chat message to send.
@@ -145,27 +145,52 @@ async def collect_chat_stream(
         payload["strategyId"] = strategy_id
 
     result = ChatStreamResult()
+
+    # Step 1: Start the chat operation.
+    resp = await client.post("/api/v1/chat", json=payload, timeout=timeout)
+    result.http_status = resp.status_code
+    if resp.status_code != 202:
+        result.events.append(
+            SSEEvent(
+                type="http_error",
+                data={"status": resp.status_code, "body": resp.text},
+            )
+        )
+        return result
+
+    body = resp.json()
+    operation_id = body.get("operationId")
+    if not operation_id:
+        result.events.append(
+            SSEEvent(
+                type="http_error", data={"status": 202, "body": "missing operationId"}
+            )
+        )
+        return result
+
+    # Step 2: Subscribe to the operation SSE stream.
     collected = ""
     async with client.stream(
-        "POST",
-        "/api/v1/chat",
-        json=payload,
+        "GET",
+        f"/api/v1/operations/{operation_id}/subscribe",
         timeout=timeout,
-    ) as resp:
-        result.http_status = resp.status_code
-        if resp.status_code != 200:
-            body = ""
-            async for chunk in resp.aiter_text():
-                body += chunk
+    ) as sse_resp:
+        if sse_resp.status_code != 200:
+            raw = ""
+            async for chunk in sse_resp.aiter_text():
+                raw += chunk
             result.events.append(
                 SSEEvent(
-                    type="http_error", data={"status": resp.status_code, "body": body}
+                    type="http_error",
+                    data={"status": sse_resp.status_code, "body": raw},
                 )
             )
             return result
 
-        async for chunk in resp.aiter_text():
+        async for chunk in sse_resp.aiter_text():
             collected += chunk
+            if "event: message_end" in collected:
+                break
 
     result.events = _parse_sse_text(collected)
     return result

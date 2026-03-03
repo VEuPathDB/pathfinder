@@ -1,17 +1,17 @@
 /**
- * Streaming SSE proxy for the /api/v1/chat endpoint.
+ * Proxy for the /api/v1/chat endpoint.
  *
- * Next.js rewrites buffer SSE response bodies — this route handler
- * pipes the upstream response through without buffering.
+ * The backend returns 202 JSON {operationId, strategyId}.
+ * The client subscribes to /operations/{id}/subscribe for SSE events.
  */
 
 import { type NextRequest } from "next/server";
 
-import { proxySSEPost } from "../_proxy";
+import { proxyJsonRequest } from "../_proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  return proxySSEPost(req, "/api/v1/chat");
+  return proxyJsonRequest(req, "/api/v1/chat", { includeBody: true });
 }

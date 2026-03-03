@@ -1,16 +1,16 @@
 import { test, expect } from "@playwright/test";
 import { gotoHome, sendMessage } from "./helpers";
 
-test("plan sessions: create, rename, search, delete", async ({ page }) => {
+test("conversations: create, rename, search, delete", async ({ page }) => {
   await gotoHome(page);
 
   // Use a unique name per test run to avoid cross-contamination from the
   // shared e2e user's accumulated data across repeated test runs.
-  const uniqueTitle = `QA Plan ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const uniqueTitle = `QA Conv ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-  // Send a message to verify streaming works (default mode is plan).
-  await sendMessage(page, "hello plan sessions");
-  await expect(page.locator("text=[mock:plan]").first()).toBeVisible({
+  // Send a message to verify streaming works.
+  await sendMessage(page, "hello conversations");
+  await expect(page.getByText("[mock]").first()).toBeVisible({
     timeout: 30_000,
   });
 

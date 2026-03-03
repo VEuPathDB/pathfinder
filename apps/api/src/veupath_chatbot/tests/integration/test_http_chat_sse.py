@@ -1,9 +1,20 @@
-import json
+"""Integration tests for the chat SSE pipeline (CQRS pattern).
+
+Tests the full flow:
+    POST /chat → 202 + operationId → GET /operations/{id}/subscribe → SSE
+
+All tests use the CQRS fire-and-forget pattern: the chat endpoint accepts
+the request and returns immediately; events are consumed from a Redis-backed
+SSE subscription endpoint.
+"""
+
+from __future__ import annotations
+
+from unittest.mock import patch
 
 import httpx
 import pytest
 
-from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.tests.fixtures.scripted_engine import (
     ScriptedEngineFactory,
     ScriptedToolCall,
@@ -11,90 +22,80 @@ from veupath_chatbot.tests.fixtures.scripted_engine import (
 )
 from veupath_chatbot.tests.fixtures.sse_collector import collect_chat_stream
 
-
-def _parse_sse_events(text: str) -> list[tuple[str, JSONObject]]:
-    events: list[tuple[str, JSONObject]] = []
-    for part in text.split("\n\n"):
-        part = part.strip()
-        if not part:
-            continue
-        lines = [ln for ln in part.split("\n") if ln.strip()]
-        et = None
-        data = None
-        for ln in lines:
-            if ln.startswith("event:"):
-                et = ln[len("event:") :].strip()
-            if ln.startswith("data:"):
-                data = ln[len("data:") :].strip()
-        if et and data is not None:
-            events.append((et, json.loads(data)))
-    return events
+_MOCK_PROVIDER_PATCH = patch(
+    "veupath_chatbot.services.chat.orchestrator._use_mock_chat_provider",
+    return_value=True,
+)
 
 
-async def test_chat_stream_sse_with_mock_provider(
-    authed_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+# ── Mock-provider tests ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_mock_provider_text_only(
+    authed_client: httpx.AsyncClient,
 ) -> None:
-    monkeypatch.setenv("PATHFINDER_CHAT_PROVIDER", "mock")
+    """Mock provider returns deterministic text events via CQRS pipeline."""
+    with _MOCK_PROVIDER_PATCH:
+        result = await collect_chat_stream(
+            authed_client, message="hello", site_id="plasmodb", timeout=30.0
+        )
 
-    payload = {
-        "siteId": "plasmodb",
-        "message": "hello",
-    }
+    assert result.http_status == 202
+    types = result.event_types
 
-    collected = ""
-    async with authed_client.stream("POST", "/api/v1/chat", json=payload) as resp:
-        assert resp.status_code == 200
-        assert resp.headers.get("content-type", "").startswith("text/event-stream")
-
-        async for chunk in resp.aiter_text():
-            collected += chunk
-            if "event: message_end" in collected:
-                break
-
-    events = _parse_sse_events(collected)
-    types = [t for t, _ in events]
     assert "message_start" in types
     assert "assistant_delta" in types
     assert "assistant_message" in types
     assert types[-1] == "message_end"
 
+    # Mock content should echo the message.
+    assert "hello" in result.assistant_content
 
-async def test_execute_stream_can_emit_planning_artifact_with_mock_provider(
-    authed_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+
+@pytest.mark.asyncio
+async def test_mock_provider_planning_artifact(
+    authed_client: httpx.AsyncClient,
 ) -> None:
-    monkeypatch.setenv("PATHFINDER_CHAT_PROVIDER", "mock")
+    """Mock provider emits ``planning_artifact`` event for artifact graph requests."""
+    with _MOCK_PROVIDER_PATCH:
+        result = await collect_chat_stream(
+            authed_client,
+            message="please emit artifact graph",
+            site_id="plasmodb",
+            timeout=30.0,
+        )
 
-    payload = {
-        "siteId": "plasmodb",
-        "message": "please emit artifact",
-    }
+    assert result.http_status == 202
+    types = result.event_types
 
-    collected = ""
-    async with authed_client.stream("POST", "/api/v1/chat", json=payload) as resp:
-        assert resp.status_code == 200
-        async for chunk in resp.aiter_text():
-            collected += chunk
-            if "event: message_end" in collected:
-                break
-
-    events = _parse_sse_events(collected)
-    types = [t for t, _ in events]
     assert "planning_artifact" in types
     assert types[-1] == "message_end"
 
+    # Verify artifact structure.
+    artifact_evt = result.first_event("planning_artifact")
+    assert artifact_evt is not None
+    artifact = artifact_evt.data.get("planningArtifact")
+    assert isinstance(artifact, dict)
+    assert "proposedStrategyPlan" in artifact
 
-# ── Realistic SSE tests using ScriptedKaniEngine ──
+
+# ── Scripted-engine tests (realistic SSE contract) ──────────────────
 
 
-async def test_scripted_engine_text_only_sse_contract(
+@pytest.mark.asyncio
+async def test_text_only_sse_contract(
     authed_client: httpx.AsyncClient,
     scripted_engine_factory: ScriptedEngineFactory,
 ) -> None:
-    """A text-only scripted response produces correct SSE event ordering."""
-    turns = [
-        ScriptedTurn(content="PlasmoDB is a genomics database for Plasmodium species."),
-    ]
-    with scripted_engine_factory(turns):
+    """A text-only response produces correct SSE event ordering."""
+    with scripted_engine_factory(
+        [
+            ScriptedTurn(
+                content="PlasmoDB is a genomics database for Plasmodium species."
+            )
+        ]
+    ):
         result = await collect_chat_stream(
             authed_client,
             message="What is PlasmoDB?",
@@ -102,28 +103,29 @@ async def test_scripted_engine_text_only_sse_contract(
             timeout=30.0,
         )
 
-    assert result.http_status == 200
+    assert result.http_status == 202
     types = result.event_types
-    assert types[0] == "message_start"
+
+    # Core events present.
+    assert "message_start" in types
     assert "assistant_delta" in types
     assert "assistant_message" in types
     assert types[-1] == "message_end"
 
-    # Deltas should come before the final message
+    # Deltas come before the final assistant_message.
     first_delta = types.index("assistant_delta")
     last_message = len(types) - 1 - types[::-1].index("assistant_message")
     assert first_delta < last_message
 
 
-async def test_scripted_engine_with_tool_call_sse_contract(
+@pytest.mark.asyncio
+async def test_tool_call_sse_contract(
     authed_client: httpx.AsyncClient,
     scripted_engine_factory: ScriptedEngineFactory,
 ) -> None:
-    """A scripted response with tool calls produces paired start/end events."""
+    """Tool calls produce paired start/end events in the SSE stream."""
     turns = [
-        ScriptedTurn(
-            tool_calls=[ScriptedToolCall("list_sites", {})],
-        ),
+        ScriptedTurn(tool_calls=[ScriptedToolCall("list_sites", {})]),
         ScriptedTurn(content="There are several VEuPathDB sites available."),
     ]
     with scripted_engine_factory(turns):
@@ -134,20 +136,118 @@ async def test_scripted_engine_with_tool_call_sse_contract(
             timeout=30.0,
         )
 
-    assert result.http_status == 200
+    assert result.http_status == 202
     types = result.event_types
-    assert types[0] == "message_start"
+
+    assert "message_start" in types
     assert types[-1] == "message_end"
 
-    # Tool call events should be paired
+    # Tool calls are paired.
     assert "tool_call_start" in types
     assert "tool_call_end" in types
     tool_pairs = result.tool_calls
     assert len(tool_pairs) >= 1
     assert tool_pairs[0][0].data.get("name") == "list_sites"
 
-    # Final assistant message should follow tool calls
+    # assistant_message follows the last tool_call_end.
     assert "assistant_message" in types
     last_tool_end = len(types) - 1 - types[::-1].index("tool_call_end")
-    first_message_after = types.index("assistant_message")
-    assert first_message_after > last_tool_end
+    first_message = types.index("assistant_message")
+    assert first_message > last_tool_end
+
+
+@pytest.mark.asyncio
+async def test_multi_tool_sse_contract(
+    authed_client: httpx.AsyncClient,
+    scripted_engine_factory: ScriptedEngineFactory,
+) -> None:
+    """Multiple sequential tool calls each produce paired events."""
+    turns = [
+        ScriptedTurn(
+            tool_calls=[ScriptedToolCall("search_for_searches", {"query": "gene"})],
+        ),
+        ScriptedTurn(
+            tool_calls=[
+                ScriptedToolCall(
+                    "create_step",
+                    {
+                        "search_name": "GenesByTaxon",
+                        "record_type": "transcript",
+                        "parameters": {"organism": '["Plasmodium falciparum 3D7"]'},
+                    },
+                )
+            ],
+        ),
+        ScriptedTurn(content="Created a gene search step."),
+    ]
+    with scripted_engine_factory(turns):
+        result = await collect_chat_stream(
+            authed_client,
+            message="Find genes in P. falciparum",
+            site_id="plasmodb",
+            timeout=60.0,
+        )
+
+    assert result.http_status == 202
+    types = result.event_types
+
+    assert "message_start" in types
+    assert types[-1] == "message_end"
+
+    # Should have at least 2 tool call pairs.
+    tool_pairs = result.tool_calls
+    assert len(tool_pairs) >= 2
+    tool_names = [pair[0].data.get("name") for pair in tool_pairs]
+    assert "search_for_searches" in tool_names
+    assert "create_step" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_strategy_id_in_message_start(
+    authed_client: httpx.AsyncClient,
+    scripted_engine_factory: ScriptedEngineFactory,
+) -> None:
+    """The message_start event includes a strategy ID for frontend routing."""
+    with scripted_engine_factory([ScriptedTurn(content="Here is some info.")]):
+        result = await collect_chat_stream(
+            authed_client,
+            message="Tell me something",
+            site_id="plasmodb",
+            timeout=30.0,
+        )
+
+    assert result.http_status == 202
+    assert result.strategy_id is not None
+    assert len(result.strategy_id) > 0
+
+
+@pytest.mark.asyncio
+async def test_cqrs_returns_202_with_operation_id(
+    authed_client: httpx.AsyncClient,
+    scripted_engine_factory: ScriptedEngineFactory,
+) -> None:
+    """POST /chat returns 202 Accepted with an operationId."""
+    with scripted_engine_factory([ScriptedTurn(content="OK")]):
+        resp = await authed_client.post(
+            "/api/v1/chat",
+            json={"siteId": "plasmodb", "message": "hello"},
+            timeout=10.0,
+        )
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert "operationId" in body
+    assert body["operationId"].startswith("op_")
+
+
+@pytest.mark.asyncio
+async def test_unauthenticated_chat_rejected(
+    client: httpx.AsyncClient,
+) -> None:
+    """POST /chat without auth cookie is rejected."""
+    resp = await client.post(
+        "/api/v1/chat",
+        json={"siteId": "plasmodb", "message": "hello"},
+        timeout=10.0,
+    )
+    assert resp.status_code in (401, 403)

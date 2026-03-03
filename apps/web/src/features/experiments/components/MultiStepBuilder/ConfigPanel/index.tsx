@@ -7,7 +7,11 @@ import type {
 import type { RecordAttribute } from "../../../api/crud";
 import type { BenchmarkControlSetInput } from "../../../api/streaming";
 import { Button } from "@/lib/components/ui/Button";
+import { Input } from "@/lib/components/ui/Input";
+import { Label } from "@/lib/components/ui/Label";
+import { ScrollArea } from "@/lib/components/ui/ScrollArea";
 import { AlertTriangle, BarChart3, FlaskConical } from "lucide-react";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { ControlsSection } from "./ControlsSection";
 import { EnrichmentConfigSection } from "./EnrichmentConfigSection";
 import { OptimizationSection } from "./OptimizationSection";
@@ -114,120 +118,138 @@ export function ConfigPanel(props: ConfigPanelProps) {
   return (
     <div
       data-testid="config-panel"
-      className="flex h-full flex-col overflow-y-auto border-l border-border bg-sidebar"
+      className="flex h-full flex-col border-l border-border bg-sidebar"
     >
       <div className="border-b border-border p-4">
         <h3 className="text-sm font-semibold text-foreground">Configuration</h3>
       </div>
 
-      <div className="flex-1 space-y-5 p-4">
-        {/* Name */}
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Experiment Name
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder="Multi-step experiment"
-            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-          />
-        </div>
-
-        {/* Controls */}
-        <ControlsSection
-          siteId={siteId}
-          positiveGenes={positiveGenes}
-          onPositiveGenesChange={onPositiveGenesChange}
-          negativeGenes={negativeGenes}
-          onNegativeGenesChange={onNegativeGenesChange}
-          onOpenControlsModal={onOpenControlsModal}
-          benchmarkMode={benchmarkMode}
-          onBenchmarkModeChange={onBenchmarkModeChange}
-          benchmarkControlSets={benchmarkControlSets}
-          onBenchmarkControlSetsChange={onBenchmarkControlSetsChange}
-        />
-
-        {/* Step Analysis */}
-        <StepAnalysisSection
-          stepAnalysis={stepAnalysis}
-          onStepAnalysisChange={onStepAnalysisChange}
-        />
-
-        {/* Cross-validation */}
-        <div>
-          <label className="flex items-center gap-2 text-xs text-foreground">
-            <input
-              type="checkbox"
-              checked={enableCV}
-              onChange={(e) => onEnableCVChange(e.target.checked)}
-              className="rounded border-input"
+      <ScrollArea className="flex-1">
+        <div className="space-y-1 p-4">
+          {/* Name */}
+          <div className="mb-4">
+            <Label className="mb-1.5 block text-xs text-muted-foreground">
+              Experiment Name
+            </Label>
+            <Input
+              value={name}
+              onChange={(e) => onNameChange(e.target.value)}
+              placeholder="Multi-step experiment"
+              className="h-8 text-sm"
             />
-            Cross-Validation
-          </label>
-          {enableCV && (
-            <div className="mt-1 flex items-center gap-2">
-              <label className="text-[10px] text-muted-foreground">K-Folds:</label>
-              <input
-                type="text"
-                value={kFoldsDraft}
-                onChange={(e) => onKFoldsDraftChange(e.target.value)}
-                onBlur={() => {
-                  const n = parseInt(kFoldsDraft, 10);
-                  if (!isNaN(n) && n >= 2) onKFoldsChange(n);
-                  else onKFoldsDraftChange(String(kFolds));
-                }}
-                className="w-14 rounded border border-input bg-background px-2 py-0.5 text-xs focus:border-primary focus:outline-none"
-              />
+          </div>
+
+          {/* Controls */}
+          <CollapsibleSection title="Controls" defaultOpen>
+            <ControlsSection
+              siteId={siteId}
+              positiveGenes={positiveGenes}
+              onPositiveGenesChange={onPositiveGenesChange}
+              negativeGenes={negativeGenes}
+              onNegativeGenesChange={onNegativeGenesChange}
+              onOpenControlsModal={onOpenControlsModal}
+              benchmarkMode={benchmarkMode}
+              onBenchmarkModeChange={onBenchmarkModeChange}
+              benchmarkControlSets={benchmarkControlSets}
+              onBenchmarkControlSetsChange={onBenchmarkControlSetsChange}
+            />
+          </CollapsibleSection>
+
+          {/* Step Analysis */}
+          <CollapsibleSection title="Step Analysis" defaultOpen={stepAnalysis.enabled}>
+            <StepAnalysisSection
+              stepAnalysis={stepAnalysis}
+              onStepAnalysisChange={onStepAnalysisChange}
+            />
+          </CollapsibleSection>
+
+          {/* Cross-validation */}
+          <CollapsibleSection title="Cross-Validation" defaultOpen={enableCV}>
+            <div>
+              <label className="flex items-center gap-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  checked={enableCV}
+                  onChange={(e) => onEnableCVChange(e.target.checked)}
+                  className="rounded border-input"
+                />
+                Enable Cross-Validation
+              </label>
+              {enableCV && (
+                <div className="mt-2 flex items-center gap-2">
+                  <Label className="text-[10px] text-muted-foreground">K-Folds:</Label>
+                  <Input
+                    value={kFoldsDraft}
+                    onChange={(e) => onKFoldsDraftChange(e.target.value)}
+                    onBlur={() => {
+                      const n = parseInt(kFoldsDraft, 10);
+                      if (!isNaN(n) && n >= 2) onKFoldsChange(n);
+                      else onKFoldsDraftChange(String(kFolds));
+                    }}
+                    className="h-7 w-14 text-xs"
+                  />
+                </div>
+              )}
+            </div>
+          </CollapsibleSection>
+
+          {/* Enrichment */}
+          <CollapsibleSection title="Enrichment" defaultOpen={enrichments.size > 0}>
+            <EnrichmentConfigSection
+              enrichments={enrichments}
+              onToggleEnrichment={onToggleEnrichment}
+            />
+          </CollapsibleSection>
+
+          {/* Tree Optimization Knobs */}
+          <CollapsibleSection
+            title="Optimization"
+            defaultOpen={thresholdKnobs.length > 0 || operatorKnobs.length > 0}
+          >
+            <OptimizationSection
+              thresholdKnobs={thresholdKnobs}
+              onThresholdKnobsChange={onThresholdKnobsChange}
+              operatorKnobs={operatorKnobs}
+              onOperatorKnobsChange={onOperatorKnobsChange}
+              treeOptObjective={treeOptObjective}
+              onTreeOptObjectiveChange={onTreeOptObjectiveChange}
+            />
+          </CollapsibleSection>
+
+          {/* Ranking */}
+          <CollapsibleSection
+            title="Result Ranking"
+            defaultOpen={sortAttribute !== null}
+          >
+            <SortingSection
+              sortAttribute={sortAttribute}
+              onSortAttributeChange={onSortAttributeChange}
+              sortDirection={sortDirection}
+              onSortDirectionChange={onSortDirectionChange}
+              sortableAttributes={sortableAttributes}
+            />
+          </CollapsibleSection>
+
+          {/* Warnings */}
+          {warnings.length > 0 && (
+            <div className="space-y-1 pt-2">
+              {warnings.map((w, i) => (
+                <div
+                  key={i}
+                  className={`flex items-start gap-2 rounded-md border px-2 py-1.5 text-xs ${
+                    w.severity === "error"
+                      ? "border-destructive/30 bg-destructive/5 text-destructive"
+                      : "border-yellow-500/30 bg-yellow-500/5 text-yellow-700 dark:text-yellow-400"
+                  }`}
+                >
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                  {w.message}
+                </div>
+              ))}
             </div>
           )}
         </div>
-
-        {/* Enrichment */}
-        <EnrichmentConfigSection
-          enrichments={enrichments}
-          onToggleEnrichment={onToggleEnrichment}
-        />
-
-        {/* Tree Optimization Knobs */}
-        <OptimizationSection
-          thresholdKnobs={thresholdKnobs}
-          onThresholdKnobsChange={onThresholdKnobsChange}
-          operatorKnobs={operatorKnobs}
-          onOperatorKnobsChange={onOperatorKnobsChange}
-          treeOptObjective={treeOptObjective}
-          onTreeOptObjectiveChange={onTreeOptObjectiveChange}
-        />
-
-        {/* Ranking */}
-        <SortingSection
-          sortAttribute={sortAttribute}
-          onSortAttributeChange={onSortAttributeChange}
-          sortDirection={sortDirection}
-          onSortDirectionChange={onSortDirectionChange}
-          sortableAttributes={sortableAttributes}
-        />
-
-        {/* Warnings */}
-        {warnings.length > 0 && (
-          <div className="space-y-1">
-            {warnings.map((w, i) => (
-              <div
-                key={i}
-                className={`flex items-start gap-2 rounded-md border px-2 py-1.5 text-xs ${
-                  w.severity === "error"
-                    ? "border-destructive/30 bg-destructive/5 text-destructive"
-                    : "border-yellow-500/30 bg-yellow-500/5 text-yellow-700 dark:text-yellow-400"
-                }`}
-              >
-                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-                {w.message}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      </ScrollArea>
 
       {/* Error */}
       {storeError && (

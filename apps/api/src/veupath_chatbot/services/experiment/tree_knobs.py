@@ -12,7 +12,8 @@ import math
 import time
 
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.experiment.helpers import safe_int as _safe_int
 from veupath_chatbot.services.experiment.types import (
     ControlValueFormat,
     OperatorKnob,
@@ -22,18 +23,6 @@ from veupath_chatbot.services.experiment.types import (
 )
 
 logger = get_logger(__name__)
-
-
-def _safe_int(val: JSONValue, default: int = 0) -> int:
-    """Safely convert a JSONValue to int."""
-    if isinstance(val, (int, float)):
-        return int(val)
-    if isinstance(val, str):
-        try:
-            return int(val)
-        except ValueError:
-            return default
-    return default
 
 
 async def optimize_tree_knobs(
@@ -51,7 +40,6 @@ async def optimize_tree_knobs(
     objective: str = "precision_at_50",
     budget: int = 50,
     max_list_size: int | None = None,
-    progress_callback: object | None = None,
 ) -> TreeOptimizationResult:
     """Run Optuna optimization over tree knobs.
 
@@ -222,15 +210,6 @@ def _apply_knobs_recursive(
     secondary = node.get("secondaryInput")
     if isinstance(secondary, dict):
         _apply_knobs_recursive(secondary, threshold_vals, operator_vals)
-
-
-def _extract_k(objective: str) -> int:
-    """Extract K from objective name like 'precision_at_50'."""
-    parts = objective.rsplit("_", 1)
-    try:
-        return int(parts[-1])
-    except ValueError:
-        return 50
 
 
 def _select_metric(

@@ -6,18 +6,19 @@ and optimization result dataclasses, as well as type aliases for callbacks.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.platform.types import JSONValue
+from veupath_chatbot.services.experiment.helpers import ProgressCallback
 from veupath_chatbot.services.experiment.types import (
     OptimizationObjective,
     ParameterType,
 )
 
-ProgressCallback = Callable[[JSONObject], Awaitable[None]]
-"""Async callback that pushes an SSE event dict onto the agent event queue."""
+__all__ = ["ProgressCallback"]  # re-exported for parameter_optimization consumers
+
 
 CancelCheck = Callable[[], bool]
 """Returns True when the optimisation should stop early."""

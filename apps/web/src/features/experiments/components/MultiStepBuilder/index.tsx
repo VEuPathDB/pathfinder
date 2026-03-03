@@ -11,13 +11,22 @@ import {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import ReactFlow, { Background, Controls, MiniMap, Panel } from "reactflow";
-import { ArrowLeft, GitBranch, Import, Plus, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, GitBranch, Import, Plus, RefreshCw, Search, X } from "lucide-react";
 import { CombineOperator, type StrategyStep } from "@pathfinder/shared";
 import { StepNode } from "@/features/strategy/graph/components/StepNode";
 import { CombineStepModal } from "@/features/strategy/graph/components/CombineStepModal";
 import type { PendingCombine } from "@/features/strategy/graph/components/CombineStepModal";
 import { deserializeStrategyToGraph } from "@/lib/strategyGraph";
 import { Button } from "@/lib/components/ui/Button";
+import { Input } from "@/lib/components/ui/Input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/lib/components/ui/Select";
+import { ScrollArea } from "@/lib/components/ui/ScrollArea";
 import { useMultiStepBuilder } from "./useMultiStepBuilder";
 import { ConfigPanel } from "./ConfigPanel";
 import { StrategyImportModal } from "./StrategyImportModal";
@@ -87,9 +96,10 @@ export function MultiStepBuilder({ siteId }: MultiStepBuilderProps) {
 
   useEffect(() => {
     if (nodes.length > 0) {
-      setTimeout(() => {
+      const id = setTimeout(() => {
         reactFlowRef.current?.fitView({ padding: 0.3, duration: 300 });
       }, 50);
+      return () => clearTimeout(id);
     }
   }, [nodes.length]);
 
@@ -164,18 +174,19 @@ export function MultiStepBuilder({ siteId }: MultiStepBuilderProps) {
           </Button>
           <div className="mx-1 h-5 w-px bg-border" />
 
-          {/* Record type selector */}
-          <select
-            value={selectedRecordType}
-            onChange={(e) => handleRecordTypeChange(e.target.value)}
-            className="rounded border border-input bg-background px-2 py-1 text-xs focus:border-primary focus:outline-none"
-          >
-            {recordTypes.map((rt) => (
-              <option key={rt.name} value={rt.name}>
-                {rt.displayName || rt.name}
-              </option>
-            ))}
-          </select>
+          {/* Record type selector — shadcn Select */}
+          <Select value={selectedRecordType} onValueChange={handleRecordTypeChange}>
+            <SelectTrigger className="h-7 w-auto min-w-[120px] gap-1 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {recordTypes.map((rt) => (
+                <SelectItem key={rt.name} value={rt.name}>
+                  {rt.displayName || rt.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <div className="mx-1 h-5 w-px bg-border" />
 
@@ -221,27 +232,30 @@ export function MultiStepBuilder({ siteId }: MultiStepBuilderProps) {
           </span>
         </div>
 
-        {/* Search Picker Dropdown */}
+        {/* Search Picker Panel */}
         {showSearchPicker && (
           <div className="border-b border-border bg-card/50 px-4 py-3">
             <div className="flex items-center gap-2">
               <Search className="h-3.5 w-3.5 text-muted-foreground" />
-              <input
+              <Input
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
                 placeholder="Filter searches..."
-                className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                className="h-7 flex-1 text-xs"
                 autoFocus
               />
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowSearchPicker(false)}
+                onClick={() => {
+                  setShowSearchPicker(false);
+                  setSearchFilter("");
+                }}
               >
-                Done
+                <X className="h-3 w-3" />
               </Button>
             </div>
-            <div className="mt-2 max-h-48 overflow-y-auto">
+            <ScrollArea className="mt-2 max-h-48">
               {searches.length === 0 && (
                 <p className="py-2 text-center text-xs text-muted-foreground">
                   {searchFilter ? "No searches match filter" : "Loading searches..."}
@@ -261,7 +275,7 @@ export function MultiStepBuilder({ siteId }: MultiStepBuilderProps) {
                   <span className="ml-2 text-muted-foreground">{search.name}</span>
                 </button>
               ))}
-            </div>
+            </ScrollArea>
           </div>
         )}
 

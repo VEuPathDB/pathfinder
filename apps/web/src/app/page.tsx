@@ -17,7 +17,15 @@ import { Button } from "@/lib/components/ui/Button";
 import { useToasts } from "@/app/hooks/useToasts";
 import { useSidebarResize } from "@/app/hooks/useSidebarResize";
 import { useBuildStrategy } from "@/features/strategy/hooks/useBuildStrategy";
-import { FlaskConical, Loader2, MessageCircle, Settings, X } from "lucide-react";
+import {
+  AlertTriangle,
+  FlaskConical,
+  Loader2,
+  MessageCircle,
+  RefreshCw,
+  Settings,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { CompactStrategyView } from "@/features/strategy/graph/components/CompactStrategyView";
 import { SettingsPage } from "@/features/settings/components/SettingsPage";
@@ -27,13 +35,12 @@ import { useSiteTheme } from "@/features/sites/hooks/useSiteTheme";
 export default function HomePage() {
   const { selectedSite, setSelectedSite } = useSessionStore();
   const setStrategyId = useSessionStore((state) => state.setStrategyId);
-  const setPlanSessionId = useSessionStore((state) => state.setPlanSessionId);
   const selectedSiteDisplayName = useSessionStore(
     (state) => state.selectedSiteDisplayName,
   );
   const veupathdbSignedIn = useSessionStore((state) => state.veupathdbSignedIn);
   const setAuthToken = useSessionStore((state) => state.setAuthToken);
-  const { authLoading } = useAuthCheck();
+  const { authLoading, apiError, retry: retryAuth } = useAuthCheck();
   useSiteTheme(selectedSite);
   const strategyId = useSessionStore((state) => state.strategyId);
   const { strategy } = useStrategyStore();
@@ -58,10 +65,9 @@ export default function HomePage() {
   useEffect(() => {
     if (prevSite && prevSite !== selectedSite) {
       setStrategyId(null);
-      setPlanSessionId(null);
       clearStrategy();
     }
-  }, [selectedSite, prevSite, setStrategyId, setPlanSessionId, clearStrategy]);
+  }, [selectedSite, prevSite, setStrategyId, clearStrategy]);
 
   const handleSiteChange = useCallback(
     (nextSite: string) => {
@@ -123,6 +129,22 @@ export default function HomePage() {
     );
   }
 
+  if (apiError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-background text-foreground">
+        <AlertTriangle className="h-10 w-10 text-destructive" />
+        <div className="text-center">
+          <p className="text-sm font-medium">Unable to connect to the API</p>
+          <p className="mt-1 max-w-sm text-xs text-muted-foreground">{apiError}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={retryAuth}>
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
       <LoginModal
@@ -138,7 +160,7 @@ export default function HomePage() {
         actions={
           <div className="flex items-center gap-1">
             <span
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
               aria-current="page"
             >
               <MessageCircle className="h-3.5 w-3.5" aria-hidden />

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { updateExperimentNotes } from "../../../api";
 import { loggedCatch } from "@/lib/utils/asyncAction";
 
@@ -10,6 +10,12 @@ interface NotesEditorProps {
 export function NotesEditor({ experimentId, initialNotes }: NotesEditorProps) {
   const [notes, setNotes] = useState(initialNotes);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const persist = useCallback(
     (value: string) => {

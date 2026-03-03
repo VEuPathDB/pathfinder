@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import copy
-from collections.abc import Awaitable, Callable
 from typing import TypedDict
 
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.experiment.helpers import ProgressCallback
 from veupath_chatbot.services.experiment.step_analysis._evaluation import (
     _evaluate_tree_against_controls,
     _extract_eval_counts,
@@ -25,8 +25,6 @@ from veupath_chatbot.services.experiment.types import (
     ParameterSweepPoint,
     parameter_sensitivity_to_json,
 )
-
-ProgressCallback = Callable[[JSONObject], Awaitable[None]]
 
 SENSITIVITY_SWEEP_POINTS = 5
 

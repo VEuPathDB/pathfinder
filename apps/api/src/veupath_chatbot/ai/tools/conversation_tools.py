@@ -9,7 +9,7 @@ from veupath_chatbot.domain.strategy.session import StrategySession
 from veupath_chatbot.platform.errors import ErrorCode
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.tool_errors import tool_error
-from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.platform.types import JSONObject, JSONValue
 
 logger = get_logger(__name__)
 
@@ -72,34 +72,6 @@ class ConversationTools:
             "plan": strategy.to_dict(),
             "message": f"Strategy '{name}' saved successfully.",
         }
-
-    @ai_function()
-    async def load_strategy(
-        self,
-        strategy_id: Annotated[str, AIParam(desc="ID of strategy to load")],
-    ) -> JSONObject:
-        """Load a previously saved strategy.
-
-        This restores the strategy for viewing or modification.
-        """
-        # In production, this would load from database
-        return self._tool_error(
-            "NOT_IMPLEMENTED",
-            "Strategy loading not yet implemented",
-            strategyId=strategy_id,
-        )
-
-    @ai_function()
-    async def list_saved_strategies(
-        self,
-        site_id: Annotated[str | None, AIParam(desc="Filter by site")] = None,
-    ) -> JSONArray:
-        """List the user's saved strategies.
-
-        Returns a list of strategy summaries with names and dates.
-        """
-        # In production, this would query the database
-        return []
 
     @ai_function()
     async def rename_strategy(
@@ -210,24 +182,3 @@ class ConversationTools:
             "stepCount": len(strategy.get_all_steps()),
             "description": strategy.description,
         }
-
-    @ai_function()
-    async def get_edit_history(
-        self,
-        graph_id: Annotated[str | None, AIParam(desc="Graph ID to inspect")] = None,
-    ) -> JSONArray:
-        """Get the edit history of the current strategy.
-
-        Shows what changes have been made during this session.
-        """
-        graph = self.session.get_graph(graph_id)
-        if not graph:
-            return [
-                self._tool_error(
-                    ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id
-                )
-            ]
-        return [
-            {"index": i, "description": h.get("description", "")}
-            for i, h in enumerate(graph.history)
-        ]

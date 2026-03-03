@@ -10,7 +10,10 @@ from veupath_chatbot.integrations.vectorstore.collections import (
     WDK_RECORD_TYPES_V1,
     WDK_SEARCHES_V1,
 )
-from veupath_chatbot.integrations.vectorstore.ingest.utils import existing_point_ids
+from veupath_chatbot.integrations.vectorstore.ingest.utils import (
+    existing_point_ids,
+    extract_search_name,
+)
 from veupath_chatbot.integrations.vectorstore.qdrant_store import (
     QdrantStore,
     point_uuid,
@@ -62,7 +65,7 @@ async def filter_existing_searches(
             continue
         if s.get("isInternal", False):
             continue
-        search_name = str(s.get("urlSegment") or s.get("name") or "").strip()
+        search_name = extract_search_name(s)
         if not search_name:
             continue
         enriched.append((rt_name, s, point_uuid(f"{site_id}:{rt_name}:{search_name}")))
@@ -81,16 +84,17 @@ async def filter_existing_searches(
     return [(rt_name, s) for rt_name, s, _ in enriched]
 
 
-async def upsert_record_type_docs(
+async def _upsert_docs_batch(
     store: QdrantStore,
     embedder: OpenAIEmbeddings,
-    record_type_docs: JSONArray,
+    collection: str,
+    docs: JSONArray,
 ) -> None:
-    if not record_type_docs:
+    if not docs:
         return
     texts: list[str] = []
     valid_docs: list[JSONObject] = []
-    for d in record_type_docs:
+    for d in docs:
         if isinstance(d, dict):
             text_value = d.get("text")
             if isinstance(text_value, str):
@@ -98,7 +102,7 @@ async def upsert_record_type_docs(
                 valid_docs.append(d)
     vectors = await embedder.embed_texts(texts)
     await store.upsert(
-        collection=WDK_RECORD_TYPES_V1,
+        collection=collection,
         points=[
             cast(
                 Any,
@@ -109,36 +113,20 @@ async def upsert_record_type_docs(
     )
 
 
+async def upsert_record_type_docs(
+    store: QdrantStore,
+    embedder: OpenAIEmbeddings,
+    record_type_docs: JSONArray,
+) -> None:
+    await _upsert_docs_batch(store, embedder, WDK_RECORD_TYPES_V1, record_type_docs)
+
+
 async def upsert_search_docs_batch(
     store: QdrantStore,
     embedder: OpenAIEmbeddings,
     buffered: JSONArray,
 ) -> None:
-    if not buffered:
-        return
-    texts: list[str] = []
-    valid_docs: list[JSONObject] = []
-    for d in buffered:
-        if isinstance(d, dict):
-            text_value = d.get("text")
-            if isinstance(text_value, str):
-                texts.append(text_value)
-                valid_docs.append(d)
-    vectors = await embedder.embed_texts(texts)
-    await store.upsert(
-        collection=WDK_SEARCHES_V1,
-        points=[
-            cast(
-                Any,
-                {
-                    "id": d.get("id"),
-                    "vector": v,
-                    "payload": d.get("payload", {}),
-                },
-            )
-            for d, v in zip(valid_docs, vectors, strict=True)
-        ],
-    )
+    await _upsert_docs_batch(store, embedder, WDK_SEARCHES_V1, buffered)
 
 
 async def run_search_indexing_pipeline(

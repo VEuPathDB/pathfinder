@@ -3,11 +3,29 @@ import type { ControlSet, ResolvedGene } from "@pathfinder/shared";
 import type { BenchmarkControlSetInput } from "../../../api/streaming";
 import { listControlSets } from "../../../api/controlSets";
 import { Button } from "@/lib/components/ui/Button";
-import { Layers, Plus, Search, Star, Trash2, X } from "lucide-react";
+import { Input } from "@/lib/components/ui/Input";
+import { Label } from "@/lib/components/ui/Label";
+import { Checkbox } from "@/lib/components/ui/Checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/lib/components/ui/Select";
+import {
+  ChevronDown,
+  ChevronRight,
+  Layers,
+  Plus,
+  Search,
+  Star,
+  Trash2,
+  X,
+} from "lucide-react";
 
 /* ── GeneIdTextarea ──────────────────────────────────────────────── */
 
-/** Parses comma- or newline-separated gene IDs from raw text. */
 function parseGeneIds(raw: string): string[] {
   return raw
     .split(/[\n,]+/)
@@ -15,11 +33,6 @@ function parseGeneIds(raw: string): string[] {
     .filter(Boolean);
 }
 
-/**
- * A textarea that lets users freely type commas and newlines.
- * IDs are parsed on blur (not on every keystroke) so delimiters aren't
- * consumed mid-typing.
- */
 function GeneIdTextarea({
   ids,
   onIdsChange,
@@ -32,8 +45,6 @@ function GeneIdTextarea({
   const [text, setText] = useState(() => ids.join("\n"));
   const [prevIds, setPrevIds] = useState(ids);
 
-  // Sync from parent when the ids prop changes externally (e.g. loading a
-  // saved control set). Uses render-time state adjustment instead of useEffect.
   if (ids !== prevIds) {
     setPrevIds(ids);
     const currentIds = parseGeneIds(text);
@@ -46,7 +57,6 @@ function GeneIdTextarea({
     const parsed = parseGeneIds(text);
     setPrevIds(parsed);
     onIdsChange(parsed);
-    // Normalize the displayed text to one-id-per-line after blur
     setText(parsed.join("\n"));
   };
 
@@ -73,6 +83,71 @@ export interface ControlsSectionProps {
   onBenchmarkModeChange: (v: boolean) => void;
   benchmarkControlSets: BenchmarkControlSetInput[];
   onBenchmarkControlSetsChange: (v: BenchmarkControlSetInput[]) => void;
+}
+
+/* ── SavedSetGeneList ─────────────────────────────────────────────── */
+
+function SavedSetGeneList({
+  positiveControls,
+  negativeControls,
+}: {
+  positiveControls: string[];
+  negativeControls: string[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const Icon = expanded ? ChevronDown : ChevronRight;
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+      >
+        <Icon className="h-3 w-3" />
+        Saved set: {positiveControls.length} positive, {negativeControls.length}{" "}
+        negative
+      </button>
+      {expanded && (
+        <div className="space-y-1.5 pl-4">
+          {positiveControls.length > 0 && (
+            <div>
+              <span className="text-[10px] font-medium text-green-700 dark:text-green-400">
+                Positive ({positiveControls.length})
+              </span>
+              <div className="mt-0.5 flex flex-wrap gap-1">
+                {positiveControls.map((id) => (
+                  <span
+                    key={id}
+                    className="rounded bg-green-500/10 px-1 py-0.5 font-mono text-[9px] text-green-700 dark:text-green-400"
+                  >
+                    {id}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {negativeControls.length > 0 && (
+            <div>
+              <span className="text-[10px] font-medium text-red-700 dark:text-red-400">
+                Negative ({negativeControls.length})
+              </span>
+              <div className="mt-0.5 flex flex-wrap gap-1">
+                {negativeControls.map((id) => (
+                  <span
+                    key={id}
+                    className="rounded bg-red-500/10 px-1 py-0.5 font-mono text-[9px] text-red-700 dark:text-red-400"
+                  >
+                    {id}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ── BenchmarkControlSetsEditor ───────────────────────────────────── */
@@ -172,11 +247,10 @@ function BenchmarkControlSetsEditor({
             >
               <Star className={`h-3 w-3 ${cs.isPrimary ? "fill-current" : ""}`} />
             </button>
-            <input
-              type="text"
+            <Input
               value={cs.label}
               onChange={(e) => updateLabel(idx, e.target.value)}
-              className="flex-1 rounded border border-border bg-background px-2 py-0.5 text-[11px] focus:border-primary focus:outline-none"
+              className="h-6 flex-1 text-[11px]"
               placeholder="Label"
             />
             <button
@@ -202,10 +276,10 @@ function BenchmarkControlSetsEditor({
             </>
           )}
           {cs.controlSetId && (
-            <p className="text-[10px] text-muted-foreground">
-              Saved set: {cs.positiveControls.length} positive,{" "}
-              {cs.negativeControls.length} negative
-            </p>
+            <SavedSetGeneList
+              positiveControls={cs.positiveControls}
+              negativeControls={cs.negativeControls}
+            />
           )}
         </div>
       ))}
@@ -221,21 +295,24 @@ function BenchmarkControlSetsEditor({
           Add inline
         </Button>
         {savedControlSets.length > 0 && (
-          <select
-            className="flex-1 rounded-md border border-dashed border-border bg-background px-2 py-1 text-[10px]"
+          <Select
             value=""
-            onChange={(e) => {
-              const cs = savedControlSets.find((s) => s.id === e.target.value);
+            onValueChange={(id) => {
+              const cs = savedControlSets.find((s) => s.id === id);
               if (cs) addFromSaved(cs);
             }}
           >
-            <option value="">+ Add saved set</option>
-            {savedControlSets.map((cs) => (
-              <option key={cs.id} value={cs.id}>
-                {cs.name} ({cs.positiveIds.length}+ / {cs.negativeIds.length}-)
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-7 flex-1 border-dashed text-[10px]">
+              <SelectValue placeholder="+ Add saved set" />
+            </SelectTrigger>
+            <SelectContent>
+              {savedControlSets.map((cs) => (
+                <SelectItem key={cs.id} value={cs.id}>
+                  {cs.name} ({cs.positiveIds.length}+ / {cs.negativeIds.length}-)
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </div>
     </div>
@@ -269,19 +346,15 @@ export function ControlsSection({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Controls
-        </h4>
-        <label className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
-          <input
-            type="checkbox"
+        <Label className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
+          <Checkbox
             checked={benchmarkMode}
-            onChange={(e) => onBenchmarkModeChange(e.target.checked)}
-            className="rounded border-input"
+            onCheckedChange={(checked) => onBenchmarkModeChange(checked === true)}
+            className="h-3.5 w-3.5"
           />
           <Layers className="h-3 w-3" />
           Benchmark suite
-        </label>
+        </Label>
       </div>
 
       {!benchmarkMode ? (
@@ -300,9 +373,9 @@ export function ControlsSection({
 
           {positiveGenes.length > 0 && (
             <div data-testid="positive-controls-input" className="mb-2">
-              <label className="mb-1 block text-[10px] text-muted-foreground">
+              <Label className="mb-1 block text-[10px] text-muted-foreground">
                 Positive ({positiveGenes.length})
-              </label>
+              </Label>
               <div className="flex flex-wrap gap-1">
                 {positiveGenes.slice(0, 8).map((g) => (
                   <span
@@ -333,9 +406,9 @@ export function ControlsSection({
 
           {negativeGenes.length > 0 && (
             <div data-testid="negative-controls-input">
-              <label className="mb-1 block text-[10px] text-muted-foreground">
+              <Label className="mb-1 block text-[10px] text-muted-foreground">
                 Negative ({negativeGenes.length})
-              </label>
+              </Label>
               <div className="flex flex-wrap gap-1">
                 {negativeGenes.slice(0, 8).map((g) => (
                   <span

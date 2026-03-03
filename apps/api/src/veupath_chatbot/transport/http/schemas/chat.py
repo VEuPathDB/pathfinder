@@ -84,7 +84,6 @@ class MessageResponse(BaseModel):
     sub_kani_activity: SubKaniActivityResponse | None = Field(
         default=None, alias="subKaniActivity"
     )
-    mode: str | None = Field(default=None)
     citations: JSONArray | None = None
     planning_artifacts: JSONArray | None = Field(
         default=None, alias="planningArtifacts"

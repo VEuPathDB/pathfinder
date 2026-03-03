@@ -24,14 +24,21 @@ import { EnrichmentCompareView } from "@/features/experiments/components/Enrichm
 import { RunningPanel } from "@/features/experiments/components/RunningPanel";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { Button } from "@/lib/components/ui/Button";
-import { FlaskConical, Loader2, MessageCircle, Settings } from "lucide-react";
+import {
+  AlertTriangle,
+  FlaskConical,
+  Loader2,
+  MessageCircle,
+  RefreshCw,
+  Settings,
+} from "lucide-react";
 import Link from "next/link";
 
 export default function ExperimentsPage() {
   const { selectedSite, setSelectedSite } = useSessionStore();
   const veupathdbSignedIn = useSessionStore((s) => s.veupathdbSignedIn);
   const setAuthToken = useSessionStore((s) => s.setAuthToken);
-  const { authLoading } = useAuthCheck();
+  const { authLoading, apiError, retry: retryAuth } = useAuthCheck();
   useSiteTheme(selectedSite);
   const authRefreshed = useSessionStore((s) => s.authRefreshed);
   const setAuthRefreshed = useSessionStore((s) => s.setAuthRefreshed);
@@ -77,6 +84,22 @@ export default function ExperimentsPage() {
     );
   }
 
+  if (apiError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-background text-foreground">
+        <AlertTriangle className="h-10 w-10 text-destructive" />
+        <div className="text-center">
+          <p className="text-sm font-medium">Unable to connect to the API</p>
+          <p className="mt-1 max-w-sm text-xs text-muted-foreground">{apiError}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={retryAuth}>
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
       <LoginModal
@@ -97,7 +120,7 @@ export default function ExperimentsPage() {
               Chat
             </Link>
             <span
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
               aria-current="page"
             >
               <FlaskConical className="h-3.5 w-3.5" aria-hidden />

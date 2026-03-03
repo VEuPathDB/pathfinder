@@ -36,6 +36,7 @@ export function ResultsTable({ experimentId }: ResultsTableProps) {
   /* ---------- row expansion state ---------- */
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   /* ---------- fetch attributes on mount ---------- */
@@ -101,16 +102,21 @@ export function ResultsTable({ experimentId }: ResultsTableProps) {
       if (expandedKey === key) {
         setExpandedKey(null);
         setDetail(null);
+        setDetailError(null);
         return;
       }
       setExpandedKey(key);
       setDetail(null);
+      setDetailError(null);
       setDetailLoading(true);
       try {
         const d = await getExperimentRecordDetail(experimentId, recordId);
         setDetail(d);
-      } catch {
+      } catch (err) {
         setDetail(null);
+        setDetailError(
+          err instanceof Error ? err.message : "Failed to load record details",
+        );
       } finally {
         setDetailLoading(false);
       }
@@ -170,6 +176,7 @@ export function ResultsTable({ experimentId }: ResultsTableProps) {
         onSort={handleSort}
         expandedKey={expandedKey}
         detail={detail}
+        detailError={detailError}
         detailLoading={detailLoading}
         onExpandRow={handleExpandRow}
       />

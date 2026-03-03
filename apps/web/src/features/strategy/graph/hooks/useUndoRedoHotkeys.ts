@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useCallback } from "react";
+import { useEventListener } from "usehooks-ts";
 
 export function useUndoRedoHotkeys(args: {
   enabled: boolean;
@@ -19,10 +20,10 @@ export function useUndoRedoHotkeys(args: {
     redoGlobal,
   } = args;
 
-  useEffect(() => {
-    if (!enabled) return;
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (!enabled) return;
 
-    const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -48,17 +49,17 @@ export function useUndoRedoHotkeys(args: {
 
       if (tryUndoLocal()) return;
       if (canUndoGlobal()) undoGlobal();
-    };
+    },
+    [
+      enabled,
+      tryUndoLocal,
+      tryRedoLocal,
+      canUndoGlobal,
+      canRedoGlobal,
+      undoGlobal,
+      redoGlobal,
+    ],
+  );
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    enabled,
-    tryUndoLocal,
-    tryRedoLocal,
-    canUndoGlobal,
-    canRedoGlobal,
-    undoGlobal,
-    redoGlobal,
-  ]);
+  useEventListener("keydown", handleKeyDown);
 }

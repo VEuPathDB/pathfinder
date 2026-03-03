@@ -12,7 +12,6 @@ async def _generate_name_and_description(
     settings = get_settings()
     from openai import AsyncOpenAI
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key or None)
     compact_json = json.dumps(strategy_compact, ensure_ascii=False)
     prompt = f"""You are generating metadata for a public strategy example.
 
@@ -31,15 +30,16 @@ Strategy (compact JSON):
 {compact_json}
 """
 
-    resp = await client.chat.completions.create(
-        model=model,
-        temperature=0.0,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": "Return JSON only."},
-            {"role": "user", "content": prompt},
-        ],
-    )
+    async with AsyncOpenAI(api_key=settings.openai_api_key or None) as client:
+        resp = await client.chat.completions.create(
+            model=model,
+            temperature=0.0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": "Return JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+        )
     text = (resp.choices[0].message.content or "").strip()
     if not text:
         raise RuntimeError("Empty LLM response")

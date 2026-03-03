@@ -179,7 +179,6 @@ export function useStrategyGraphNodes(options: UseStrategyGraphNodesOptions) {
     steps: draftStrategy?.steps || [],
     buildStepSignature,
     validate: validateSearchSteps,
-    strategy,
   });
 
   return {

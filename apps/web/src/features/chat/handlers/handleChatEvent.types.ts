@@ -78,9 +78,5 @@ export type ChatEventContext = {
 
   setOptimizationProgress: Dispatch<SetStateAction<OptimizationProgressData | null>>;
 
-  onPlanSessionId?: (id: string) => void;
-  onPlanningArtifactUpdate?: (artifact: PlanningArtifact) => void;
-  onExecutorBuildRequest?: (message: string) => void;
-  onConversationTitleUpdate?: (title: string) => void;
   onApiError?: (message: string) => void;
 };

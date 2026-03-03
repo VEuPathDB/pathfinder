@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { gotoHomeWithStrategy, sendMessage } from "./helpers";
 
-test("execute: can apply a deterministic planning artifact to strategy", async ({
+test("chat: can apply a deterministic planning artifact to strategy", async ({
   page,
 }) => {
   await gotoHomeWithStrategy(page);
@@ -9,10 +9,9 @@ test("execute: can apply a deterministic planning artifact to strategy", async (
   // Trigger mock provider to emit a planning artifact (see API mock stream).
   await sendMessage(page, "please emit artifact");
 
-  // Wait for the mock execute-mode response to complete before looking for
-  // the artifact section — under parallel load the API can be slow, and
-  // other tests' plan-mode messages may also contain artifact headings.
-  await expect(page.getByText("[mock:execute]").first()).toBeVisible({
+  // Wait for the mock response to complete before looking for the artifact
+  // section -- under parallel load the API can be slow.
+  await expect(page.getByText("[mock]").first()).toBeVisible({
     timeout: 30_000,
   });
   await expect(page.getByText("Saved planning artifacts").first()).toBeVisible();

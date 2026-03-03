@@ -4,6 +4,10 @@ const path = require("path");
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  // Disable built-in gzip compression so SSE streams are flushed per-event
+  // instead of being buffered by the compressor.  In production, the reverse
+  // proxy (nginx / CDN) handles compression for non-streaming responses.
+  compress: false,
   transpilePackages: ["@pathfinder/shared"],
   turbopack: {
     root: path.resolve(__dirname, "../.."),

@@ -17,7 +17,7 @@ test("switching site resets the chat panel", async ({ page }) => {
 
   // Send a message to establish chat state.
   await sendMessage(page, "test message before site switch");
-  await expect(page.getByText("[mock:plan]").first()).toBeVisible({
+  await expect(page.getByText("[mock]").first()).toBeVisible({
     timeout: 30_000,
   });
 

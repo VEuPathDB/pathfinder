@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, startTransition } from "react";
+import { useDebouncedCallback } from "use-debounce";
 import type { ParamSpec, Search } from "@pathfinder/shared";
 import { getParamSpecs } from "@/lib/api/client";
 import { normalizeRecordType } from "@/features/strategy/recordType";
@@ -32,8 +33,34 @@ export function useParamSpecs({
   const [paramSpecs, setParamSpecs] = useState<ParamSpec[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
+  const debouncedFetch = useDebouncedCallback((resolvedRecordType: string) => {
     let isActive = true;
+    setIsLoading(true);
+    getParamSpecs(
+      siteId,
+      resolvedRecordType,
+      searchName,
+      buildContextValues(contextValues || {}),
+    )
+      .then((details) => {
+        if (!isActive) return;
+        setParamSpecs(details || []);
+      })
+      .catch((err) => {
+        console.error("[useParamSpecs]", err);
+        if (!isActive) return;
+        setParamSpecs([]);
+      })
+      .finally(() => {
+        if (!isActive) return;
+        setIsLoading(false);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, 250);
+
+  useEffect(() => {
     if (!enabled) {
       startTransition(() => {
         setParamSpecs([]);
@@ -58,35 +85,7 @@ export function useParamSpecs({
       });
       return;
     }
-    const timeout = window.setTimeout(() => {
-      setIsLoading(true);
-      const trySpecs = (recordTypeToUse: string) =>
-        getParamSpecs(
-          siteId,
-          recordTypeToUse,
-          searchName,
-          buildContextValues(contextValues || {}),
-        );
-
-      trySpecs(resolvedRecordType)
-        .then((details) => {
-          if (!isActive) return;
-          setParamSpecs(details || []);
-        })
-        .catch((err) => {
-          console.error("[useParamSpecs]", err);
-          if (!isActive) return;
-          setParamSpecs([]);
-        })
-        .finally(() => {
-          if (!isActive) return;
-          setIsLoading(false);
-        });
-    }, 250);
-    return () => {
-      isActive = false;
-      window.clearTimeout(timeout);
-    };
+    debouncedFetch(resolvedRecordType);
   }, [
     enabled,
     siteId,
@@ -97,6 +96,7 @@ export function useParamSpecs({
     apiRecordTypeValue,
     resolveRecordTypeForSearch,
     contextValues,
+    debouncedFetch,
   ]);
 
   return { paramSpecs, isLoading };

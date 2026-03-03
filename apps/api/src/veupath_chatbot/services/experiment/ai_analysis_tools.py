@@ -16,6 +16,7 @@ from veupath_chatbot.ai.agents.experiment import ExperimentAssistantAgent
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.experiment.ai_analysis_helpers import (
+    build_primary_key,
     classify_gene,
     extract_pk,
     fetch_group_records,
@@ -139,8 +140,10 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
             return {"error": "Experiment not found"}
 
         api = get_strategy_api(self.site_id)
-        pk_parts = cast(list[JSONObject], [{"name": "source_id", "value": gene_id}])
         try:
+            pk_parts = await build_primary_key(
+                api, self.site_id, exp.config.record_type, gene_id
+            )
             result = await api.get_single_record(
                 record_type=exp.config.record_type,
                 primary_key=pk_parts,
@@ -195,10 +198,10 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
 
         api = get_strategy_api(self.site_id)
         group_a_attrs = await fetch_group_records(
-            api, exp.config.record_type, group_a_ids
+            api, exp.config.record_type, group_a_ids, site_id=self.site_id
         )
         group_b_attrs = await fetch_group_records(
-            api, exp.config.record_type, group_b_ids
+            api, exp.config.record_type, group_b_ids, site_id=self.site_id
         )
 
         return cast(

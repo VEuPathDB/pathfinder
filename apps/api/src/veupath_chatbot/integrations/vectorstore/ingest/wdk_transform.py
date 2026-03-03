@@ -5,6 +5,7 @@ from typing import Any, cast
 
 from veupath_chatbot.domain.parameters.specs import extract_param_specs
 from veupath_chatbot.domain.parameters.vocab_utils import flatten_vocab
+from veupath_chatbot.integrations.vectorstore.ingest.utils import extract_search_name
 from veupath_chatbot.integrations.vectorstore.qdrant_store import (
     point_uuid,
     sha256_hex,
@@ -58,7 +59,7 @@ def build_record_type_doc(site_id: str, rt: JSONValue) -> JSONObject | None:
         rt_display = rt
         rt_desc = ""
     elif isinstance(rt, dict):
-        rt_name = str(rt.get("urlSegment") or rt.get("name") or "").strip()
+        rt_name = extract_search_name(rt)
         rt_display = str(rt.get("displayName") or rt_name)
         rt_desc = str(rt.get("description") or "")
     else:
@@ -115,7 +116,7 @@ def build_search_doc(
         return None
     if s.get("isInternal", False):
         return None
-    search_name = str(s.get("urlSegment") or s.get("name") or "").strip()
+    search_name = extract_search_name(s)
     if not search_name:
         return None
 

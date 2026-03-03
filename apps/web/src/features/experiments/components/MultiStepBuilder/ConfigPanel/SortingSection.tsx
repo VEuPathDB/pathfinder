@@ -1,5 +1,14 @@
 import type { RecordAttribute } from "../../../api/crud";
 import { ArrowUpDown } from "lucide-react";
+import { Checkbox } from "@/lib/components/ui/Checkbox";
+import { Label } from "@/lib/components/ui/Label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/lib/components/ui/Select";
 
 export interface SortingSectionProps {
   sortAttribute: string | null;
@@ -18,12 +27,11 @@ export function SortingSection({
 }: SortingSectionProps) {
   return (
     <div className="space-y-2">
-      <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <input
-          type="checkbox"
+      <Label className="flex items-center gap-2 text-xs font-normal text-foreground">
+        <Checkbox
           checked={sortAttribute !== null}
-          onChange={(e) => {
-            if (e.target.checked) {
+          onCheckedChange={(checked) => {
+            if (checked) {
               const suggested = sortableAttributes.find((a) => a.isSuggested);
               onSortAttributeChange(
                 suggested?.name ?? sortableAttributes[0]?.name ?? null,
@@ -32,40 +40,43 @@ export function SortingSection({
               onSortAttributeChange(null);
             }
           }}
-          className="rounded border-input"
+          className="h-3.5 w-3.5"
         />
         <ArrowUpDown className="h-3 w-3" />
         Enable result ranking
-      </label>
+      </Label>
       <p className="pl-5 text-[10px] text-muted-foreground">
         Rank results by a numeric attribute to compute Top-K metrics (P@K, R@K, E@K).
       </p>
       {sortAttribute !== null && (
         <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
           <div>
-            <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+            <Label className="mb-1.5 block text-[10px] text-muted-foreground">
               Sort attribute
-            </label>
-            <select
-              className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs"
-              value={sortAttribute}
-              onChange={(e) => onSortAttributeChange(e.target.value)}
-            >
-              {sortableAttributes.length === 0 && (
-                <option value="">No sortable attributes found</option>
-              )}
-              {sortableAttributes.map((a) => (
-                <option key={a.name} value={a.name}>
-                  {a.displayName}
-                  {a.isSuggested ? " (suggested)" : ""}
-                </option>
-              ))}
-            </select>
+            </Label>
+            <Select value={sortAttribute} onValueChange={onSortAttributeChange}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Select attribute" />
+              </SelectTrigger>
+              <SelectContent>
+                {sortableAttributes.length === 0 && (
+                  <SelectItem value="" disabled>
+                    No sortable attributes found
+                  </SelectItem>
+                )}
+                {sortableAttributes.map((a) => (
+                  <SelectItem key={a.name} value={a.name}>
+                    {a.displayName}
+                    {a.isSuggested ? " (suggested)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+            <Label className="mb-1.5 block text-[10px] text-muted-foreground">
               Direction
-            </label>
+            </Label>
             <div className="flex gap-2">
               {(["ASC", "DESC"] as const).map((dir) => (
                 <button

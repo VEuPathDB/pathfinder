@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
-from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
-from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.integrations.veupathdb.strategy_api import (
+    StrategyAPI,
+    is_internal_wdk_strategy_name,
+    strip_internal_wdk_strategy_name,
+)
+from veupath_chatbot.platform.logging import get_logger
+from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
 from veupath_chatbot.services.experiment.types import ControlValueFormat
+
+logger = get_logger(__name__)
 
 
 def _encode_id_list(ids: list[str], fmt: ControlValueFormat) -> str:
@@ -90,3 +97,45 @@ async def _get_total_count_for_step(api: StrategyAPI, step_id: int) -> int | Non
         return await api.get_step_count(step_id)
     except Exception:
         return None
+
+
+async def cleanup_internal_control_test_strategies(
+    api: StrategyAPI,
+    wdk_items: JSONArray,
+    *,
+    site_id: str = "",
+) -> None:
+    """Delete leaked internal control-test strategies from a WDK item list.
+
+    Callers fetch the item list themselves (via ``api.list_strategies()``),
+    then pass it here for cleanup.
+    """
+    if not isinstance(wdk_items, list):
+        return
+    for item in wdk_items:
+        if not isinstance(item, dict):
+            continue
+        name_raw = item.get("name")
+        name = name_raw if isinstance(name_raw, str) else None
+        if not isinstance(name, str) or not is_internal_wdk_strategy_name(name):
+            continue
+        display_name = strip_internal_wdk_strategy_name(name)
+        if not display_name.startswith("Pathfinder control test"):
+            continue
+        wdk_id = item.get("strategyId")
+        if not isinstance(wdk_id, int):
+            continue
+        try:
+            await api.delete_strategy(wdk_id)
+            logger.info(
+                "Deleted leaked internal control-test WDK strategy",
+                site_id=site_id,
+                wdk_strategy_id=wdk_id,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to delete leaked internal control-test strategy",
+                site_id=site_id,
+                wdk_strategy_id=wdk_id,
+                error=str(e),
+            )

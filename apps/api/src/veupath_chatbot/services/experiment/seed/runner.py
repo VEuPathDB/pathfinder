@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 async def run_seed(
     *,
     user_id: UUID,
-    strategy_repo: Any,
+    stream_repo: Any,
     control_set_repo: Any,
 ) -> AsyncIterator[JSONObject]:
     """Create seed strategies and control sets, yielding SSE progress events.
@@ -37,8 +37,8 @@ async def run_seed(
     from veupath_chatbot.services.experiment.materialization import (
         _materialize_step_tree,
     )
-    from veupath_chatbot.transport.http.routers.strategies.wdk_import import (
-        _sync_single_wdk_strategy,
+    from veupath_chatbot.services.strategies.wdk_sync import (
+        sync_single_wdk_strategy,
     )
 
     total = len(SEEDS)
@@ -92,11 +92,11 @@ async def run_seed(
                 raise ValueError(f"WDK did not return a strategy ID for '{seed.name}'")
 
             # 3. Sync to local DB (sidebar)
-            await _sync_single_wdk_strategy(
+            await sync_single_wdk_strategy(
                 wdk_id=wdk_strategy_id,
                 site_id=seed.site_id,
                 api=api,
-                strategy_repo=strategy_repo,
+                stream_repo=stream_repo,
                 user_id=user_id,
             )
             strategies_ok += 1

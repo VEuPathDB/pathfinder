@@ -1,4 +1,5 @@
 import type { StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
+import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import { isFallbackDisplayName } from "@/lib/strategyGraph";
 
 export interface GraphSnapshotStepInput {
@@ -97,7 +98,7 @@ export function buildStrategyFromGraphSnapshot(args: {
       graphSnapshot.name ||
       graphSnapshot.graphName ||
       existingStrategy?.name ||
-      "Draft Strategy",
+      DEFAULT_STREAM_NAME,
     siteId,
     recordType:
       graphSnapshot.recordType !== undefined

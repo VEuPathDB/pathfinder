@@ -23,12 +23,14 @@ from veupath_chatbot.platform.errors import (
     http_exception_handler,
 )
 from veupath_chatbot.platform.logging import get_logger, setup_logging
+from veupath_chatbot.platform.redis import close_redis, init_redis
 from veupath_chatbot.transport.http.routers import (
     chat,
     control_sets,
     experiments,
     health,
     models,
+    operations,
     sites,
     steps,
     strategies,
@@ -55,6 +57,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # For local Docker and first-run developer setups, we create tables automatically.
     # (Alembic migrations are not supported.)
     await init_db()
+    await init_redis()
+
+    # Mark any operations left "active" from a previous process as failed.
+    # This handles the Docker-rebuild / crash case where the producer task
+    # died without marking the operation complete.
+    from veupath_chatbot.persistence.repositories.stream import StreamRepository
+    from veupath_chatbot.persistence.session import async_session_factory
+
+    async with async_session_factory() as session:
+        repo = StreamRepository(session)
+        orphaned = await repo.list_active_operations()
+        for op in orphaned:
+            await repo.fail_operation(op.operation_id)
+            logger.info(
+                "Marked orphaned operation as failed", operation_id=op.operation_id
+            )
+        if orphaned:
+            await session.commit()
+
     try:
         await ensure_rag_collections()
     except Exception as exc:  # pragma: no cover
@@ -70,6 +91,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Shutdown
     logger.info("Shutting down Pathfinder API")
     await close_all_clients()
+    await close_redis()
     await close_db()
 
 
@@ -139,6 +161,7 @@ def create_app() -> FastAPI:
     app.include_router(experiments.router)
     app.include_router(control_sets.router)
     app.include_router(veupathdb_auth.router)
+    app.include_router(operations.router)
 
     # Dev-only routes (e2e / local dev with mock chat provider).
     if settings.chat_provider.strip().lower() == "mock":

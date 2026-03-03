@@ -39,12 +39,18 @@ class TokenPayload(BaseModel):
 
 
 def _pick_redirect_url(candidate: str | None) -> str:
+    from urllib.parse import urlparse
+
     settings = get_settings()
     allowed = settings.cors_origins or []
     if candidate:
-        for origin in allowed:
-            if candidate.startswith(origin):
+        try:
+            parsed = urlparse(candidate)
+            candidate_origin = f"{parsed.scheme}://{parsed.netloc}"
+            if candidate_origin in allowed:
                 return candidate
+        except Exception:
+            pass
     return allowed[0] if allowed else "http://localhost:3000"
 
 
@@ -109,13 +115,16 @@ def _build_success_response(
     if auth_token:
         body["authToken"] = auth_token
 
+    settings = get_settings()
+    secure_cookie = not settings.is_development
+
     resp = JSONResponse(body)
     resp.set_cookie(
         key="Authorization",
         value=veupathdb_token,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=secure_cookie,
         path="/",
     )
     if auth_token:
@@ -132,12 +141,10 @@ def _build_success_response(
 @router.post("/login", response_model=AuthSuccessResponse)
 async def login_with_password(
     user_repo: UserRepo,
-    site_id: str = Query(..., alias="siteId"),
     payload: LoginPayload | None = None,
     redirect_to: str | None = Query(None, alias="redirectTo"),
 ) -> JSONResponse:
     """Login via VEuPathDB /login, link internal user, and store auth cookies."""
-    del site_id  # auth uses VEuPathDB portal
     if not payload:
         raise ValidationError(
             detail="Email and password required",
@@ -249,11 +256,8 @@ async def refresh_internal_auth(
 
 
 @router.get("/status", response_model=AuthStatusResponse)
-async def auth_status(
-    site_id: str = Query(..., alias="siteId"),
-) -> dict[str, object]:
+async def auth_status() -> dict[str, object]:
     """Return current VEuPathDB auth status."""
-    del site_id  # auth uses VEuPathDB portal
     site = get_site("veupathdb")
     client = get_wdk_client(site.id)
     try:

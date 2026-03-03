@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from shared_py.defaults import DEFAULT_STREAM_NAME
+
 from veupath_chatbot.domain.strategy.ast import from_dict
 from veupath_chatbot.domain.strategy.session import (
     StrategyGraph,
@@ -44,7 +46,7 @@ def build_strategy_session(
         graph_id = graph_id_str or "unknown"
 
         name_value = strategy_graph.get("name")
-        name = str(name_value) if isinstance(name_value, str) else "Draft Strategy"
+        name = str(name_value) if isinstance(name_value, str) else DEFAULT_STREAM_NAME
         plan = strategy_graph.get("plan")
 
         graph = StrategyGraph(graph_id, name, site_id)
@@ -102,6 +104,6 @@ def build_strategy_session(
         session.add_graph(graph)
 
     if not session.get_graph(None):
-        session.create_graph("Draft Strategy")
+        session.create_graph(DEFAULT_STREAM_NAME)
 
     return session

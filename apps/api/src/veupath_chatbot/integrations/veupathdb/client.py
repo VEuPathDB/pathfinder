@@ -268,21 +268,6 @@ class VEuPathDBClient:
             ),
         )
 
-    async def get_question_parameter_values(
-        self,
-        record_type: str,
-        search_name: str,
-        param_name: str,
-        context: JSONObject | None = None,
-    ) -> JSONObject:
-        """Get vocabulary values for a dependent parameter."""
-        return await self.get_refreshed_dependent_params(
-            record_type,
-            search_name,
-            param_name,
-            context or {},
-        )
-
     async def get_refreshed_dependent_params(
         self,
         record_type: str,
@@ -303,17 +288,6 @@ class VEuPathDBClient:
                     },
                     "contextParamValues": encoded_context,
                 },
-            ),
-        )
-
-    async def get_ontology_term_summary(
-        self, record_type: str, ontology: str
-    ) -> JSONObject:
-        """Get ontology term summary for filtering."""
-        return cast(
-            JSONObject,
-            await self.get(
-                f"/record-types/{record_type}/ontology/{ontology}/term-summary"
             ),
         )
 

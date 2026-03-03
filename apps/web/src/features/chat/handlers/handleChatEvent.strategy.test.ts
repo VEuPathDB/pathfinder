@@ -144,8 +144,8 @@ describe("handleChatEvent — strategy events", () => {
       recordType: "gene",
     });
 
-    // strategy_cleared clears when id matches.
-    handleChatEvent(ctx, { type: "strategy_cleared", data: { graphId: "s1" } } as any);
+    // graph_cleared clears when id matches.
+    handleChatEvent(ctx, { type: "graph_cleared", data: { graphId: "s1" } } as any);
     expect(ctx.clearStrategy).toHaveBeenCalled();
   });
 

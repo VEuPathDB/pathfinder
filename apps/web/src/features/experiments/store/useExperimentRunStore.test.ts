@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExperimentConfig, ExperimentProgressData } from "@pathfinder/shared";
+import type { OperationSubscription } from "@/lib/operationSubscribe";
 import type { StepAnalysisLiveItems, TrialHistoryEntry } from "../types";
 import type { StreamRunnerCallbacks } from "../utils/experimentStreamRunner";
 
@@ -8,7 +9,18 @@ import type { StreamRunnerCallbacks } from "../utils/experimentStreamRunner";
 // Capture the callbacks that runExperimentStream passes to the stream opener
 // so we can simulate progress / complete / error events in tests.
 let capturedCallbacks: StreamRunnerCallbacks | null = null;
-let capturedController: AbortController | null = null;
+let capturedSubscription: (OperationSubscription & { _unsubscribed: boolean }) | null =
+  null;
+
+function makeMockSubscription() {
+  const sub = {
+    _unsubscribed: false,
+    unsubscribe() {
+      sub._unsubscribed = true;
+    },
+  };
+  return sub;
+}
 
 vi.mock("../utils/experimentStreamRunner", async (importOriginal) => {
   const original =
@@ -17,8 +29,8 @@ vi.mock("../utils/experimentStreamRunner", async (importOriginal) => {
     ...original,
     runExperimentStream: vi.fn(({ set, get }, opts) => {
       // Mirror the real runner's init logic so the store state updates
-      get().abortController?.abort();
-      const controller = new AbortController();
+      get().subscription?.unsubscribe();
+      const sub = makeMockSubscription();
       set({
         isRunning: true,
         hasOptimization: opts.hasOptimization,
@@ -27,9 +39,9 @@ vi.mock("../utils/experimentStreamRunner", async (importOriginal) => {
         stepAnalysisItems: original.EMPTY_LIVE_ITEMS,
         error: null,
         runningConfig: opts.config,
-        abortController: controller,
+        subscription: sub,
       });
-      capturedController = controller;
+      capturedSubscription = sub;
 
       // Capture the callbacks by calling openStream the same way the real runner does
       const callbacks: StreamRunnerCallbacks = {
@@ -51,7 +63,7 @@ vi.mock("../utils/experimentStreamRunner", async (importOriginal) => {
         onRunComplete: () => {
           set({
             isRunning: false,
-            abortController: null,
+            subscription: null,
             runningConfig: null,
           });
         },
@@ -59,13 +71,13 @@ vi.mock("../utils/experimentStreamRunner", async (importOriginal) => {
           set({
             error,
             isRunning: false,
-            abortController: null,
+            subscription: null,
             runningConfig: null,
           });
         },
       };
       capturedCallbacks = callbacks;
-      opts.openStream(callbacks, controller);
+      opts.openStream(callbacks);
     }),
   };
 });
@@ -149,7 +161,7 @@ describe("features/experiments/store/useExperimentRunStore", () => {
   beforeEach(() => {
     useExperimentRunStore.getState().reset();
     capturedCallbacks = null;
-    capturedController = null;
+    capturedSubscription = null;
     vi.clearAllMocks();
   });
 
@@ -163,7 +175,7 @@ describe("features/experiments/store/useExperimentRunStore", () => {
     expect(state.trialHistory).toEqual([]);
     expect(state.stepAnalysisItems).toEqual(EMPTY_LIVE_ITEMS);
     expect(state.error).toBeNull();
-    expect(state.abortController).toBeNull();
+    expect(state.subscription).toBeNull();
     expect(state.runningConfig).toBeNull();
   });
 
@@ -200,7 +212,7 @@ describe("features/experiments/store/useExperimentRunStore", () => {
     expect(state.runningConfig).toEqual(config);
     expect(state.progress).toBeNull();
     expect(state.error).toBeNull();
-    expect(state.abortController).not.toBeNull();
+    expect(state.subscription).not.toBeNull();
   });
 
   it("runExperiment sets hasOptimization when optimizationSpecs exist", () => {
@@ -374,7 +386,7 @@ describe("features/experiments/store/useExperimentRunStore", () => {
 
     const state = useExperimentRunStore.getState();
     expect(state.isRunning).toBe(false);
-    expect(state.abortController).toBeNull();
+    expect(state.subscription).toBeNull();
     expect(state.runningConfig).toBeNull();
   });
 
@@ -388,24 +400,23 @@ describe("features/experiments/store/useExperimentRunStore", () => {
     const state = useExperimentRunStore.getState();
     expect(state.error).toBe("Stream failed");
     expect(state.isRunning).toBe(false);
-    expect(state.abortController).toBeNull();
+    expect(state.subscription).toBeNull();
     expect(state.runningConfig).toBeNull();
   });
 
   /* ── cancelExperiment ──────────────────────────────────────────── */
 
-  it("cancelExperiment aborts the controller and stops running", () => {
+  it("cancelExperiment unsubscribes and stops running", () => {
     useExperimentRunStore.getState().runExperiment(makeConfig());
-    const controller = useExperimentRunStore.getState().abortController;
-    expect(controller).not.toBeNull();
+    expect(capturedSubscription).not.toBeNull();
 
     useExperimentRunStore.getState().cancelExperiment();
 
-    expect(controller!.signal.aborted).toBe(true);
+    expect(capturedSubscription!._unsubscribed).toBe(true);
     const state = useExperimentRunStore.getState();
     expect(state.isRunning).toBe(false);
     expect(state.hasOptimization).toBe(false);
-    expect(state.abortController).toBeNull();
+    expect(state.subscription).toBeNull();
     expect(state.runningConfig).toBeNull();
   });
 
@@ -419,13 +430,13 @@ describe("features/experiments/store/useExperimentRunStore", () => {
 
   /* ── reset ─────────────────────────────────────────────────────── */
 
-  it("reset aborts controller and restores all state to defaults", () => {
+  it("reset unsubscribes and restores all state to defaults", () => {
     useExperimentRunStore.getState().runExperiment(makeConfig());
-    const controller = useExperimentRunStore.getState().abortController;
+    expect(capturedSubscription).not.toBeNull();
 
     useExperimentRunStore.getState().reset();
 
-    expect(controller!.signal.aborted).toBe(true);
+    expect(capturedSubscription!._unsubscribed).toBe(true);
     const state = useExperimentRunStore.getState();
     expect(state.isRunning).toBe(false);
     expect(state.hasOptimization).toBe(false);
@@ -433,11 +444,11 @@ describe("features/experiments/store/useExperimentRunStore", () => {
     expect(state.trialHistory).toEqual([]);
     expect(state.stepAnalysisItems).toEqual(EMPTY_LIVE_ITEMS);
     expect(state.error).toBeNull();
-    expect(state.abortController).toBeNull();
+    expect(state.subscription).toBeNull();
     expect(state.runningConfig).toBeNull();
   });
 
-  it("reset is safe when no controller exists", () => {
+  it("reset is safe when no subscription exists", () => {
     expect(() => {
       useExperimentRunStore.getState().reset();
     }).not.toThrow();
@@ -483,7 +494,7 @@ describe("features/experiments/store/useExperimentRunStore", () => {
     useExperimentRunStore.getState().cancelExperiment();
 
     expect(useExperimentRunStore.getState().isRunning).toBe(false);
-    expect(useExperimentRunStore.getState().abortController).toBeNull();
+    expect(useExperimentRunStore.getState().subscription).toBeNull();
   });
 
   /* ── runBatchExperiment ────────────────────────────────────────── */
@@ -525,14 +536,14 @@ describe("features/experiments/store/useExperimentRunStore", () => {
 
   /* ── Re-running aborts previous ────────────────────────────────── */
 
-  it("starting a new run aborts the previous one", () => {
+  it("starting a new run unsubscribes from the previous one", () => {
     useExperimentRunStore.getState().runExperiment(makeConfig({ name: "Run 1" }));
-    const firstController = useExperimentRunStore.getState().abortController;
-    expect(firstController).not.toBeNull();
+    const firstSubscription = capturedSubscription;
+    expect(firstSubscription).not.toBeNull();
 
     useExperimentRunStore.getState().runExperiment(makeConfig({ name: "Run 2" }));
 
-    expect(firstController!.signal.aborted).toBe(true);
+    expect(firstSubscription!._unsubscribed).toBe(true);
     const state = useExperimentRunStore.getState();
     expect(state.isRunning).toBe(true);
     expect(state.runningConfig?.name).toBe("Run 2");

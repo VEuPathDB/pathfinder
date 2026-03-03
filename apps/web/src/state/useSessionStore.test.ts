@@ -53,15 +53,14 @@ describe("state/useSessionStore", () => {
     expect(store.getState().selectedSiteDisplayName).toBe("TrypDB");
   });
 
-  it("changing selected site clears strategyId and planSessionId", async () => {
+  it("changing selected site restores strategy for new site (null when none saved)", async () => {
     const mod = await import("./useSessionStore");
     const store = mod.useSessionStore;
     store.getState().setStrategyId("s1");
-    store.getState().setPlanSessionId("p1");
     store.getState().setSelectedSite("toxodb");
     expect(store.getState().selectedSite).toBe("toxodb");
+    // No window in Node env, so restored strategy is null.
     expect(store.getState().strategyId).toBeNull();
-    expect(store.getState().planSessionId).toBeNull();
   });
 
   it("setStrategyId updates strategy id", async () => {
@@ -71,13 +70,6 @@ describe("state/useSessionStore", () => {
     expect(store.getState().strategyId).toBe("s123");
     store.getState().setStrategyId(null);
     expect(store.getState().strategyId).toBeNull();
-  });
-
-  it("setPlanSessionId updates plan session id", async () => {
-    const mod = await import("./useSessionStore");
-    const store = mod.useSessionStore;
-    store.getState().setPlanSessionId("p123");
-    expect(store.getState().planSessionId).toBe("p123");
   });
 
   it("setVeupathdbAuth updates auth state", async () => {
@@ -98,19 +90,74 @@ describe("state/useSessionStore", () => {
     expect(store.getState().chatIsStreaming).toBe(true);
   });
 
-  it("linkConversation stores plan-to-strategy mapping and persists to localStorage", async () => {
-    const localStorage = makeLocalStorage();
+  it("restores selectedSite from localStorage on init", async () => {
+    vi.stubGlobal("window", {
+      localStorage: makeLocalStorage({ "pathfinder-selected-site": "toxodb" }),
+    });
+
+    const mod = await import("./useSessionStore");
+    expect(mod.useSessionStore.getState().selectedSite).toBe("toxodb");
+  });
+
+  it("restores strategyId scoped to site from localStorage on init", async () => {
+    vi.stubGlobal("window", {
+      localStorage: makeLocalStorage({
+        "pathfinder-selected-site": "toxodb",
+        "pathfinder-strategy-id:toxodb": "s-toxo-1",
+      }),
+    });
+
+    const mod = await import("./useSessionStore");
+    expect(mod.useSessionStore.getState().selectedSite).toBe("toxodb");
+    expect(mod.useSessionStore.getState().strategyId).toBe("s-toxo-1");
+  });
+
+  it("setStrategyId persists to localStorage scoped by site", async () => {
+    const localStorage = makeLocalStorage({
+      "pathfinder-selected-site": "plasmodb",
+    });
     vi.stubGlobal("window", { localStorage });
 
     const mod = await import("./useSessionStore");
     const store = mod.useSessionStore;
-    store.getState().linkConversation("plan-1", "strategy-1");
-    expect(store.getState().linkedConversations).toEqual({
-      "plan-1": "strategy-1",
+
+    store.getState().setStrategyId("s-new");
+    expect(localStorage.getItem("pathfinder-strategy-id:plasmodb")).toBe("s-new");
+
+    store.getState().setStrategyId(null);
+    expect(localStorage.getItem("pathfinder-strategy-id:plasmodb")).toBeNull();
+  });
+
+  it("setSelectedSite persists to localStorage and restores strategy for new site", async () => {
+    const localStorage = makeLocalStorage({
+      "pathfinder-selected-site": "plasmodb",
+      "pathfinder-strategy-id:plasmodb": "s-plasmo",
+      "pathfinder-strategy-id:toxodb": "s-toxo",
     });
-    const persisted = JSON.parse(
-      localStorage.getItem("pathfinder-linked-conversations") ?? "{}",
-    );
-    expect(persisted).toEqual({ "plan-1": "strategy-1" });
+    vi.stubGlobal("window", { localStorage });
+
+    const mod = await import("./useSessionStore");
+    const store = mod.useSessionStore;
+
+    // Switch to toxodb — should restore s-toxo
+    store.getState().setSelectedSite("toxodb");
+    expect(store.getState().selectedSite).toBe("toxodb");
+    expect(store.getState().strategyId).toBe("s-toxo");
+    expect(localStorage.getItem("pathfinder-selected-site")).toBe("toxodb");
+
+    // Switch back to plasmodb — should restore s-plasmo
+    store.getState().setSelectedSite("plasmodb");
+    expect(store.getState().strategyId).toBe("s-plasmo");
+  });
+
+  it("restores selectedSiteDisplayName from localStorage", async () => {
+    vi.stubGlobal("window", {
+      localStorage: makeLocalStorage({
+        "pathfinder-selected-site-display": "ToxoDB",
+      }),
+    });
+
+    const mod = await import("./useSessionStore");
+    expect(mod.useSessionStore.getState().selectedSiteDisplayName).toBe("ToxoDB");
   });
 });

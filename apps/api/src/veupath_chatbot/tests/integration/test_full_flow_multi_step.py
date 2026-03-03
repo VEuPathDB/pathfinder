@@ -148,11 +148,10 @@ class TestCombineIntersect:
                 authed_client,
                 message="Find genes with epitopes that are also upregulated in gametocytes",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=180.0,
             )
 
-        assert result.http_status == 200, f"HTTP {result.http_status}"
+        assert result.http_status == 202, f"HTTP {result.http_status}"
         types = result.event_types
         assert types[0] == "message_start"
         assert "message_end" in types
@@ -267,11 +266,10 @@ class TestSearchPlusTransform:
                 authed_client,
                 message="Find epitope genes in P. falciparum then find orthologs in P. vivax",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert r1.http_status == 200
+        assert r1.http_status == 202
         strategy_id = r1.strategy_id
         assert strategy_id
 
@@ -350,12 +348,11 @@ class TestSearchPlusTransform:
                 authed_client,
                 message="Now add an ortholog transform to find P. vivax orthologs",
                 site_id="plasmodb",
-                mode="execute",
                 strategy_id=strategy_id,
                 timeout=120.0,
             )
 
-        assert r2.http_status == 200
+        assert r2.http_status == 202
         types = r2.event_types
         assert types[0] == "message_start"
         assert "message_end" in types
@@ -433,11 +430,10 @@ class TestThreeStepStrategy:
                 authed_client,
                 message="Find epitope genes and known vaccine targets, then combine them",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert r1.http_status == 200
+        assert r1.http_status == 202
         strategy_id = r1.strategy_id
         assert strategy_id
 
@@ -475,12 +471,11 @@ class TestThreeStepStrategy:
                 authed_client,
                 message="Now combine these with UNION and build the strategy",
                 site_id="plasmodb",
-                mode="execute",
                 strategy_id=strategy_id,
                 timeout=120.0,
             )
 
-        assert r2.http_status == 200
+        assert r2.http_status == 202
 
         tool_names = [s.data.get("name") for s, _ in r2.tool_calls]
         assert "ensure_single_output" in tool_names

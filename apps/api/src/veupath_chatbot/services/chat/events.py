@@ -10,16 +10,13 @@ from veupath_chatbot.platform.types import JSONArray, JSONObject
 GRAPH_SNAPSHOT = "graph_snapshot"
 GRAPH_PLAN = "graph_plan"
 GRAPH_CLEARED = "graph_cleared"
-GRAPH_DELETED = "graph_deleted"
 STRATEGY_LINK = "strategy_link"
 STRATEGY_META = "strategy_meta"
 STRATEGY_UPDATE = "strategy_update"
 PLANNING_ARTIFACT = "planning_artifact"
 CITATIONS = "citations"
 REASONING = "reasoning"
-PLAN_UPDATE = "plan_update"
 EXECUTOR_BUILD_REQUEST = "executor_build_request"
-OPTIMIZATION_PROGRESS = "optimization_progress"
 
 
 def tool_result_to_events(
@@ -49,7 +46,12 @@ def tool_result_to_events(
 
     conversation_title = result.get("conversationTitle")
     if isinstance(conversation_title, str) and conversation_title.strip():
-        events.append({"type": PLAN_UPDATE, "data": {"title": conversation_title}})
+        events.append(
+            {
+                "type": STRATEGY_META,
+                "data": {"name": conversation_title.strip()},
+            }
+        )
 
     if isinstance(result.get("executorBuildRequest"), dict):
         events.append(
@@ -133,11 +135,6 @@ def tool_result_to_events(
     if result.get("cleared"):
         events.append(
             {"type": GRAPH_CLEARED, "data": {"graphId": result.get("graphId")}}
-        )
-
-    if result.get("graphDeleted"):
-        events.append(
-            {"type": GRAPH_DELETED, "data": {"graphId": result.get("graphId")}}
         )
 
     wdk_strategy_id = result.get("wdkStrategyId")

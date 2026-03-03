@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import cast
 
+from veupath_chatbot.domain.parameters.specs import find_missing_required_params
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 
 from .param_resolution import (
@@ -101,42 +102,7 @@ async def validate_search_params(
         }
 
     # Required checks using raw WDK specs (keeps semantics aligned with WDK).
-    required_specs: list[JSONObject] = []
-    for p in raw_specs:
-        if not isinstance(p, dict):
-            continue
-        is_required_raw = p.get("isRequired")
-        allow_empty_raw = p.get("allowEmptyValue")
-        is_required = (
-            bool(is_required_raw) if isinstance(is_required_raw, bool) else False
-        )
-        allow_empty = (
-            bool(allow_empty_raw) if isinstance(allow_empty_raw, bool) else True
-        )
-        if is_required or not allow_empty:
-            required_specs.append(p)
-    missing: list[str] = []
-    for spec in required_specs:
-        if not isinstance(spec, dict):
-            continue
-        name_raw = spec.get("name")
-        name = name_raw if isinstance(name_raw, str) else None
-        if not name:
-            continue
-        if name not in normalized_context:
-            missing.append(name)
-            continue
-        value = normalized_context.get(name)
-        type_raw = spec.get("type")
-        param_type = (type_raw if isinstance(type_raw, str) else "").lower()
-        if param_type == "multi-pick-vocabulary":
-            if value in (None, "", "[]") or (
-                isinstance(value, list) and len(value) == 0
-            ):
-                missing.append(str(name))
-            continue
-        if value in (None, "", [], {}):
-            missing.append(str(name))
+    missing = find_missing_required_params(raw_specs, normalized_context)
 
     if missing:
         by_key = {name: ["Required"] for name in missing}

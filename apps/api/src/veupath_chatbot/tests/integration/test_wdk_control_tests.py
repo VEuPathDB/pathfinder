@@ -348,6 +348,7 @@ class TestBothControls:
     @pytest.mark.asyncio
     async def test_positive_and_negative_together(self) -> None:
         """Both positive and negative results should be populated."""
+        cleanup_api = _make_mock_api()
         pos_api = _make_mock_api(
             target_count=150,
             combined_count=3,
@@ -358,7 +359,7 @@ class TestBothControls:
             combined_count=1,
             answer_gene_ids=NEGATIVE_IDS[:1],
         )
-        with patch(PATCH_TARGET, side_effect=[pos_api, neg_api]):
+        with patch(PATCH_TARGET, side_effect=[cleanup_api, pos_api, neg_api]):
             result = await run_positive_negative_controls(
                 site_id=SITE_ID,
                 record_type=RECORD_TYPE,
@@ -556,19 +557,27 @@ class TestCleanupOnSuccess:
                 "strategyId": 999,
             },
         ]
-        mock_api = _make_mock_api(
+        cleanup_api = _make_mock_api(stale_strategies=stale)
+        pos_api = _make_mock_api(
             combined_count=2,
             answer_gene_ids=POSITIVE_IDS[:2],
-            stale_strategies=stale,
         )
-        with patch(PATCH_TARGET, return_value=mock_api):
-            await _run_intersection_control(**_common_kwargs(POSITIVE_IDS))
+        with patch(PATCH_TARGET, side_effect=[cleanup_api, pos_api]):
+            await run_positive_negative_controls(
+                site_id=SITE_ID,
+                record_type=RECORD_TYPE,
+                target_search_name=TARGET_SEARCH_NAME,
+                target_parameters=TARGET_PARAMETERS,
+                controls_search_name=CONTROLS_SEARCH_NAME,
+                controls_param_name=CONTROLS_PARAM_NAME,
+                positive_controls=POSITIVE_IDS,
+                controls_value_format="newline",
+            )
 
-        # The stale strategy should have been deleted PLUS the new one
-        delete_calls = mock_api.delete_strategy.call_args_list
-        deleted_ids = [call.args[0] for call in delete_calls]
-        assert 999 in deleted_ids
-        assert STRATEGY_ID in deleted_ids
+        # The stale strategy should have been deleted by the cleanup API
+        cleanup_api.delete_strategy.assert_any_await(999)
+        # The temp strategy should have been deleted by the pos API
+        pos_api.delete_strategy.assert_awaited_once_with(STRATEGY_ID)
 
 
 class TestCleanupOnFailure:

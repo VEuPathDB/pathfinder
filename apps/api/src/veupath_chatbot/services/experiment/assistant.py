@@ -15,8 +15,8 @@ from veupath_chatbot.ai.agents.experiment import ExperimentAssistantAgent
 from veupath_chatbot.ai.agents.factory import create_engine
 from veupath_chatbot.ai.models.catalog import ModelProvider, ReasoningEffort
 from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.chat.streaming import stream_chat
 from veupath_chatbot.services.experiment.types import WizardStep
-from veupath_chatbot.transport.http.streaming import stream_chat
 
 _BASE_PERSONA = """\
 You are a scientific research assistant embedded in the VEuPathDB Experiment Lab wizard.
@@ -321,6 +321,12 @@ def _build_context_block(context: JSONObject) -> str:
     search_name = context.get("searchName")
     if search_name:
         parts.append(f"Selected search: {search_name}")
+    mode = context.get("mode")
+    if isinstance(mode, str) and mode:
+        parts.append(f"Experiment mode: {mode}")
+    strategy_summary = context.get("strategySummary")
+    if isinstance(strategy_summary, str) and strategy_summary:
+        parts.append(f"Strategy: {strategy_summary}")
     params = context.get("parameters")
     if isinstance(params, dict) and params:
         non_empty = {k: v for k, v in params.items() if v}
@@ -338,6 +344,55 @@ def _build_context_block(context: JSONObject) -> str:
             f"Negative controls ({len(neg)}): {', '.join(str(g) for g in neg[:20])}"
             + (" ..." if len(neg) > 20 else "")
         )
+    # Results: classification metrics (for results/analysis steps)
+    metrics = context.get("metrics")
+    if isinstance(metrics, dict) and metrics:
+        m_parts = []
+        for key in (
+            "sensitivity",
+            "specificity",
+            "precision",
+            "f1Score",
+            "mcc",
+            "balancedAccuracy",
+            "totalResults",
+        ):
+            val = metrics.get(key)
+            if val is not None:
+                if isinstance(val, (int, float)):
+                    m_parts.append(f"{key}: {val}")
+                else:
+                    m_parts.append(f"{key}: {val}")
+        if m_parts:
+            parts.append("Classification metrics: " + ", ".join(m_parts))
+    cm = context.get("confusionMatrix")
+    if isinstance(cm, dict) and cm:
+        tp = cm.get("TP", cm.get("truePositives"))
+        fp = cm.get("FP", cm.get("falsePositives"))
+        fn = cm.get("FN", cm.get("falseNegatives"))
+        tn = cm.get("TN", cm.get("trueNegatives"))
+        if any(v is not None for v in (tp, fp, fn, tn)):
+            parts.append(f"Confusion matrix: TP={tp}, FP={fp}, FN={fn}, TN={tn}")
+    enrichment = context.get("enrichmentSummary")
+    if isinstance(enrichment, str) and enrichment.strip():
+        parts.append(f"Enrichment findings:\n{enrichment}")
+    gene_lists = context.get("geneListsSummary")
+    if isinstance(gene_lists, str) and gene_lists.strip():
+        parts.append(f"Gene lists (sample):\n{gene_lists}")
+    cv = context.get("crossValidation")
+    if isinstance(cv, dict) and cv:
+        cv_parts = []
+        if cv.get("overfittingLevel") is not None:
+            cv_parts.append(f"overfitting: {cv['overfittingLevel']}")
+        if cv.get("overfittingScore") is not None:
+            cv_parts.append(f"score={cv['overfittingScore']}")
+        if cv.get("meanF1") is not None:
+            cv_parts.append(f"mean F1={cv['meanF1']}")
+        if cv_parts:
+            parts.append("Cross-validation: " + ", ".join(cv_parts))
+    exp_id = context.get("experimentId")
+    if isinstance(exp_id, str) and exp_id:
+        parts.append(f"Experiment ID: {exp_id}")
     if not parts:
         return ""
     return "\n## Wizard context\n" + "\n".join(f"- {p}" for p in parts)

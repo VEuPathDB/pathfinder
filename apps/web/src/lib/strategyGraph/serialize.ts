@@ -1,4 +1,5 @@
 import type { PlanStepNode, StrategyPlan } from "@pathfinder/shared";
+import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import type { Step, Strategy } from "./types";
 
 export type SerializedStrategyPlan = {
@@ -83,7 +84,7 @@ export function serializeStrategyPlan(
   const rootNode = buildNode(rootStep.id);
   if (!rootNode) return null;
 
-  const name = strategy?.name || "Draft Strategy";
+  const name = strategy?.name || DEFAULT_STREAM_NAME;
   return {
     name,
     recordType,

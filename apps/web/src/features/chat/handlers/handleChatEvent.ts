@@ -5,12 +5,11 @@ import {
   handleAssistantMessageEvent,
   handleCitationsEvent,
   handleErrorEvent,
-  handleExecutorBuildRequestEvent,
   handleMessageStartEvent,
   handleOptimizationProgressEvent,
   handlePlanningArtifactEvent,
-  handlePlanUpdateEvent,
   handleReasoningEvent,
+  handleUserMessageEvent,
 } from "./handleChatEvent.messageEvents";
 import {
   handleGraphSnapshotEvent,
@@ -33,6 +32,10 @@ export function handleChatEvent(ctx: ChatEventContext, event: ChatSSEEvent) {
   switch (event.type) {
     case "message_start": {
       handleMessageStartEvent(ctx, event.data);
+      break;
+    }
+    case "user_message": {
+      handleUserMessageEvent(ctx, event.data);
       break;
     }
     case "assistant_delta": {
@@ -95,20 +98,12 @@ export function handleChatEvent(ctx: ChatEventContext, event: ChatSSEEvent) {
       handleStrategyMetaEvent(ctx, event.data);
       break;
     }
-    case "strategy_cleared": {
+    case "graph_cleared": {
       handleStrategyClearedEvent(ctx, event.data);
-      break;
-    }
-    case "executor_build_request": {
-      handleExecutorBuildRequestEvent(ctx, event.data);
       break;
     }
     case "optimization_progress": {
       handleOptimizationProgressEvent(ctx, event.data);
-      break;
-    }
-    case "plan_update": {
-      handlePlanUpdateEvent(ctx, event.data);
       break;
     }
     case "error": {

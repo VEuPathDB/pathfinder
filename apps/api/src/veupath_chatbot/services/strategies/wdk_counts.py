@@ -31,7 +31,7 @@ async def compute_step_counts_for_plan(
 ) -> dict[str, int | None]:
     cache_key = _plan_cache_key(site_id, plan)
     cached = _STEP_COUNTS_CACHE.get(cache_key)
-    if cached is not None and any(isinstance(value, int) for value in cached.values()):
+    if cached is not None:
         _STEP_COUNTS_CACHE.move_to_end(cache_key)
         return cached
 
@@ -94,9 +94,8 @@ async def compute_step_counts_for_plan(
                 error=str(e),
             )
 
-    if any(isinstance(value, int) for value in counts.values()):
-        _STEP_COUNTS_CACHE[cache_key] = counts
-        if len(_STEP_COUNTS_CACHE) > _STEP_COUNTS_CACHE_MAX:
-            _STEP_COUNTS_CACHE.popitem(last=False)
+    _STEP_COUNTS_CACHE[cache_key] = counts
+    if len(_STEP_COUNTS_CACHE) > _STEP_COUNTS_CACHE_MAX:
+        _STEP_COUNTS_CACHE.popitem(last=False)
 
     return counts

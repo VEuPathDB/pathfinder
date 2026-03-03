@@ -15,7 +15,6 @@ interface StrategyListState {
   removeStrategy: (id: string) => void;
 
   addExecutedStrategy: (strategy: StrategyWithMeta) => void;
-  removeExecutedStrategy: (id: string) => void;
   setGraphValidationStatus: (id: string, hasErrors: boolean) => void;
 }
 
@@ -70,11 +69,6 @@ export const useStrategyListStore = create<StrategyListState>()((set) => ({
       };
     }),
 
-  removeExecutedStrategy: (id) =>
-    set((state) => {
-      const remaining = state.executedStrategies.filter((s) => s.id !== id);
-      return { executedStrategies: remaining };
-    }),
   setGraphValidationStatus: (id, hasErrors) =>
     set((state) => ({
       graphValidationStatus: {

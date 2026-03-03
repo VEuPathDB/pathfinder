@@ -1,79 +1,87 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
-const streamSSEMock = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/sse", () => ({
-  streamSSE: streamSSEMock,
+const subscribeToOperationMock = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/operationSubscribe", () => ({
+  subscribeToOperation: subscribeToOperationMock,
 }));
+
+const requestJsonMock = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/api/http", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return { ...actual, requestJson: requestJsonMock };
+});
 
 import { streamChat } from "./stream";
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  streamSSEMock.mockReset();
+  subscribeToOperationMock.mockReset();
+  requestJsonMock.mockReset();
 });
 
 describe("features/chat/stream", () => {
-  it("reports error via onError when API health check is not ok", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: false,
-        status: 503,
-        statusText: "Service Unavailable",
-      })),
-    );
+  it("POSTs to /api/v1/chat and subscribes to the operation", async () => {
+    requestJsonMock.mockResolvedValue({
+      operationId: "op-1",
+      strategyId: "s-1",
+    });
 
-    const onError = vi.fn();
-    await streamChat("hi", "plasmodb", { onMessage: () => {}, onError });
-    expect(onError).toHaveBeenCalledTimes(1);
-  });
-
-  it("streams chat via streamSSE and parses events before invoking onMessage", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true })),
+    const unsubscribe = vi.fn();
+    subscribeToOperationMock.mockImplementation(
+      (
+        _opId: string,
+        opts: {
+          onEvent: (e: { type: string; data: unknown }) => void;
+          onComplete?: () => void;
+        },
+      ) => {
+        // Simulate an event followed by completion.
+        opts.onEvent({
+          type: "assistant_message",
+          data: { content: "hello" },
+        });
+        opts.onComplete?.();
+        return { unsubscribe };
+      },
     );
 
     const onMessage = vi.fn();
+    const onComplete = vi.fn();
 
-    streamSSEMock.mockImplementation(
-      async (_path: string, _args: unknown, options: unknown) => {
-        const opts = options as {
-          onEvent: (evt: { type: string; data: string }) => void;
-          onComplete?: () => void;
-        };
-        opts.onEvent({
-          type: "assistant_message",
-          data: JSON.stringify({ content: "hello" }),
-        });
-        opts.onComplete?.();
-      },
-    );
-
-    await streamChat(
+    const result = await streamChat(
       "hello",
       "plasmodb",
-      {
-        onMessage,
-      },
+      { onMessage, onComplete },
       { strategyId: "s1" },
-      "execute",
     );
 
-    expect(streamSSEMock).toHaveBeenCalledTimes(1);
-    const [path, args] = streamSSEMock.mock.calls[0] as [string, { body?: unknown }];
+    // requestJson was called with correct params
+    expect(requestJsonMock).toHaveBeenCalledTimes(1);
+    const [path, args] = requestJsonMock.mock.calls[0] as [string, { body?: unknown }];
     expect(path).toBe("/api/v1/chat");
     expect(args.body).toMatchObject({
       message: "hello",
       siteId: "plasmodb",
       strategyId: "s1",
-      mode: "execute",
     });
 
+    // subscribeToOperation was called with the operationId
+    expect(subscribeToOperationMock).toHaveBeenCalledTimes(1);
+    expect(subscribeToOperationMock.mock.calls[0]?.[0]).toBe("op-1");
+
+    // onMessage received a parsed ChatSSEEvent
     expect(onMessage).toHaveBeenCalledTimes(1);
     expect(onMessage.mock.calls[0]?.[0]).toMatchObject({
       type: "assistant_message",
       data: { content: "hello" },
     });
+
+    // onComplete was called
+    expect(onComplete).toHaveBeenCalledTimes(1);
+
+    // Result contains operationId, strategyId, and subscription
+    expect(result.operationId).toBe("op-1");
+    expect(result.strategyId).toBe("s-1");
+    expect(result.subscription).toEqual({ unsubscribe });
   });
 });

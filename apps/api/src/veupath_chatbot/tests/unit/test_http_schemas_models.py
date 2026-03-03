@@ -73,7 +73,7 @@ def test_chat_request_rejects_empty_message() -> None:
 
 def test_chat_request_rejects_missing_site_id() -> None:
     with pytest.raises(ValidationError):
-        schemas.ChatRequest(message="hello")  # type: ignore[call-arg]
+        schemas.ChatRequest.model_validate({"message": "hello"})
 
 
 def test_chat_request_defaults() -> None:
@@ -262,7 +262,6 @@ def test_message_response_with_all_fields() -> None:
         role="assistant",
         content="Here's your analysis",
         timestamp=now,
-        mode="execute",
         toolCalls=[
             schemas.ToolCallResponse(id="t1", name="search", arguments={"q": "abc"})
         ],
@@ -270,7 +269,6 @@ def test_message_response_with_all_fields() -> None:
         reasoning="Step-by-step analysis",
     )
     assert msg.role == "assistant"
-    assert msg.mode == "execute"
     assert msg.tool_calls is not None
     assert len(msg.tool_calls) == 1
     assert msg.reasoning == "Step-by-step analysis"
@@ -279,4 +277,4 @@ def test_message_response_with_all_fields() -> None:
 def test_message_response_minimal() -> None:
     now = datetime.now(UTC)
     msg = schemas.MessageResponse(role="user", content="hello", timestamp=now)
-    assert msg.mode is None
+    assert msg.citations is None

@@ -6,7 +6,7 @@ list (StepData dicts) from various inputs (AST, graph snapshots, etc.).
 
 from __future__ import annotations
 
-from veupath_chatbot.domain.strategy.ast import from_dict
+from veupath_chatbot.domain.strategy.ast import StrategyAST, from_dict
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONObject
 
@@ -15,16 +15,23 @@ from .step_builders import build_steps_data_from_ast
 logger = get_logger(__name__)
 
 
+def _parse_plan(plan: JSONObject) -> StrategyAST | None:
+    """Parse a plan dict into a StrategyAST, returning None on error."""
+    try:
+        return from_dict(plan)
+    except ValueError, KeyError, TypeError:
+        logger.debug("Could not parse plan into AST", exc_info=True)
+        return None
+
+
 def build_steps_data_from_plan(plan: JSONObject) -> JSONArray:
     """Build persisted steps list from a plan dict (AST payload).
 
     :param plan: Plan dict (AST payload).
     :returns: List of step data dicts.
     """
-    try:
-        ast = from_dict(plan)
-    except ValueError, KeyError, TypeError:
-        logger.debug("Could not parse plan into AST for step extraction", exc_info=True)
+    ast = _parse_plan(plan)
+    if ast is None:
         return []
     return build_steps_data_from_ast(ast)
 
@@ -35,49 +42,7 @@ def count_steps_in_plan(plan: JSONObject) -> int:
     :param plan: Plan dict (AST payload).
     :returns: Step count.
     """
-    try:
-        ast = from_dict(plan)
-    except ValueError, KeyError, TypeError:
-        logger.debug("Could not parse plan into AST for step count", exc_info=True)
+    ast = _parse_plan(plan)
+    if ast is None:
         return 0
     return len(ast.get_all_steps())
-
-
-def build_steps_data_from_graph_snapshot(
-    snapshot: JSONObject,
-) -> JSONArray:
-    """Build persisted steps list from a `graphSnapshot` payload.
-
-    Normalizes whatever the UI sends into our canonical derived step shape.
-
-    :param snapshot: Graph snapshot from UI.
-    :returns: List of step data dicts.
-    """
-    steps_data: JSONArray = []
-    snapshot_steps = snapshot.get("steps") or []
-    if not isinstance(snapshot_steps, list):
-        return steps_data
-
-    for step in snapshot_steps:
-        if not isinstance(step, dict):
-            continue
-        primary_input = step.get("primaryInputStepId")
-        secondary_input = step.get("secondaryInputStepId")
-        steps_data.append(
-            {
-                "id": step.get("id"),
-                "kind": step.get("kind"),
-                "displayName": step.get("displayName"),
-                "searchName": step.get("searchName"),
-                "recordType": step.get("recordType"),
-                "parameters": step.get("parameters"),
-                "operator": step.get("operator"),
-                "primaryInputStepId": primary_input,
-                "secondaryInputStepId": secondary_input,
-                "filters": step.get("filters"),
-                "analyses": step.get("analyses"),
-                "reports": step.get("reports"),
-            }
-        )
-
-    return steps_data

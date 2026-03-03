@@ -17,6 +17,12 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 
 from veupath_chatbot.platform.types import JSONObject
 
+SSE_HEADERS: dict[str, str] = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
+
 
 async def sse_stream(
     producer: Callable[[Callable[[JSONObject], Awaitable[None]]], Awaitable[None]],

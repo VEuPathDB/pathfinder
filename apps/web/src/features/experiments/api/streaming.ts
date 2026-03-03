@@ -3,6 +3,11 @@ import type {
   ExperimentConfig,
   ExperimentProgressData,
 } from "@pathfinder/shared";
+import { requestJson } from "@/lib/api/http";
+import {
+  subscribeToOperation,
+  type OperationSubscription,
+} from "@/lib/operationSubscribe";
 import { streamSSEParsed } from "@/lib/sse";
 
 /* ── Config serialization ────────────────────────────────────────── */
@@ -99,43 +104,39 @@ export type ExperimentSSEHandler = {
   onError?: (error: string) => void;
 };
 
-export function createExperimentStream(
+export async function createExperimentStream(
   config: PartialConfig,
   handlers: ExperimentSSEHandler,
-  controller?: AbortController,
-): AbortController {
-  controller ??= new AbortController();
+): Promise<OperationSubscription> {
+  const resp = await requestJson<{ operationId: string }>("/api/v1/experiments", {
+    method: "POST",
+    body: serializeExperimentConfig(config),
+  });
 
-  streamSSEParsed(
-    "/api/v1/experiments",
-    { body: serializeExperimentConfig(config), signal: controller.signal },
-    {
-      onError: (err) => handlers.onError?.(err.message),
-      onFrame: ({ event, data }) => {
-        const d = data as Record<string, unknown>;
-        if (event === "experiment_complete") {
-          handlers.onComplete?.(d as unknown as Experiment);
-        } else if (event === "experiment_error") {
-          handlers.onError?.((d.error as string) ?? "Unknown error");
-        } else if (event === "experiment_progress" || event === "experiment_end") {
-          handlers.onProgress?.(d as unknown as ExperimentProgressData);
-        }
-      },
+  return subscribeToOperation<Record<string, unknown>>(resp.operationId, {
+    onEvent: ({ type, data }) => {
+      if (type === "experiment_complete") {
+        handlers.onComplete?.(data as unknown as Experiment);
+      } else if (type === "experiment_error") {
+        handlers.onError?.((data.error as string) ?? "Unknown error");
+      } else if (type === "experiment_progress" || type === "experiment_end") {
+        handlers.onProgress?.(data as unknown as ExperimentProgressData);
+      }
     },
-  ).catch((err) => console.error("[experiment.stream]", err));
-
-  return controller;
+    onError: (err) => handlers.onError?.(err.message),
+    endEventTypes: new Set(["experiment_end"]),
+  });
 }
 
 /* ── Batch experiment stream ─────────────────────────────────────── */
 
 export interface BatchOrganismTarget {
   organism: string;
-  positiveControls: string[];
-  negativeControls: string[];
+  positiveControls?: string[] | null;
+  negativeControls?: string[] | null;
 }
 
-export function createBatchExperimentStream(
+export async function createBatchExperimentStream(
   base: PartialConfig,
   organismParamName: string,
   targetOrganisms: BatchOrganismTarget[],
@@ -144,39 +145,32 @@ export function createBatchExperimentStream(
     onComplete?: (experiments: Experiment[], batchId: string) => void;
     onError?: (error: string) => void;
   },
-  controller?: AbortController,
-): AbortController {
-  controller ??= new AbortController();
-
-  streamSSEParsed(
-    "/api/v1/experiments/batch",
-    {
-      body: {
-        base: serializeExperimentConfig(base),
-        organismParamName,
-        targetOrganisms,
-      },
-      signal: controller.signal,
+): Promise<OperationSubscription> {
+  const resp = await requestJson<{ operationId: string }>("/api/v1/experiments/batch", {
+    method: "POST",
+    body: {
+      base: serializeExperimentConfig(base),
+      organismParamName,
+      targetOrganisms,
     },
-    {
-      onError: (err) => handlers.onError?.(err.message),
-      onFrame: ({ event, data }) => {
-        const d = data as Record<string, unknown>;
-        if (event === "batch_complete") {
-          handlers.onComplete?.(
-            (d.experiments as Experiment[]) ?? [],
-            (d.batchId as string) ?? "",
-          );
-        } else if (event === "batch_error") {
-          handlers.onError?.((d.error as string) ?? "Unknown error");
-        } else if (event === "experiment_progress") {
-          handlers.onProgress?.(d as unknown as ExperimentProgressData);
-        }
-      },
-    },
-  ).catch((err) => console.error("[experiment.stream]", err));
+  });
 
-  return controller;
+  return subscribeToOperation<Record<string, unknown>>(resp.operationId, {
+    onEvent: ({ type, data }) => {
+      if (type === "batch_complete") {
+        handlers.onComplete?.(
+          (data.experiments as Experiment[]) ?? [],
+          (data.batchId as string) ?? "",
+        );
+      } else if (type === "batch_error") {
+        handlers.onError?.((data.error as string) ?? "Unknown error");
+      } else if (type === "experiment_progress") {
+        handlers.onProgress?.(data as unknown as ExperimentProgressData);
+      }
+    },
+    onError: (err) => handlers.onError?.(err.message),
+    endEventTypes: new Set(["batch_complete", "batch_error"]),
+  });
 }
 
 /* ── Benchmark stream ────────────────────────────────────────────── */
@@ -189,7 +183,7 @@ export interface BenchmarkControlSetInput {
   isPrimary: boolean;
 }
 
-export function createBenchmarkStream(
+export async function createBenchmarkStream(
   base: PartialConfig,
   controlSets: BenchmarkControlSetInput[],
   handlers: {
@@ -197,35 +191,31 @@ export function createBenchmarkStream(
     onComplete?: (experiments: Experiment[], benchmarkId: string) => void;
     onError?: (error: string) => void;
   },
-  controller?: AbortController,
-): AbortController {
-  controller ??= new AbortController();
-
-  streamSSEParsed(
+): Promise<OperationSubscription> {
+  const resp = await requestJson<{ operationId: string }>(
     "/api/v1/experiments/benchmark",
     {
+      method: "POST",
       body: { base: serializeExperimentConfig(base), controlSets },
-      signal: controller.signal,
     },
-    {
-      onError: (err) => handlers.onError?.(err.message),
-      onFrame: ({ event, data }) => {
-        const d = data as Record<string, unknown>;
-        if (event === "benchmark_complete") {
-          handlers.onComplete?.(
-            (d.experiments as Experiment[]) ?? [],
-            (d.benchmarkId as string) ?? "",
-          );
-        } else if (event === "benchmark_error") {
-          handlers.onError?.((d.error as string) ?? "Unknown error");
-        } else if (event === "experiment_progress") {
-          handlers.onProgress?.(d as unknown as ExperimentProgressData);
-        }
-      },
-    },
-  ).catch((err) => console.error("[experiment.stream]", err));
+  );
 
-  return controller;
+  return subscribeToOperation<Record<string, unknown>>(resp.operationId, {
+    onEvent: ({ type, data }) => {
+      if (type === "benchmark_complete") {
+        handlers.onComplete?.(
+          (data.experiments as Experiment[]) ?? [],
+          (data.benchmarkId as string) ?? "",
+        );
+      } else if (type === "benchmark_error") {
+        handlers.onError?.((data.error as string) ?? "Unknown error");
+      } else if (type === "experiment_progress") {
+        handlers.onProgress?.(data as unknown as ExperimentProgressData);
+      }
+    },
+    onError: (err) => handlers.onError?.(err.message),
+    endEventTypes: new Set(["benchmark_complete", "benchmark_error"]),
+  });
 }
 
 /* ── AI Assist stream ────────────────────────────────────────────── */

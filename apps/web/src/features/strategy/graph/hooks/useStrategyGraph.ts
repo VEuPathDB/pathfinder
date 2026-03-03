@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { CombineOperator } from "@pathfinder/shared";
+import { CombineOperator, DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import type { StrategyWithMeta } from "@pathfinder/shared";
 import { useStrategyStore } from "@/state/useStrategyStore";
 import { computeStepCounts, listSites } from "@/lib/api/client";
@@ -131,12 +131,6 @@ export function useStrategyGraph(options: UseStrategyGraphOptions) {
     fetchCounts: computeStepCounts,
   });
 
-  // --- Noop plan hash setter (plan hash tracking removed) ---
-  const noopSetLastSavedPlanHash = useCallback(
-    (_v: React.SetStateAction<string | null>) => {},
-    [],
-  );
-
   // --- Save ---
   const { isSaving, canSave, handleSave } = useGraphSave({
     strategy,
@@ -148,7 +142,6 @@ export function useStrategyGraph(options: UseStrategyGraphOptions) {
     buildStepSignature: graphNodes.buildStepSignature,
     setLastSavedSteps: graphNodes.setLastSavedSteps,
     setLastSavedStepsVersion: graphNodes.setLastSavedStepsVersion,
-    setLastSavedPlanHash: noopSetLastSavedPlanHash,
     validateSearchSteps: graphNodes.validateSearchSteps,
     nameValue,
     setNameValue,
@@ -193,8 +186,6 @@ export function useStrategyGraph(options: UseStrategyGraphOptions) {
   // --- Saved snapshot sync ---
   useSavedSnapshotSync({
     strategy,
-    planHash: graphNodes.planHash,
-    setLastSavedPlanHash: noopSetLastSavedPlanHash,
     setLastSavedSteps: graphNodes.setLastSavedSteps,
     buildStepSignature: graphNodes.buildStepSignature,
     bumpLastSavedStepsVersion: () => graphNodes.setLastSavedStepsVersion((v) => v + 1),
@@ -204,7 +195,7 @@ export function useStrategyGraph(options: UseStrategyGraphOptions) {
   const handleNameCommit = useCallback(async () => {
     const name = nameValue.trim();
     if (!name || name === draftStrategy?.name) {
-      setNameValue(draftStrategy?.name || "Draft Strategy");
+      setNameValue(draftStrategy?.name || DEFAULT_STREAM_NAME);
       return;
     }
     setStrategyMeta({ name });

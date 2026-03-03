@@ -8,6 +8,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file:
       - path: ./apps/api/.env
         required: false
@@ -15,6 +17,7 @@ services:
       # Container-friendly defaults; override as needed.
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/pathfinder
       QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379/0
       DEFAULT_MODEL_ID: ${DEFAULT_MODEL_ID:-openai/gpt-5}
       DEFAULT_REASONING_EFFORT: ${DEFAULT_REASONING_EFFORT:-medium}
       # "mock" = fake chat (no API key needed; used by E2E). Set PATHFINDER_CHAT_PROVIDER=
@@ -69,6 +72,19 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   qdrant:
     image: qdrant/qdrant:latest
     ports:
@@ -108,5 +124,6 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   qdrant_data:
 

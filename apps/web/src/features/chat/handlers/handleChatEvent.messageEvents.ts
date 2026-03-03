@@ -7,7 +7,30 @@ import type {
   ToolCall,
   StrategyWithMeta,
 } from "@pathfinder/shared";
+import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import type { ChatEventContext } from "./handleChatEvent.types";
+
+/**
+ * Resolve the current streaming assistant message index with fallback.
+ *
+ * If the tracked index is stale (null or negative), falls back to the
+ * last message if it's an assistant message. Returns null when no valid
+ * index can be resolved.
+ */
+function resolveAssistantIndex(
+  streamingIndex: number | null,
+  messages: readonly Message[],
+): number | null {
+  let idx = streamingIndex;
+  if (
+    (idx === null || idx < 0) &&
+    messages[messages.length - 1]?.role === "assistant"
+  ) {
+    idx = messages.length - 1;
+  }
+  if (idx === null || idx < 0 || idx >= messages.length) return null;
+  return idx;
+}
 
 export function snapshotSubKaniActivityFromBuffers(
   calls: Record<string, ToolCall[]>,
@@ -17,23 +40,52 @@ export function snapshotSubKaniActivityFromBuffers(
   return { calls: { ...calls }, status: { ...status } };
 }
 
+/**
+ * Handle `user_message` events from the Redis stream catch-up.
+ *
+ * During normal streaming the user message is added locally by
+ * `handleSendMessage` before the stream starts.  But during
+ * **operation recovery** (page refresh / reconnect), the catch-up
+ * replays events from Redis — including the user_message — and
+ * we must append it so `mergeMessages` sees a complete conversation.
+ */
+export function handleUserMessageEvent(ctx: ChatEventContext, data: unknown) {
+  const raw = data as { content?: string; messageId?: string };
+  const content = typeof raw.content === "string" ? raw.content : "";
+  if (!content) return;
+
+  ctx.setMessages((prev) => {
+    // De-duplicate: skip if the last user message has the same content
+    // (can happen if data-loading and recovery both add it).
+    for (let i = prev.length - 1; i >= 0; i--) {
+      if (prev[i].role !== "user") continue;
+      if (prev[i].content === content) return prev;
+      break; // Only check the most recent user message
+    }
+    return [
+      ...prev,
+      {
+        role: "user" as const,
+        content,
+        messageId: raw.messageId,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+  });
+}
+
 export function handleMessageStartEvent(ctx: ChatEventContext, data: unknown) {
-  const { strategyId, strategy, planSessionId } = data as {
+  const { strategyId, strategy } = data as {
     strategyId?: string;
     strategy?: StrategyWithMeta;
-    planSessionId?: string;
   };
-
-  if (planSessionId && ctx.onPlanSessionId) {
-    ctx.onPlanSessionId(planSessionId);
-  }
 
   if (strategyId) {
     ctx.setStrategyId(strategyId);
     ctx.addStrategy({
       id: strategyId,
-      name: strategy?.name || "Draft Strategy",
-      title: strategy?.title || strategy?.name || "Draft Strategy",
+      name: strategy?.name || DEFAULT_STREAM_NAME,
+      title: strategy?.title || strategy?.name || DEFAULT_STREAM_NAME,
       siteId: ctx.siteId,
       recordType: strategy?.recordType ?? null,
       stepCount: strategy?.steps?.length ?? 0,
@@ -98,11 +150,8 @@ export function handleAssistantDeltaEvent(ctx: ChatEventContext, data: unknown) 
   }
 
   ctx.setMessages((prev) => {
-    let idx = ctx.streamState.streamingAssistantIndex;
-    if ((idx === null || idx < 0) && prev[prev.length - 1]?.role === "assistant") {
-      idx = prev.length - 1;
-    }
-    if (idx === null || idx < 0 || idx >= prev.length) return prev;
+    const idx = resolveAssistantIndex(ctx.streamState.streamingAssistantIndex, prev);
+    if (idx === null) return prev;
     const next = [...prev];
     const existing = next[idx];
     if (!existing || existing.role !== "assistant") return prev;
@@ -144,11 +193,8 @@ export function handleAssistantMessageEvent(ctx: ChatEventContext, data: unknown
   ) {
     ctx.session.consumeUndoSnapshot();
     ctx.setMessages((prev) => {
-      let idx = ctx.streamState.streamingAssistantIndex;
-      if ((idx === null || idx < 0) && prev[prev.length - 1]?.role === "assistant") {
-        idx = prev.length - 1;
-      }
-      if (idx === null || idx < 0 || idx >= prev.length) return prev;
+      const idx = resolveAssistantIndex(ctx.streamState.streamingAssistantIndex, prev);
+      if (idx === null) return prev;
       const next = [...prev];
       const existing = next[idx];
       if (!existing || existing.role !== "assistant") return prev;
@@ -216,7 +262,6 @@ export function handlePlanningArtifactEvent(ctx: ChatEventContext, data: unknown
   const artifact = (data as { planningArtifact?: unknown }).planningArtifact;
   if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) return;
   ctx.planningArtifactsBuffer.push(artifact as PlanningArtifact);
-  ctx.onPlanningArtifactUpdate?.(artifact as PlanningArtifact);
 }
 
 export function handleReasoningEvent(ctx: ChatEventContext, data: unknown) {
@@ -272,22 +317,6 @@ export function handleOptimizationProgressEvent(ctx: ChatEventContext, data: unk
     next[idx] = { ...prev[idx], optimizationProgress: normalizedProgress };
     return next;
   });
-}
-
-export function handlePlanUpdateEvent(ctx: ChatEventContext, data: unknown) {
-  const { title } = data as { title?: string };
-  if (title && ctx.onConversationTitleUpdate) {
-    ctx.onConversationTitleUpdate(title.trim());
-  }
-}
-
-export function handleExecutorBuildRequestEvent(ctx: ChatEventContext, data: unknown) {
-  const ebr = (data as { executorBuildRequest?: Record<string, unknown> })
-    .executorBuildRequest;
-  const message = typeof ebr?.message === "string" ? ebr.message : undefined;
-  if (message && ctx.onExecutorBuildRequest) {
-    ctx.onExecutorBuildRequest(message);
-  }
 }
 
 export function handleErrorEvent(ctx: ChatEventContext, data: unknown) {

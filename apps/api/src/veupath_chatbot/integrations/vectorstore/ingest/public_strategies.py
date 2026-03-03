@@ -30,7 +30,10 @@ from veupath_chatbot.integrations.vectorstore.ingest.public_strategies_helpers i
 from veupath_chatbot.integrations.vectorstore.ingest.public_transform import (
     _generate_name_and_description,
 )
-from veupath_chatbot.integrations.vectorstore.ingest.utils import existing_point_ids
+from veupath_chatbot.integrations.vectorstore.ingest.utils import (
+    existing_point_ids,
+    parse_sites,
+)
 from veupath_chatbot.integrations.vectorstore.qdrant_store import (
     QdrantStore,
     point_uuid,
@@ -108,23 +111,14 @@ async def ingest_site(
             candidates = candidates[: max(0, int(max_strategies))]
 
         if skip_existing and candidates:
-            from qdrant_client import AsyncQdrantClient
-
-            timeout_int: int | None = (
-                int(store.timeout_seconds)
-                if store.timeout_seconds is not None
-                else None
-            )
-            q = AsyncQdrantClient(
-                url=store.url,
-                api_key=store.api_key,
-                timeout=timeout_int,
-            )
+            q = store._client()
             try:
                 sigs = [str(s.get("signature") or "").strip() for s in candidates]
-                ids = [point_uuid(f"{site_id}:{sig}") for sig in sigs if sig]
+                sig_to_id = {sig: point_uuid(f"{site_id}:{sig}") for sig in sigs if sig}
                 existing = await existing_point_ids(
-                    qdrant_client=q, collection=EXAMPLE_PLANS_V1, ids=ids
+                    qdrant_client=q,
+                    collection=EXAMPLE_PLANS_V1,
+                    ids=list(sig_to_id.values()),
                 )
             finally:
                 await q.close()
@@ -133,10 +127,8 @@ async def ingest_site(
                 before = len(candidates)
                 candidates = [
                     s
-                    for s in candidates
-                    if str(s.get("signature") or "").strip()
-                    and point_uuid(f"{site_id}:{str(s.get('signature') or '').strip()}")
-                    not in existing
+                    for s, sig in zip(candidates, sigs, strict=True)
+                    if sig and sig_to_id.get(sig) not in existing
                 ]
                 skipped = before - len(candidates)
                 if skipped:
@@ -194,8 +186,6 @@ async def ingest_site(
                                 "traceback": traceback.format_exc(),
                             },
                         )
-                        if tmp_id is not None:
-                            await _delete_strategy(client, tmp_id)
                         jobs.task_done()
                         continue
                     finally:
@@ -329,18 +319,12 @@ async def ingest_public_strategies(
     dim = len(await embed_one(text="example-plans", model=settings.embeddings_model))
 
     if reset:
-        from qdrant_client import AsyncQdrantClient
-
-        timeout_int: int | None = (
-            int(store.timeout_seconds) if store.timeout_seconds is not None else None
-        )
-        client = AsyncQdrantClient(
-            url=store.url,
-            api_key=store.api_key,
-            timeout=timeout_int,
-        )
-        if await client.collection_exists(collection_name=EXAMPLE_PLANS_V1):
-            await client.delete_collection(collection_name=EXAMPLE_PLANS_V1)
+        client = store._client()
+        try:
+            if await client.collection_exists(collection_name=EXAMPLE_PLANS_V1):
+                await client.delete_collection(collection_name=EXAMPLE_PLANS_V1)
+        finally:
+            await client.close()
 
     await store.ensure_collection(name=EXAMPLE_PLANS_V1, vector_size=dim)
     embedder = OpenAIEmbeddings(model=settings.embeddings_model)
@@ -395,13 +379,6 @@ async def ingest_public_strategies(
     _write_jsonl(report_path, {"ts": _now_ts(), "level": "run", "stage": "end"})
 
 
-def _parse_sites(value: str) -> list[str] | None:
-    v = (value or "").strip()
-    if not v or v == "all":
-        return None
-    return [s.strip() for s in v.split(",") if s.strip()]
-
-
 async def _cli_async(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sites", default="all")
@@ -432,7 +409,7 @@ async def _cli_async(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     await ingest_public_strategies(
-        sites=_parse_sites(args.sites),
+        sites=parse_sites(args.sites),
         reset=bool(args.reset),
         skip_existing=bool(args.skip_existing),
         llm_model=str(args.llm_model),

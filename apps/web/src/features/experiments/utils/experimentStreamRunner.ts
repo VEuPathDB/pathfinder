@@ -1,4 +1,5 @@
 import type { ExperimentConfig, ExperimentProgressData } from "@pathfinder/shared";
+import type { OperationSubscription } from "@/lib/operationSubscribe";
 import type { StepAnalysisLiveItems, TrialHistoryEntry } from "../types";
 
 /* ── Types ──────────────────────────────────────────────────────────── */
@@ -21,7 +22,7 @@ interface RunStoreSlice {
   trialHistory: TrialHistoryEntry[];
   stepAnalysisItems: StepAnalysisLiveItems;
   error: string | null;
-  abortController: AbortController | null;
+  subscription: OperationSubscription | null;
   runningConfig: ExperimentConfig | null;
 }
 
@@ -45,11 +46,11 @@ export interface StreamRunnerOpts {
   /** Whether this run involves optimization / step-analysis progress. */
   hasOptimization: boolean;
   /**
-   * Opens the SSE stream. The implementor wires the stream-creator's
+   * Opens the operation stream. The implementor wires the stream-creator's
    * typed `onComplete` to first perform any view-store updates, then
    * call `callbacks.onRunComplete()` to reset running state.
    */
-  openStream: (callbacks: StreamRunnerCallbacks, controller: AbortController) => void;
+  openStream: (callbacks: StreamRunnerCallbacks) => Promise<OperationSubscription>;
 }
 
 /* ── Accumulator helpers ─────────────────────────────────────────────── */
@@ -156,11 +157,10 @@ export function runExperimentStream(
   { set, get }: RunStoreAccessors,
   opts: StreamRunnerOpts,
 ): void {
-  // 1. Abort any in-flight run
-  get().abortController?.abort();
+  // 1. Unsubscribe from any in-flight run
+  get().subscription?.unsubscribe();
 
-  // 2. Fresh controller + running state
-  const controller = new AbortController();
+  // 2. Running state (subscription will be set once connected)
   set({
     isRunning: true,
     hasOptimization: opts.hasOptimization,
@@ -169,12 +169,12 @@ export function runExperimentStream(
     stepAnalysisItems: EMPTY_LIVE_ITEMS,
     error: null,
     runningConfig: opts.config,
-    abortController: controller,
+    subscription: null,
   });
 
-  // 3. Open the stream with shared callbacks
-  opts.openStream(
-    {
+  // 3. Open the stream with shared callbacks (async)
+  opts
+    .openStream({
       onProgress: (data) => {
         set((s) => ({
           progress: data,
@@ -185,7 +185,7 @@ export function runExperimentStream(
       onRunComplete: () => {
         set({
           isRunning: false,
-          abortController: null,
+          subscription: null,
           runningConfig: null,
         });
       },
@@ -193,11 +193,26 @@ export function runExperimentStream(
         set({
           error,
           isRunning: false,
-          abortController: null,
+          subscription: null,
           runningConfig: null,
         });
       },
-    },
-    controller,
-  );
+    })
+    .then((sub) => {
+      // Store subscription for cancellation
+      if (get().isRunning) {
+        set({ subscription: sub });
+      } else {
+        // Run already completed before we got the subscription
+        sub.unsubscribe();
+      }
+    })
+    .catch((err) => {
+      set({
+        error: err instanceof Error ? err.message : String(err),
+        isRunning: false,
+        subscription: null,
+        runningConfig: null,
+      });
+    });
 }

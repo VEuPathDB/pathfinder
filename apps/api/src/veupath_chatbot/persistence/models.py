@@ -21,12 +21,12 @@ from sqlalchemy.types import CHAR, TypeDecorator, TypeEngine
 from veupath_chatbot.platform.types import JSONArray, JSONObject
 
 
-class GUID(TypeDecorator[str]):
+class GUID(TypeDecorator[UUID]):
     """Platform-independent GUID type.
 
     Uses CHAR(36) and stores UUIDs as strings.
-
-
+    Returns proper ``UUID`` objects on read so that Python-side comparisons
+    (e.g. ``stream.user_id == some_uuid``) work correctly.
     """
 
     impl = CHAR
@@ -39,17 +39,19 @@ class GUID(TypeDecorator[str]):
         self, value: UUID | str | None, dialect: Dialect
     ) -> str | None:
         if value is None:
-            return value
+            return None
         if isinstance(value, UUID):
             return str(value)
         return value
 
-    def process_result_value(self, value: str | None, dialect: Dialect) -> str | None:
+    def process_result_value(
+        self, value: str | UUID | None, dialect: Dialect
+    ) -> UUID | None:
         if value is None:
-            return value
+            return None
         if isinstance(value, UUID):
-            return str(value)
-        return value
+            return value
+        return UUID(value)
 
 
 class Base(DeclarativeBase):
@@ -75,6 +77,9 @@ class User(Base):
 
     # Relationships
     strategies: Mapped[list[Strategy]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    streams: Mapped[list[Stream]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -211,3 +216,94 @@ class ExperimentRow(Base):
         Index("ix_experiments_batch_id", "batch_id"),
         Index("ix_experiments_benchmark_id", "benchmark_id"),
     )
+
+
+class Stream(Base):
+    """A conversation stream — the identity of a chat conversation.
+
+    All mutable state is derived from events in Redis. This table only
+    holds identity and ownership.
+    """
+
+    __tablename__ = "streams"
+
+    id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("users.id", ondelete="CASCADE")
+    )
+    site_id: Mapped[str] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="streams")
+
+    __table_args__ = (Index("ix_streams_user_site", "user_id", "site_id"),)
+
+
+class StreamProjection(Base):
+    """Materialized projection of a conversation stream.
+
+    Derived from events — rebuildable by replaying the Redis stream.
+    This is a CACHE for fast reads, not a source of truth.
+    """
+
+    __tablename__ = "stream_projections"
+
+    stream_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("streams.id", ondelete="CASCADE"), primary_key=True
+    )
+    name: Mapped[str] = mapped_column(String(255), default="")
+    record_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    wdk_strategy_id: Mapped[int | None] = mapped_column(nullable=True)
+    is_saved: Mapped[bool] = mapped_column(Boolean, default=False)
+    model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    message_count: Mapped[int] = mapped_column(Integer, default=0)
+    step_count: Mapped[int] = mapped_column(Integer, default=0)
+    plan: Mapped[JSONObject] = mapped_column(JSON, default=dict)
+    steps: Mapped[JSONArray] = mapped_column(JSON, default=list)
+    root_step_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    result_count: Mapped[int | None] = mapped_column(nullable=True)
+    last_event_id: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    stream: Mapped[Stream] = relationship()
+
+    @property
+    def site_id(self) -> str:
+        """Site ID from the parent stream, defaulting to empty string."""
+        return self.stream.site_id if self.stream else ""
+
+    __table_args__ = (
+        Index(
+            "ix_proj_wdk",
+            "wdk_strategy_id",
+            unique=True,
+            postgresql_where="wdk_strategy_id IS NOT NULL",
+        ),
+    )
+
+
+class Operation(Base):
+    """Tracks active and completed operations for client discovery."""
+
+    __tablename__ = "operations"
+
+    operation_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    stream_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("streams.id", ondelete="CASCADE")
+    )
+    type: Mapped[str] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    stream: Mapped[Stream] = relationship()
+
+    __table_args__ = (Index("ix_ops_stream_status", "stream_id", "status"),)

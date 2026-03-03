@@ -37,7 +37,8 @@ export type paths = {
          * Readiness Check
          * @description Readiness check - is the service ready to accept requests?
          *
-         *     In production, this should check database and cache connectivity.
+         *     Checks database connectivity and Qdrant availability (if RAG is enabled).
+         *     Returns 503 if any dependency is unreachable.
          */
         get: operations["readiness_check_health_ready_get"];
         put?: never;
@@ -117,9 +118,7 @@ export type paths = {
         };
         /**
          * Get Searches
-         * @description Get searches available on a site.
-         *
-         *     Optionally filter by record type.
+         * @description Get searches available on a site, optionally filtered by record type.
          */
         get: operations["get_searches_api_v1_sites__siteId__searches_get"];
         put?: never;
@@ -297,59 +296,6 @@ export type paths = {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/api/v1/plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Plans */
-        get: operations["list_plans_api_v1_plans_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/plans/open": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Open Plan */
-        post: operations["open_plan_api_v1_plans_open_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/plans/{planSessionId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Plan */
-        get: operations["get_plan_api_v1_plans__planSessionId__get"];
-        put?: never;
-        post?: never;
-        /** Delete Plan */
-        delete: operations["delete_plan_api_v1_plans__planSessionId__delete"];
-        options?: never;
-        head?: never;
-        /** Update Plan */
-        patch: operations["update_plan_api_v1_plans__planSessionId__patch"];
         trace?: never;
     };
     "/api/v1/strategies": {
@@ -839,9 +785,6 @@ export type paths = {
         /**
          * Compute Overlap
          * @description Compute pairwise gene set overlap between experiments.
-         *
-         *     For each experiment the result gene set is the union of TP and FP genes.
-         *     Returns Jaccard similarity, shared/unique genes, and membership counts.
          */
         post: operations["compute_overlap_api_v1_experiments_overlap_post"];
         delete?: never;
@@ -862,9 +805,6 @@ export type paths = {
         /**
          * Compare Enrichment
          * @description Compare enrichment results across experiments.
-         *
-         *     Builds a term-by-experiment matrix of fold-enrichment scores.
-         *     Optionally filters to a single analysis type.
          */
         post: operations["compare_enrichment_api_v1_experiments_enrichment_compare_post"];
         delete?: never;
@@ -936,26 +876,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/experiments/{experiment_id}/re-evaluate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Re Evaluate Experiment
-         * @description Re-run control evaluation against the (possibly modified) strategy.
-         */
-        post: operations["re_evaluate_experiment_api_v1_experiments__experiment_id__re_evaluate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/experiments/{experiment_id}/custom-enrich": {
         parameters: {
             query?: never;
@@ -970,6 +890,26 @@ export type paths = {
          * @description Test enrichment of a custom gene set against the experiment results.
          */
         post: operations["custom_enrichment_api_v1_experiments__experiment_id__custom_enrich_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/experiments/{experiment_id}/re-evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re Evaluate Experiment
+         * @description Re-run control evaluation against the (possibly modified) strategy.
+         */
+        post: operations["re_evaluate_experiment_api_v1_experiments__experiment_id__re_evaluate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1577,18 +1517,10 @@ export type components = {
         ChatRequest: {
             /** Strategyid */
             strategyId?: string | null;
-            /** Plansessionid */
-            planSessionId?: string | null;
             /** Siteid */
             siteId: string;
             /** Message */
             message: string;
-            /**
-             * Mode
-             * @default execute
-             * @enum {string}
-             */
-            mode: "execute" | "plan";
             /** Provider */
             provider?: ("openai" | "anthropic" | "google") | null;
             /** Model */
@@ -1955,7 +1887,7 @@ export type components = {
             toolCalls?: components["schemas"]["ToolCallResponse"][] | null;
             subKaniActivity?: components["schemas"]["SubKaniActivityResponse"] | null;
             /** Mode */
-            mode?: ("execute" | "plan") | null;
+            mode?: string | null;
             citations?: components["schemas"]["JSONArray"] | null;
             planningArtifacts?: components["schemas"]["JSONArray"] | null;
             /** Reasoning */
@@ -1966,23 +1898,6 @@ export type components = {
              * Format: date-time
              */
             timestamp: string;
-        };
-        /** OpenPlanSessionRequest */
-        OpenPlanSessionRequest: {
-            /** Plansessionid */
-            planSessionId?: string | null;
-            /** Siteid */
-            siteId: string;
-            /** Title */
-            title?: string | null;
-        };
-        /** OpenPlanSessionResponse */
-        OpenPlanSessionResponse: {
-            /**
-             * Plansessionid
-             * Format: uuid
-             */
-            planSessionId: string;
         };
         /**
          * OpenStrategyRequest
@@ -2179,56 +2094,6 @@ export type components = {
         PlanNormalizeResponse: {
             plan: components["schemas"]["StrategyPlan-Output"];
             warnings?: components["schemas"]["JSONArray"] | null;
-        };
-        /** PlanSessionResponse */
-        PlanSessionResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Siteid */
-            siteId: string;
-            /** Title */
-            title: string;
-            /** Messages */
-            messages?: components["schemas"]["MessageResponse"][] | null;
-            thinking?: components["schemas"]["ThinkingResponse"] | null;
-            planningArtifacts?: components["schemas"]["JSONArray"] | null;
-            /** Modelid */
-            modelId?: string | null;
-            /**
-             * Updatedat
-             * Format: date-time
-             */
-            updatedAt: string;
-            /**
-             * Createdat
-             * Format: date-time
-             */
-            createdAt: string;
-        };
-        /** PlanSessionSummaryResponse */
-        PlanSessionSummaryResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Siteid */
-            siteId: string;
-            /** Title */
-            title: string;
-            /**
-             * Updatedat
-             * Format: date-time
-             */
-            updatedAt: string;
-            /**
-             * Createdat
-             * Format: date-time
-             */
-            createdAt: string;
         };
         /**
          * RecordTypeResponse
@@ -2803,11 +2668,6 @@ export type components = {
             /** Result */
             result?: string | null;
         };
-        /** UpdatePlanSessionRequest */
-        UpdatePlanSessionRequest: {
-            /** Title */
-            title?: string | null;
-        };
         /**
          * UpdateStrategyRequest
          * @description Request to update a strategy.
@@ -3348,169 +3208,6 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": string;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_plans_api_v1_plans_get: {
-        parameters: {
-            query?: {
-                siteId?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlanSessionSummaryResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    open_plan_api_v1_plans_open_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OpenPlanSessionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpenPlanSessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_plan_api_v1_plans__planSessionId__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                planSessionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlanSessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_plan_api_v1_plans__planSessionId__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                planSessionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_plan_api_v1_plans__planSessionId__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                planSessionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdatePlanSessionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlanSessionSummaryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4593,7 +4290,7 @@ export interface operations {
             };
         };
     };
-    re_evaluate_experiment_api_v1_experiments__experiment_id__re_evaluate_post: {
+    custom_enrichment_api_v1_experiments__experiment_id__custom_enrich_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -4602,7 +4299,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomEnrichRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -4624,7 +4325,7 @@ export interface operations {
             };
         };
     };
-    custom_enrichment_api_v1_experiments__experiment_id__custom_enrich_post: {
+    re_evaluate_experiment_api_v1_experiments__experiment_id__re_evaluate_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -4633,11 +4334,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CustomEnrichRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -5130,8 +4827,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                experiment_id: string;
                 attribute_name: string;
+                experiment_id: string;
             };
             cookie?: never;
         };

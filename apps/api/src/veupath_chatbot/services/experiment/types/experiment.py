@@ -89,8 +89,8 @@ class BatchOrganismTarget:
     """Per-organism overrides for a cross-organism batch experiment."""
 
     organism: str
-    positive_controls: list[str] = field(default_factory=list)
-    negative_controls: list[str] = field(default_factory=list)
+    positive_controls: list[str] | None = None
+    negative_controls: list[str] | None = None
 
 
 @dataclass(slots=True)

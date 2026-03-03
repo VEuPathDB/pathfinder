@@ -22,11 +22,9 @@ from veupath_chatbot.services.control_helpers import (
     _encode_id_list,
     _extract_record_ids,
     _get_total_count_for_step,
-)
-from veupath_chatbot.services.experiment.types import ControlValueFormat
-from veupath_chatbot.transport.http.routers.strategies._shared import (
     cleanup_internal_control_test_strategies,
 )
+from veupath_chatbot.services.experiment.types import ControlValueFormat
 
 __all__ = [
     "_coerce_step_id",
@@ -249,6 +247,25 @@ async def _cleanup_internal_control_test_strategies(api: StrategyAPI) -> None:
     await cleanup_internal_control_test_strategies(api, strategies)
 
 
+def _extract_intersection_data(
+    payload: JSONObject,
+) -> tuple[int, set[str], bool]:
+    """Extract intersection count and ID set from a control-test payload.
+
+    :returns: ``(count, id_set, has_id_list)`` where *has_id_list* indicates
+        whether the payload contained an explicit intersection IDs list
+        (``False`` when there are >500 controls and IDs weren't fetched).
+    """
+    raw_count = payload.get("intersectionCount")
+    count = int(raw_count) if isinstance(raw_count, (int, float)) else 0
+
+    ids_value = payload.get("intersectionIds") if isinstance(payload, dict) else None
+    id_set: set[str] = set()
+    if isinstance(ids_value, list):
+        id_set = {str(x) for x in ids_value if x is not None}
+    return count, id_set, isinstance(ids_value, list)
+
+
 async def run_positive_negative_controls(
     *,
     site_id: str,
@@ -262,6 +279,7 @@ async def run_positive_negative_controls(
     controls_value_format: ControlValueFormat = "newline",
     controls_extra_parameters: JSONObject | None = None,
     id_field: str | None = None,
+    skip_cleanup: bool = False,
 ) -> JSONObject:
     """Run positive + negative controls against a single WDK question configuration.
 
@@ -269,11 +287,13 @@ async def run_positive_negative_controls(
     internally.  WDK cascade-deletes all steps inside a strategy when the
     strategy is deleted, so a shared target step would be invalidated after
     the first control run's cleanup.
+
+    :param skip_cleanup: When ``True``, skip the upfront strategy cleanup.
+        Useful when the caller already performed cleanup (e.g. batch sweeps).
     """
-    # Best-effort cleanup of any stale control-test strategies (once per call,
-    # not per intersection, to avoid racing concurrent experiments).
-    cleanup_api = get_strategy_api(site_id)
-    await _cleanup_internal_control_test_strategies(cleanup_api)
+    if not skip_cleanup:
+        cleanup_api = get_strategy_api(site_id)
+        await _cleanup_internal_control_test_strategies(cleanup_api)
 
     # Common kwargs passed to _run_intersection_control for both control sets.
     common_kwargs: _IntersectionKwargs = {
@@ -315,36 +335,12 @@ async def run_positive_negative_controls(
         target["stepId"] = pos_payload.get("targetStepId")
         target["resultCount"] = pos_payload.get("targetResultCount")
 
-        # Use intersectionCount (authoritative from WDK step count API)
-        # for recall computation.  intersectionIds (extracted from the
-        # answer body) may be empty when the record format doesn't match
-        # _extract_record_ids expectations.
-        raw_pos_count = pos_payload.get("intersectionCount")
-        pos_intersection_count = (
-            int(raw_pos_count) if isinstance(raw_pos_count, (int, float)) else 0
-        )
-
-        # Still attempt to extract IDs for the "missing" sample.
-        intersection_ids_value = (
-            pos_payload.get("intersectionIds")
-            if isinstance(pos_payload, dict)
-            else None
-        )
-        pos_intersection_ids_list: list[str] = []
-        if isinstance(intersection_ids_value, list):
-            pos_intersection_ids_list = [
-                str(x) for x in intersection_ids_value if x is not None
-            ]
-        found_ids = set(pos_intersection_ids_list)
-        # When intersectionIds is None (>500 controls), found_ids is empty
-        # and we can't enumerate missing IDs.  intersectionCount is still
-        # authoritative for metrics.
-        missing = [x for x in pos if x not in found_ids] if found_ids else []
-        missing_ids_sample: JSONValue = list(missing[:50]) if missing else []
+        pos_count, found_ids, has_ids = _extract_intersection_data(pos_payload)
+        missing = [x for x in pos if x not in found_ids] if has_ids else []
         result["positive"] = {
             **pos_payload,
-            "missingIdsSample": missing_ids_sample,
-            "recall": pos_intersection_count / len(pos) if pos else None,
+            "missingIdsSample": missing[:50],
+            "recall": pos_count / len(pos) if pos else None,
         }
 
     if neg:
@@ -358,29 +354,11 @@ async def run_positive_negative_controls(
             target["stepId"] = neg_payload.get("targetStepId")
             target["resultCount"] = neg_payload.get("targetResultCount")
 
-        # Use intersectionCount (authoritative) for FPR computation.
-        raw_neg_count = neg_payload.get("intersectionCount")
-        neg_intersection_count = (
-            int(raw_neg_count) if isinstance(raw_neg_count, (int, float)) else 0
-        )
-
-        # Still attempt to extract IDs for the "unexpected hits" sample.
-        intersection_ids_value = (
-            neg_payload.get("intersectionIds")
-            if isinstance(neg_payload, dict)
-            else None
-        )
-        neg_intersection_ids_list: list[str] = []
-        if isinstance(intersection_ids_value, list):
-            neg_intersection_ids_list = [
-                str(x) for x in intersection_ids_value if x is not None
-            ]
-        hit_ids = set(neg_intersection_ids_list)
-        unexpected_hits_sample: JSONValue = list(list(hit_ids)[:50]) if hit_ids else []
+        neg_count, hit_ids, _ = _extract_intersection_data(neg_payload)
         result["negative"] = {
             **neg_payload,
-            "unexpectedHitsSample": unexpected_hits_sample,
-            "falsePositiveRate": neg_intersection_count / len(neg) if neg else None,
+            "unexpectedHitsSample": list(hit_ids)[:50] if hit_ids else [],
+            "falsePositiveRate": neg_count / len(neg) if neg else None,
         }
 
     return result

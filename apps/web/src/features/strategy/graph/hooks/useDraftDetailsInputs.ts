@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 
 export function useDraftDetailsInputs(args: {
   isDraftView: boolean;
@@ -17,7 +18,7 @@ export function useDraftDetailsInputs(args: {
 
   useEffect(() => {
     if (!isDraftView) return;
-    setNameValue(draftName || "Draft Strategy");
+    setNameValue(draftName || DEFAULT_STREAM_NAME);
     setDescriptionValue(draftDescription || "");
   }, [isDraftView, draftName, draftDescription, setNameValue, setDescriptionValue]);
 }

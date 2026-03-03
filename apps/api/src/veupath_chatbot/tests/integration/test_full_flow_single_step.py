@@ -117,11 +117,10 @@ class TestSingleStepRNASeqSearch:
                 authed_client,
                 message="Find genes upregulated in P. falciparum gametocytes using RNA-Seq data",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert result.http_status == 200, f"HTTP {result.http_status}: {result.events}"
+        assert result.http_status == 202, f"HTTP {result.http_status}: {result.events}"
         types = result.event_types
 
         assert types[0] == "message_start", (
@@ -233,11 +232,10 @@ class TestSingleStepEpitopeSearch:
                 authed_client,
                 message="Find P. falciparum genes with epitope evidence",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert result.http_status == 200, f"HTTP {result.http_status}"
+        assert result.http_status == 202, f"HTTP {result.http_status}"
         types = result.event_types
         assert types[0] == "message_start"
         assert "message_end" in types
@@ -326,11 +324,10 @@ class TestSingleStepEpitopeVariant:
                 authed_client,
                 message="Find P. falciparum genes with low-confidence epitope predictions",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert result.http_status == 200, f"HTTP {result.http_status}"
+        assert result.http_status == 202, f"HTTP {result.http_status}"
         types = result.event_types
         assert types[0] == "message_start"
         assert "message_end" in types
@@ -389,11 +386,10 @@ class TestCatalogExploration:
                 authed_client,
                 message="What proteomics searches are available on PlasmoDB?",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=60.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
         types = result.event_types
         assert types[0] == "message_start"
         assert "message_end" in types

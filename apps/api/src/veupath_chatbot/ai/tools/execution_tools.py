@@ -5,8 +5,10 @@ from typing import Annotated, cast
 from kani import AIParam, ai_function
 
 from veupath_chatbot.domain.strategy.ast import StrategyAST
-from veupath_chatbot.domain.strategy.compile import compile_strategy
-from veupath_chatbot.domain.strategy.session import StrategyGraph, StrategySession
+from veupath_chatbot.domain.strategy.compile import (
+    apply_step_decorations,
+    compile_strategy,
+)
 from veupath_chatbot.domain.strategy.validate import validate_strategy
 from veupath_chatbot.integrations.veupathdb.factory import (
     get_site,
@@ -15,105 +17,18 @@ from veupath_chatbot.integrations.veupathdb.factory import (
 from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
 from veupath_chatbot.platform.errors import ErrorCode
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.tool_errors import tool_error
 from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.services.strategies.engine.validation import ValidationMixin
 
 logger = get_logger(__name__)
 
 
-class ExecutionTools:
+class ExecutionTools(ValidationMixin):
     """Tools for running strategies and getting results."""
-
-    def __init__(self, session: StrategySession) -> None:
-        self.session = session
-
-    def _get_graph(self, graph_id: str | None) -> StrategyGraph | None:
-        return self.session.get_graph(graph_id)
-
-    def _graph_not_found(self, graph_id: str | None) -> JSONObject:
-        if graph_id:
-            return self._tool_error(
-                ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id
-            )
-        return self._tool_error(
-            ErrorCode.NOT_FOUND, "Graph not found. Provide a graphId.", graphId=graph_id
-        )
-
-    def _tool_error(
-        self, code: ErrorCode | str, message: str, **details: object
-    ) -> JSONObject:
-        # Convert details to JSONValue-compatible types
-        json_details: dict[str, JSONValue] = {}
-        for key, value in details.items():
-            # Convert object to JSONValue - only include JSON-serializable types
-            if isinstance(value, (str, int, float, bool, type(None))):
-                json_details[key] = value
-            elif isinstance(value, list):
-                # Convert list elements to JSONValue recursively
-                json_list: list[JSONValue] = []
-                for item in value:
-                    if isinstance(item, (str, int, float, bool, type(None))):
-                        json_list.append(item)
-                    elif isinstance(item, (list, dict)):
-                        json_list.append(cast(JSONValue, item))
-                    else:
-                        json_list.append(str(item))
-                json_details[key] = json_list
-            elif isinstance(value, dict):
-                # Convert dict to JSONObject
-                json_dict: dict[str, JSONValue] = {}
-                for k, v in value.items():
-                    if isinstance(v, (str, int, float, bool, type(None))):
-                        json_dict[str(k)] = v
-                    elif isinstance(v, (list, dict)):
-                        json_dict[str(k)] = cast(JSONValue, v)
-                    else:
-                        json_dict[str(k)] = str(v)
-                json_details[key] = json_dict
-            else:
-                # Convert other types to string
-                json_details[key] = str(value)
-        return tool_error(code, message, **json_details)
 
     def _get_api(self) -> StrategyAPI:
         """Get strategy API for current site."""
         return get_strategy_api(self.session.site_id)
-
-    @ai_function()
-    async def preview_results(
-        self,
-        step_id: Annotated[str, AIParam(desc="Step ID to preview")],
-        limit: Annotated[int, AIParam(desc="Max records to return")] = 10,
-        graph_id: Annotated[str | None, AIParam(desc="Graph ID to use")] = None,
-    ) -> JSONObject:
-        """Preview results from a step.
-
-        Returns a sample of records and the total count.
-        Use this to check if a step returns expected results before
-        building a full strategy.
-        """
-        graph = self._get_graph(graph_id)
-        if not graph:
-            return self._graph_not_found(graph_id)
-
-        step = graph.get_step(step_id)
-
-        if not step:
-            return self._tool_error(
-                ErrorCode.STEP_NOT_FOUND, f"Step not found: {step_id}", graphId=graph.id
-            )
-
-        # For now, return a simulated preview
-        # In production, this would compile and execute the step
-        return {
-            "graphId": graph.id,
-            "stepId": step_id,
-            "status": "preview_simulated",
-            "message": (
-                "Preview functionality requires executing the step on VEuPathDB. "
-                "Build the full strategy to get actual results."
-            ),
-        }
 
     @ai_function()
     async def build_strategy(
@@ -257,30 +172,7 @@ class ExecutionTools:
 
             compiled_map = {s.local_id: s.wdk_step_id for s in compilation_result.steps}
 
-            for step in strategy.get_all_steps():
-                wdk_step_id = compiled_map.get(step.id)
-                if not wdk_step_id:
-                    continue
-                for step_filter in getattr(step, "filters", []) or []:
-                    await api.set_step_filter(
-                        step_id=wdk_step_id,
-                        filter_name=step_filter.name,
-                        value=step_filter.value,
-                        disabled=step_filter.disabled,
-                    )
-                for analysis in getattr(step, "analyses", []) or []:
-                    await api.run_step_analysis(
-                        step_id=wdk_step_id,
-                        analysis_type=analysis.analysis_type,
-                        parameters=analysis.parameters,
-                        custom_name=analysis.custom_name,
-                    )
-                for report in getattr(step, "reports", []) or []:
-                    await api.run_step_report(
-                        step_id=wdk_step_id,
-                        report_name=report.report_name,
-                        config=report.config,
-                    )
+            await apply_step_decorations(strategy, compiled_map, api)
             site = get_site(self.session.site_id)
             wdk_url = (
                 site.strategy_url(wdk_strategy_id, compilation_result.root_step_id)

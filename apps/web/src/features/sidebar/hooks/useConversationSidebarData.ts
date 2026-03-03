@@ -3,8 +3,8 @@
 /**
  * Data-fetching and list-building logic for the conversation sidebar.
  *
- * Owns plan/strategy items, syncing state, search query, and the
- * merged+filtered conversation list.
+ * Owns strategy items, syncing state, search query, and the
+ * filtered conversation list.
  */
 
 import {
@@ -17,18 +17,14 @@ import {
   useState,
   startTransition,
 } from "react";
-import {
-  APIError,
-  getPlanSession,
-  listPlans,
-  syncWdkStrategies,
-} from "@/lib/api/client";
-import { toUserMessage } from "@/lib/api/errors";
+import { openStrategy, syncWdkStrategies } from "@/lib/api/client";
+import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import { useSessionStore } from "@/state/useSessionStore";
+import { useStrategyListStore } from "@/state/useStrategyListStore";
 import { useStrategyStore } from "@/state/useStrategyStore";
 import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
-import type { PlanSessionSummary } from "@pathfinder/shared";
 import type { ConversationItem } from "@/features/sidebar/components/conversationSidebarTypes";
+import { resolveActiveConversation } from "@/features/sidebar/utils/resolveActiveConversation";
 
 export interface UseConversationSidebarDataArgs {
   siteId: string;
@@ -43,111 +39,69 @@ export interface ConversationSidebarData {
   query: string;
   setQuery: (q: string) => void;
   isSyncing: boolean;
-  refreshPlans: () => Promise<void>;
   refreshStrategies: () => Promise<void>;
   handleManualRefresh: () => Promise<void>;
-  /** Exposed for the actions hook to perform optimistic plan-list updates. */
-  planItems: PlanSessionSummary[];
-  setPlanItems: Dispatch<SetStateAction<PlanSessionSummary[]>>;
   /** Exposed for the actions hook to perform optimistic strategy-list updates. */
   strategyItems: StrategyListItem[];
   setStrategyItems: Dispatch<SetStateAction<StrategyListItem[]>>;
-  /** Shared error handler for auth-aware plan errors. */
-  handlePlanError: (error: unknown, fallback: string) => void;
 }
 
 export function useConversationSidebarData({
   siteId,
-  reportError,
+  reportError: _reportError,
 }: UseConversationSidebarDataArgs): ConversationSidebarData {
   // --- Store selectors ---
-  const planSessionId = useSessionStore((s) => s.planSessionId);
-  const setPlanSessionId = useSessionStore((s) => s.setPlanSessionId);
   const strategyId = useSessionStore((s) => s.strategyId);
   const setStrategyId = useSessionStore((s) => s.setStrategyId);
   const authToken = useSessionStore((s) => s.authToken);
-  const setAuthToken = useSessionStore((s) => s.setAuthToken);
-  const linkedConversations = useSessionStore((s) => s.linkedConversations);
-  const planListVersion = useSessionStore((s) => s.planListVersion);
 
   const draftStrategy = useStrategyStore((s) => s.strategy);
 
   // --- Local state ---
-  const [planItems, setPlanItems] = useState<PlanSessionSummary[]>([]);
   const [strategyItems, setStrategyItems] = useState<StrategyListItem[]>([]);
   const [query, setQuery] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // --- Error helpers ---
-  const handlePlanError = useCallback(
-    (error: unknown, fallback: string) => {
-      if (error instanceof APIError && error.status === 401) {
-        if (!authToken) {
-          setPlanItems([]);
-          return;
-        }
-        setAuthToken(null);
-        setPlanSessionId(null);
-        setPlanItems([]);
-        reportError("Session expired. Refresh to start a new plan.");
-        return;
-      }
-      reportError(toUserMessage(error, fallback));
-    },
-    [authToken, reportError, setAuthToken, setPlanSessionId],
-  );
-
   // --- Data fetching ---
-  const refreshPlans = useCallback(async () => {
-    if (!authToken) {
-      setPlanItems([]);
-      return;
-    }
-    try {
-      const sessions = await listPlans(siteId);
-      // Include the active plan even if server hides empty plans
-      if (planSessionId && !sessions.some((p) => p.id === planSessionId)) {
-        const active = await getPlanSession(planSessionId).catch((err) => {
-          console.error("[useConversationSidebarData.getPlanSession]", err);
-          return null;
-        });
-        if (active) {
-          setPlanItems([
-            {
-              id: active.id,
-              siteId: active.siteId,
-              title: active.title || "New Conversation",
-              createdAt: active.createdAt,
-              updatedAt: active.updatedAt,
-            },
-            ...sessions,
-          ]);
-          return;
-        }
-        // Plan session no longer exists — clear the stale reference.
-        setPlanSessionId(null);
-      }
-      setPlanItems(sessions);
-    } catch (error) {
-      setPlanItems([]);
-      handlePlanError(error, "Failed to load plans.");
-    }
-  }, [authToken, handlePlanError, planSessionId, setPlanSessionId, siteId]);
 
   // Guard against concurrent sync calls (e.g. two useEffects firing on mount).
   const syncInFlight = useRef(false);
+  const prevSiteRef = useRef(siteId);
+  // Track whether the initial fetch has completed (to avoid premature auto-create).
+  const hasFetched = useRef(false);
+  // Guard against concurrent auto-create calls.
+  const autoCreateInFlight = useRef(false);
+
+  // Clear stale items immediately on site change + unblock fetch guard.
+  useEffect(() => {
+    if (prevSiteRef.current !== siteId) {
+      prevSiteRef.current = siteId;
+      setStrategyItems([]);
+      syncInFlight.current = false;
+      hasFetched.current = false;
+      autoCreateInFlight.current = false;
+    }
+  }, [siteId]);
 
   const refreshStrategies = useCallback(() => {
     if (syncInFlight.current) return Promise.resolve();
     syncInFlight.current = true;
+    const fetchSite = siteId;
     return syncWdkStrategies(siteId)
       .then((strategies) => {
+        // Discard if site changed while fetch was in-flight.
+        if (fetchSite !== prevSiteRef.current) return;
+        hasFetched.current = true;
+        // Populate the global store so @-mentions and experiment import
+        // can read the same data (single source of truth).
+        useStrategyListStore.getState().setStrategies(strategies);
         const now = new Date().toISOString();
         const items: StrategyListItem[] = strategies.map((s) => ({
           id: s.id,
           name: s.name,
           updatedAt: s.updatedAt ?? now,
           siteId: s.siteId,
+          stepCount: s.stepCount ?? 0,
           wdkStrategyId: s.wdkStrategyId,
           isSaved: s.isSaved ?? false,
         }));
@@ -164,44 +118,80 @@ export function useConversationSidebarData({
   const handleManualRefresh = useCallback(async () => {
     setIsSyncing(true);
     try {
-      await Promise.all([refreshPlans(), refreshStrategies()]);
+      await refreshStrategies();
     } finally {
       setIsSyncing(false);
     }
-  }, [refreshPlans, refreshStrategies]);
+  }, [refreshStrategies]);
 
   // Ensure there's always an active conversation (strategy).
-  // If no strategy is selected, pick the most recent one.
+  // Core invariant: NEVER switch away from a set strategyId. The data-loading
+  // layer validates it (404 → clear). This prevents race conditions during
+  // rapid refresh where the sidebar list isn't populated yet.
   const ensureActiveConversation = useCallback(async () => {
-    if (!authToken) return;
-    // Already have a conversation selected
-    if (strategyId) return;
-    // Legacy: plan session is selected — don't interfere
-    if (planSessionId) return;
-    // Wait for strategies to load, then select the most recent
-    if (strategyItems.length > 0) {
-      const sorted = [...strategyItems].sort(
-        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-      );
-      const mostRecent = sorted[0];
-      setStrategyId(mostRecent.id);
+    const action = resolveActiveConversation({
+      strategyId,
+      hasAuth: !!authToken,
+      strategyItems,
+      hasFetched: hasFetched.current,
+    });
+
+    switch (action.type) {
+      case "keep":
+      case "wait":
+        return;
+
+      case "pick":
+        setStrategyId(action.strategyId);
+        return;
+
+      case "create": {
+        if (autoCreateInFlight.current) return;
+        autoCreateInFlight.current = true;
+        try {
+          const res = await openStrategy({ siteId });
+          const now = new Date().toISOString();
+          setStrategyItems([
+            {
+              id: res.strategyId,
+              name: DEFAULT_STREAM_NAME,
+              updatedAt: now,
+              siteId,
+              stepCount: 0,
+              isSaved: false,
+            },
+          ]);
+          setStrategyId(res.strategyId);
+        } catch (err) {
+          console.warn("[ensureActiveConversation] Failed to auto-create:", err);
+        } finally {
+          autoCreateInFlight.current = false;
+        }
+        return;
+      }
     }
-  }, [authToken, strategyId, planSessionId, strategyItems, setStrategyId]);
+  }, [authToken, strategyId, strategyItems, setStrategyId, siteId, setStrategyItems]);
 
   // --- Effects ---
 
-  // Refresh both on mount / auth / site change
+  // Refresh on mount / site change
   useEffect(() => {
     startTransition(() => {
-      void refreshPlans();
       void refreshStrategies();
     });
-  }, [refreshPlans, refreshStrategies]);
+  }, [refreshStrategies]);
 
-  // Re-fetch plans when planListVersion bumps (after new plan creation / title change)
+  // Retry sync after auth token changes (e.g. refreshAuth returns a new token
+  // after the first sync failed with 401).
+  const prevAuthRef = useRef(authToken);
   useEffect(() => {
-    if (planListVersion > 0) void refreshPlans();
-  }, [planListVersion, refreshPlans]);
+    if (prevAuthRef.current === authToken) return;
+    prevAuthRef.current = authToken;
+    if (!authToken) return;
+    // Reset the in-flight guard so the retry can proceed.
+    syncInFlight.current = false;
+    void refreshStrategies();
+  }, [authToken, refreshStrategies]);
 
   // Re-fetch strategies when draft strategy changes
   useEffect(() => {
@@ -215,39 +205,8 @@ export function useConversationSidebarData({
     });
   }, [ensureActiveConversation]);
 
-  // --- Build merged conversation list ---
-  const linkedPlanIds = useMemo(
-    () => new Set(Object.keys(linkedConversations)),
-    [linkedConversations],
-  );
-
+  // --- Build conversation list ---
   const conversations: ConversationItem[] = useMemo(() => {
-    // Plans that haven't graduated (i.e. aren't linked to a strategy)
-    const plans: ConversationItem[] = planItems
-      .filter((p) => !linkedPlanIds.has(p.id))
-      .map((p) => ({
-        id: p.id,
-        kind: "plan" as const,
-        title: p.title || "New Conversation",
-        updatedAt: p.updatedAt,
-        siteId: p.siteId,
-      }));
-
-    // Also show the current active plan optimistically if not yet in the list
-    if (planSessionId && !linkedPlanIds.has(planSessionId)) {
-      const exists = plans.some((p) => p.id === planSessionId);
-      if (!exists) {
-        const now = new Date().toISOString();
-        plans.unshift({
-          id: planSessionId,
-          kind: "plan",
-          title: "New Conversation",
-          updatedAt: now,
-          siteId,
-        });
-      }
-    }
-
     const strategies: ConversationItem[] = strategyItems.map((s) => ({
       id: s.id,
       kind: "strategy" as const,
@@ -257,11 +216,10 @@ export function useConversationSidebarData({
       strategyItem: s,
     }));
 
-    // Merge and sort by updatedAt descending
-    return [...plans, ...strategies].sort(
+    return strategies.sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
-  }, [planItems, strategyItems, linkedPlanIds, planSessionId, siteId]);
+  }, [strategyItems]);
 
   // Filter
   const filtered = useMemo(() => {
@@ -276,13 +234,9 @@ export function useConversationSidebarData({
     query,
     setQuery,
     isSyncing,
-    refreshPlans,
     refreshStrategies,
     handleManualRefresh,
-    planItems,
-    setPlanItems,
     strategyItems,
     setStrategyItems,
-    handlePlanError,
   };
 }

@@ -1,6 +1,4 @@
 import type {
-  Message,
-  ToolCall,
   Citation,
   PlanningArtifact,
   OptimizationProgressData,
@@ -15,21 +13,15 @@ export type ChatSSEEvent =
       data: {
         strategyId?: string;
         strategy?: StrategyWithMeta;
-        planSessionId?: string;
-        planSession?: Record<string, unknown>;
         authToken?: string;
       };
     }
+  | { type: "user_message"; data: { messageId?: string; content?: string } }
   | { type: "assistant_delta"; data: { messageId?: string; delta?: string } }
   | { type: "assistant_message"; data: { messageId?: string; content?: string } }
   | { type: "citations"; data: { citations?: Citation[] } }
   | { type: "planning_artifact"; data: { planningArtifact?: PlanningArtifact } }
-  | {
-      type: "executor_build_request";
-      data: { executorBuildRequest?: Record<string, unknown> };
-    }
   | { type: "reasoning"; data: { reasoning?: string } }
-  | { type: "plan_update"; data: { title?: string } }
   | { type: "tool_call_start"; data: { id: string; name: string; arguments?: string } }
   | { type: "tool_call_end"; data: { id: string; result: string } }
   | { type: "subkani_task_start"; data: { task?: string } }
@@ -65,7 +57,7 @@ export type ChatSSEEvent =
         recordType?: string | null;
       };
     }
-  | { type: "strategy_cleared"; data: { graphId?: string } }
+  | { type: "graph_cleared"; data: { graphId?: string } }
   | {
       type: "optimization_progress";
       data: OptimizationProgressData;
@@ -82,19 +74,20 @@ function safeJsonParse(text: string): Record<string, unknown> | string {
   }
 }
 
-export function parseChatSSEEvent(event: RawSSEEvent): ChatSSEEvent {
-  const data = safeJsonParse(event.data);
+export function parseChatSSEEvent(
+  event: RawSSEEvent | { type: string; data: Record<string, unknown> },
+): ChatSSEEvent {
+  const data = typeof event.data === "string" ? safeJsonParse(event.data) : event.data;
   const type = event.type;
 
   switch (type) {
     case "message_start":
+    case "user_message":
     case "assistant_delta":
     case "assistant_message":
     case "citations":
     case "planning_artifact":
-    case "executor_build_request":
     case "reasoning":
-    case "plan_update":
     case "tool_call_start":
     case "tool_call_end":
     case "subkani_task_start":
@@ -105,7 +98,7 @@ export function parseChatSSEEvent(event: RawSSEEvent): ChatSSEEvent {
     case "graph_snapshot":
     case "strategy_link":
     case "strategy_meta":
-    case "strategy_cleared":
+    case "graph_cleared":
     case "optimization_progress":
     case "error":
       return { type, data } as ChatSSEEvent;
@@ -117,7 +110,3 @@ export function parseChatSSEEvent(event: RawSSEEvent): ChatSSEEvent {
       };
   }
 }
-
-// Convenience: these are only used for typing in UI code.
-export type ChatMessage = Message;
-export type ChatToolCall = ToolCall;

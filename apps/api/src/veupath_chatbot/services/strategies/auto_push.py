@@ -17,11 +17,15 @@ from uuid import UUID
 
 from veupath_chatbot.domain.strategy.compile import compile_strategy
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-from veupath_chatbot.persistence.repo import StrategyRepository
+from veupath_chatbot.persistence.repositories.stream import StreamRepository
 from veupath_chatbot.persistence.session import async_session_factory
 from veupath_chatbot.platform.errors import WDKError
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.services.strategies.plan_validation import validate_plan_or_raise
+from veupath_chatbot.services.strategies.serialization import (
+    build_steps_data_from_plan,
+    count_steps_in_plan,
+)
 
 logger = get_logger(__name__)
 
@@ -38,10 +42,15 @@ def _get_push_lock(strategy_id: UUID) -> asyncio.Lock:
     :returns: Asyncio lock for the given strategy.
     """
     if strategy_id not in _push_locks:
-        # Evict oldest entries to bound memory.
+        # Evict oldest *unlocked* entries to bound memory.
         if len(_push_locks) >= _PUSH_LOCKS_MAX:
-            oldest = next(iter(_push_locks))
-            del _push_locks[oldest]
+            to_evict: UUID | None = None
+            for candidate in _push_locks:
+                if not _push_locks[candidate].locked():
+                    to_evict = candidate
+                    break
+            if to_evict is not None:
+                del _push_locks[to_evict]
         _push_locks[strategy_id] = asyncio.Lock()
     return _push_locks[strategy_id]
 
@@ -50,6 +59,8 @@ async def try_auto_push_to_wdk(
     strategy_id: UUID,
 ) -> None:
     """Push a strategy to WDK if it has a ``wdk_strategy_id``.
+
+    Reads from the CQRS projection (stream_projections table).
 
     This is a best-effort operation — any error is logged and swallowed.
 
@@ -69,44 +80,61 @@ async def try_auto_push_to_wdk(
     # request-scoped session that fired this background task.
     async with lock, async_session_factory() as session:
         try:
-            repo = StrategyRepository(session)
-            strategy = await repo.get_by_id(strategy_id)
-            if not strategy or not strategy.wdk_strategy_id:
+            repo = StreamRepository(session)
+            projection = await repo.get_projection(strategy_id)
+            if not projection or not projection.wdk_strategy_id:
                 return
 
-            plan = strategy.plan if isinstance(strategy.plan, dict) else {}
+            site_id = projection.site_id
+            if not site_id:
+                return
+
+            plan = projection.plan if isinstance(projection.plan, dict) else {}
             if not plan:
                 return
 
             strategy_ast = validate_plan_or_raise(plan)
-            api = get_strategy_api(strategy.site_id)
+            api = get_strategy_api(site_id)
 
-            result = await compile_strategy(strategy_ast, api, site_id=strategy.site_id)
+            result = await compile_strategy(strategy_ast, api, site_id=site_id)
 
             await api.update_strategy(
-                strategy_id=strategy.wdk_strategy_id,
+                strategy_id=projection.wdk_strategy_id,
                 step_tree=result.step_tree,
-                name=strategy.name,
+                name=projection.name,
             )
 
             # Rewrite local IDs to WDK IDs in the persisted plan.
             compiled_map = {s.local_id: s.wdk_step_id for s in result.steps}
-            for step in strategy_ast.get_all_steps():
-                wdk_step_id = compiled_map.get(step.id)
-                if wdk_step_id:
-                    step.id = str(wdk_step_id)
+            all_steps = strategy_ast.get_all_steps()
+            unmapped = [s.id for s in all_steps if s.id not in compiled_map]
+            if unmapped:
+                logger.warning(
+                    "Auto-push: some steps missing from compiled map, "
+                    "skipping ID rewrite to avoid mixed-ID corruption",
+                    strategy_id=str(strategy_id),
+                    unmapped_step_ids=unmapped,
+                )
+            else:
+                for step in all_steps:
+                    step.id = str(compiled_map[step.id])
 
-            await repo.update(
-                strategy_id=strategy_id,
-                plan=strategy_ast.to_dict(),
+            updated_plan = strategy_ast.to_dict()
+            await repo.update_projection(
+                strategy_id,
+                plan=updated_plan,
+                steps=list(build_steps_data_from_plan(updated_plan)),
                 record_type=strategy_ast.record_type,
+                root_step_id=strategy_ast.root.id,
+                root_step_id_set=True,
+                step_count=count_steps_in_plan(updated_plan),
             )
             await session.commit()
 
             logger.info(
                 "Auto-pushed strategy to WDK",
                 strategy_id=str(strategy_id),
-                wdk_strategy_id=strategy.wdk_strategy_id,
+                wdk_strategy_id=projection.wdk_strategy_id,
             )
         except WDKError as e:
             await session.rollback()
@@ -118,9 +146,9 @@ async def try_auto_push_to_wdk(
                     strategy_id=str(strategy_id),
                 )
                 try:
-                    repo = StrategyRepository(session)
-                    await repo.update(
-                        strategy_id=strategy_id,
+                    repo = StreamRepository(session)
+                    await repo.update_projection(
+                        strategy_id,
                         wdk_strategy_id=None,
                         wdk_strategy_id_set=True,
                     )

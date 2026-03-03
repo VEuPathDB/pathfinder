@@ -71,8 +71,48 @@ def record_matches(attrs: JSONObject, query_lower: str, attribute: str | None) -
     return any(isinstance(v, str) and query_lower in v.lower() for v in attrs.values())
 
 
+async def build_primary_key(
+    api: StrategyAPI, site_id: str, record_type: str, gene_id: str
+) -> list[JSONObject]:
+    """Build a complete WDK primary key for a gene ID.
+
+    WDK requires all primary key columns (e.g. ``source_id`` + ``project_id``
+    for gene records). This helper fetches the record type info and fills
+    missing columns from site configuration.
+
+    :param api: Strategy API instance.
+    :param site_id: VEuPathDB site identifier.
+    :param record_type: WDK record type.
+    :param gene_id: Gene identifier (the ``source_id`` value).
+    :returns: List of ``{name, value}`` dicts forming the complete PK.
+    """
+    from veupath_chatbot.integrations.veupathdb.factory import get_site
+
+    pk_parts: list[JSONObject] = [{"name": "source_id", "value": gene_id}]
+    try:
+        info = await api.get_record_type_info(record_type)
+        pk_refs = info.get("primaryKeyColumnRefs") or info.get("primaryKey") or []
+        if isinstance(pk_refs, list) and len(pk_parts) < len(pk_refs):
+            names_sent = {"source_id"}
+            site = get_site(site_id)
+            pk_defaults: dict[str, str] = {"project_id": site.project_id}
+            for col in pk_refs:
+                if not isinstance(col, str) or col in names_sent:
+                    continue
+                default_val = pk_defaults.get(col)
+                if default_val:
+                    pk_parts.append({"name": col, "value": default_val})
+    except Exception:
+        pass  # Fall back to source_id only
+    return pk_parts
+
+
 async def fetch_group_records(
-    api: StrategyAPI, record_type: str, gene_ids: list[str], limit: int = 20
+    api: StrategyAPI,
+    record_type: str,
+    gene_ids: list[str],
+    limit: int = 20,
+    site_id: str | None = None,
 ) -> list[JSONObject]:
     """Fetch records for a list of gene IDs.
 
@@ -80,16 +120,22 @@ async def fetch_group_records(
     :param record_type: WDK record type.
     :param gene_ids: Gene IDs to fetch.
     :param limit: Max number of genes to fetch.
+    :param site_id: Site ID for PK completion (fills project_id etc.).
     :returns: List of dicts with ``geneId`` and ``attributes``.
     """
     results: list[JSONObject] = []
     for gene_id in gene_ids[:limit]:
         try:
+            if site_id:
+                pk = await build_primary_key(api, site_id, record_type, gene_id)
+            else:
+                pk = cast(
+                    list[JSONObject],
+                    [{"name": "source_id", "value": gene_id}],
+                )
             rec = await api.get_single_record(
                 record_type=record_type,
-                primary_key=cast(
-                    list[JSONObject], [{"name": "source_id", "value": gene_id}]
-                ),
+                primary_key=pk,
             )
             if isinstance(rec, dict):
                 results.append(

@@ -1,4 +1,5 @@
 import type { StrategySummary } from "@pathfinder/shared";
+import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 
 export function buildDraftStrategySummary(args: {
   id: string;
@@ -9,8 +10,8 @@ export function buildDraftStrategySummary(args: {
   const ts = nowIso();
   return {
     id,
-    name: "Draft Strategy",
-    title: "Draft Strategy",
+    name: DEFAULT_STREAM_NAME,
+    title: DEFAULT_STREAM_NAME,
     siteId,
     recordType: null,
     stepCount: 0,

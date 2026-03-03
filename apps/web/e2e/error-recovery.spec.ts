@@ -7,7 +7,7 @@ import {
 } from "./helpers";
 
 test("error: API 500 during chat shows error and allows retry", async ({ page }) => {
-  // Fail only the first chat request.
+  // Fail only the first chat POST request.
   await page.route(
     "**/api/v1/chat",
     async (route) => {
@@ -22,16 +22,16 @@ test("error: API 500 during chat shows error and allows retry", async ({ page })
 
   await gotoHomeWithStrategy(page);
 
-  // Send a message that triggers a 500 error.
+  // Send a message that triggers a 500 error from the POST.
   await sendMessage(page, "please fail");
-  await expect(page.getByText("SSE request failed", { exact: false })).toBeVisible({
+  await expect(page.getByText(/HTTP 500|error|failed/i).first()).toBeVisible({
     timeout: 10_000,
   });
 
   // User should be able to type and send a new message.
   await expectIdleComposer(page);
   await sendMessage(page, "hello after error");
-  await expect(page.getByText(/\[mock:execute\]/).first()).toBeVisible({
+  await expect(page.getByText(/\[mock\]/).first()).toBeVisible({
     timeout: 20_000,
   });
 });
@@ -39,7 +39,7 @@ test("error: API 500 during chat shows error and allows retry", async ({ page })
 test("error: auth expiry shows login modal", async ({ page }) => {
   await gotoHome(page);
 
-  // Intercept the chat endpoint to return 401 (auth expired).
+  // Intercept the chat POST endpoint to return 401 (auth expired).
   await page.route(
     "**/api/v1/chat",
     async (route) => {
@@ -56,11 +56,10 @@ test("error: auth expiry shows login modal", async ({ page }) => {
 
   // Should show an error or login prompt.
   const loginModal = page.getByTestId("login-modal");
-  const errorMsg = page.getByText(/unauthorized|expired|login/i).first();
-  const sseError = page.getByText("SSE request failed", { exact: false });
+  const errorMsg = page.getByText(/unauthorized|expired|login|session/i).first();
 
   // Wait for either login modal or error message to appear.
-  await expect(loginModal.or(errorMsg).or(sseError)).toBeVisible({
+  await expect(loginModal.or(errorMsg)).toBeVisible({
     timeout: 10_000,
   });
 });
@@ -80,7 +79,7 @@ test("error: network error during streaming shows error toast", async ({ page })
   await sendMessage(page, "trigger network error");
 
   // Should show some error indication.
-  const errorIndicator = page.getByText(/error|failed|network/i).first();
+  const errorIndicator = page.getByText(/error|failed|network|unable/i).first();
   await expect(errorIndicator).toBeVisible({ timeout: 10_000 });
 
   // User should be able to recover and send a new message.

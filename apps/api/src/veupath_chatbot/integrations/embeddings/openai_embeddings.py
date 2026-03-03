@@ -35,20 +35,16 @@ class OpenAIEmbeddings:
                 detail="Install `openai` (or `kani[openai]`) to enable embeddings.",
             ) from exc
 
-        client = AsyncOpenAI(api_key=settings.openai_api_key or None)
-        vectors: list[list[float]] = []
-        # Keep ordering stable.
-        for batch in _chunks(texts, size=self.batch_size):
-            # The SDK accepts list[str] input.
-            resp = await client.embeddings.create(model=self.model, input=batch)
-            # resp.data is in the same order as input.
-            vectors.extend([d.embedding for d in resp.data])
-            # Be polite to upstream if we're doing large ingests.
-            await asyncio.sleep(0)
+        async with AsyncOpenAI(api_key=settings.openai_api_key or None) as client:
+            vectors: list[list[float]] = []
+            for batch in _chunks(texts, size=self.batch_size):
+                resp = await client.embeddings.create(model=self.model, input=batch)
+                vectors.extend([d.embedding for d in resp.data])
+                await asyncio.sleep(0)
 
-        if len(vectors) != len(texts):  # pragma: no cover (SDK contract)
-            raise InternalError(title="Embedding count mismatch")
-        return vectors
+            if len(vectors) != len(texts):  # pragma: no cover (SDK contract)
+                raise InternalError(title="Embedding count mismatch")
+            return vectors
 
 
 async def embed_one(*, text: str, model: str) -> list[float]:

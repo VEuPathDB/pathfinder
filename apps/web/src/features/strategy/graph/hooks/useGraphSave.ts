@@ -3,6 +3,7 @@ import { normalizePlan, updateStrategy } from "@/lib/api/client";
 import { APIError } from "@/lib/api/http";
 import { toUserMessage } from "@/lib/api/errors";
 import type { StrategyPlan, StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
+import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import type { CombineMismatchGroup } from "@/lib/strategyGraph";
 import type { MutableRef } from "@/lib/types/refs";
 
@@ -28,7 +29,6 @@ interface UseGraphSaveArgs {
   buildStepSignature: (step: StrategyStep) => string;
   setLastSavedSteps: React.Dispatch<React.SetStateAction<Map<string, string>>>;
   setLastSavedStepsVersion: React.Dispatch<React.SetStateAction<number>>;
-  setLastSavedPlanHash: React.Dispatch<React.SetStateAction<string | null>>;
   validateSearchSteps: () => Promise<boolean>;
   nameValue: string;
   setNameValue: React.Dispatch<React.SetStateAction<string>>;
@@ -52,14 +52,12 @@ export function useGraphSave({
   buildStepSignature,
   setLastSavedSteps,
   setLastSavedStepsVersion,
-  setLastSavedPlanHash,
   validateSearchSteps,
   nameValue,
   setNameValue,
   descriptionValue,
 }: UseGraphSaveArgs) {
   const [isSaving, setIsSaving] = useState(false);
-  const [, setSaveError] = useState<string | null>(null);
 
   const persistPlan = useCallback(
     async (args: PersistPlanArgs = {}) => {
@@ -70,21 +68,19 @@ export function useGraphSave({
         toastOnSuccess = true,
         toastOnWarnings = true,
       } = args;
-      setSaveError(null);
+
       if (!isUuid(draftStrategy.id)) {
         const message =
           "This draft isn't linked to a saved strategy yet. Open or create a strategy first, then save.";
         console.warn("Refusing to save: strategy id is not a UUID", {
           id: draftStrategy.id,
         });
-        setSaveError(message);
         onToast?.({ type: "error", message });
         return;
       }
       if (combineMismatchGroups.length > 0) {
         const message =
           "Cannot save: the graph has validation issues (cannot combine steps with different record types).";
-        setSaveError(message);
         if (toastOnWarnings) {
           onToast?.({ type: "error", message });
         }
@@ -100,7 +96,6 @@ export function useGraphSave({
       if (!result) {
         const message =
           "Cannot save: strategy must have a single final output step. Add a final combine step (e.g., UNION) to produce one output.";
-        setSaveError(message);
         onToast?.({ type: "error", message });
         return;
       }
@@ -131,7 +126,6 @@ export function useGraphSave({
           siteId: updated.siteId,
           description: updated.description ?? undefined,
         });
-        setLastSavedPlanHash(JSON.stringify(nextPlan));
         if (draftStrategy?.steps) {
           const nextSavedSteps = new Map(
             draftStrategy.steps.map((step) => [step.id, buildStepSignature(step)]),
@@ -153,7 +147,6 @@ export function useGraphSave({
           console.error("Failed to save strategy", error);
         }
         const message = toUserMessage(error, "Failed to save strategy.");
-        setSaveError(message);
         onToast?.({ type: "error", message });
       } finally {
         setIsSaving(false);
@@ -164,7 +157,6 @@ export function useGraphSave({
       combineMismatchGroups.length,
       setStrategyMeta,
       buildPlan,
-      setLastSavedPlanHash,
       setLastSavedSteps,
       setLastSavedStepsVersion,
       buildStepSignature,
@@ -178,27 +170,24 @@ export function useGraphSave({
       if (!buildPlan()) {
         const message =
           "Cannot save: strategy must have a single final output step. Add a final combine step (e.g., UNION) to produce one output.";
-        setSaveError(message);
         onToast?.({ type: "error", message });
         return;
       }
       await persistPlan({ overrideName: name, overrideDescription: description });
     },
-    [buildPlan, draftStrategy?.id, onToast, persistPlan, setSaveError],
+    [buildPlan, draftStrategy?.id, onToast, persistPlan],
   );
 
   const handleSave = useCallback(async () => {
-    setSaveError(null);
     const name = nameValue.trim();
     if (!name) {
-      setNameValue(draftStrategy?.name || "Draft Strategy");
+      setNameValue(draftStrategy?.name || DEFAULT_STREAM_NAME);
       return;
     }
     const isValid = await validateSearchSteps();
     if (!isValid) {
       const message =
         "Cannot save: fix the validation errors highlighted in the graph first.";
-      setSaveError(message);
       onToast?.({ type: "error", message });
       return;
     }
@@ -213,29 +202,12 @@ export function useGraphSave({
     onToast,
   ]);
 
-  const handleAutoSaveAfterModelResponse = useCallback(async () => {
-    if (!draftStrategy?.id) return;
-    const isValid = await validateSearchSteps();
-    if (!isValid) {
-      // Surface the error in the UI (validation errors are already set on steps)
-      // but do not persist a structurally invalid graph.
-      onToast?.({
-        type: "error",
-        message:
-          "Auto-save skipped: the graph has validation errors that must be fixed first.",
-      });
-      return;
-    }
-    await persistPlan({ toastOnSuccess: false, toastOnWarnings: false });
-  }, [draftStrategy?.id, validateSearchSteps, persistPlan, onToast]);
-
   const canSave = !!draftStrategy && strategy?.id === draftStrategy.id && !!buildPlan();
 
   return {
     isSaving,
     canSave,
     handleSave,
-    handleAutoSaveAfterModelResponse,
     persistPlan,
   };
 }

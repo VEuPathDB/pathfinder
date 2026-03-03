@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.experiment.helpers import ProgressCallback
 from veupath_chatbot.services.experiment.step_analysis._evaluation import (
     _extract_eval_counts,
 )
@@ -30,8 +29,6 @@ from veupath_chatbot.services.experiment.types import (
     StepEvaluation,
 )
 
-ProgressCallback = Callable[[JSONObject], Awaitable[None]]
-
 logger = get_logger(__name__)
 
 
@@ -43,8 +40,6 @@ logger = get_logger(__name__)
 def _enrich_step_evals_with_movement(
     evals: list[StepEvaluation],
     baseline_result: JSONObject,
-    positive_controls: list[str],
-    negative_controls: list[str],
 ) -> list[StepEvaluation]:
     """Add TP/FP/FN movement fields relative to the full-strategy baseline."""
     baseline_counts = _extract_eval_counts(baseline_result)
@@ -190,8 +185,6 @@ async def run_step_analysis(
         step_evals = _enrich_step_evals_with_movement(
             step_evals,
             baseline_result,
-            positive_controls,
-            negative_controls,
         )
 
     if "operator_comparison" in enabled:

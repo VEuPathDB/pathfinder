@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDebouncedCallback } from "use-debounce";
 import type { GeneSearchResult, ResolvedGene } from "@pathfinder/shared";
 import { searchGenes } from "@/lib/api/client";
 import { Search, X } from "lucide-react";
@@ -35,7 +36,6 @@ export function GeneLookupPanel({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const resultsRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchPage = useCallback(
     async (q: string, org: string, pageNum: number) => {
@@ -72,16 +72,14 @@ export function GeneLookupPanel({
     [siteId],
   );
 
+  const debouncedFetch = useDebouncedCallback(() => {
+    setPage(0);
+    fetchPage(query, organism, 0);
+  }, 400);
+
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setPage(0);
-      fetchPage(query, organism, 0);
-    }, 400);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query, organism, fetchPage]);
+    debouncedFetch();
+  }, [query, organism, fetchPage, debouncedFetch]);
 
   const goToPage = useCallback(
     (p: number) => {

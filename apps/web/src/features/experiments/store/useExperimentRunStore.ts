@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ExperimentConfig, ExperimentProgressData } from "@pathfinder/shared";
+import type { OperationSubscription } from "@/lib/operationSubscribe";
 import {
   createExperimentStream,
   createBatchExperimentStream,
@@ -17,7 +18,7 @@ interface ExperimentRunState {
   trialHistory: TrialHistoryEntry[];
   stepAnalysisItems: StepAnalysisLiveItems;
   error: string | null;
-  abortController: AbortController | null;
+  subscription: OperationSubscription | null;
   runningConfig: ExperimentConfig | null;
 
   runExperiment: (config: ExperimentConfig) => void;
@@ -46,7 +47,7 @@ export const useExperimentRunStore = create<ExperimentRunState>((set, get) => ({
   trialHistory: [],
   stepAnalysisItems: EMPTY_LIVE_ITEMS,
   error: null,
-  abortController: null,
+  subscription: null,
   runningConfig: null,
 
   runExperiment: (config) => {
@@ -57,23 +58,19 @@ export const useExperimentRunStore = create<ExperimentRunState>((set, get) => ({
         hasOptimization:
           (config.optimizationSpecs?.length ?? 0) > 0 ||
           config.enableStepAnalysis === true,
-        openStream: (callbacks, controller) => {
-          createExperimentStream(
-            config,
-            {
-              onProgress: callbacks.onProgress,
-              onComplete: (experiment) => {
-                useExperimentViewStore.setState({
-                  currentExperiment: experiment,
-                  view: "results",
-                });
-                useExperimentViewStore.getState().fetchExperiments(config.siteId);
-                callbacks.onRunComplete();
-              },
-              onError: callbacks.onError,
+        openStream: async (callbacks) => {
+          return createExperimentStream(config, {
+            onProgress: callbacks.onProgress,
+            onComplete: (experiment) => {
+              useExperimentViewStore.setState({
+                currentExperiment: experiment,
+                view: "results",
+              });
+              useExperimentViewStore.getState().fetchExperiments(config.siteId);
+              callbacks.onRunComplete();
             },
-            controller,
-          );
+            onError: callbacks.onError,
+          });
         },
       },
     );
@@ -85,26 +82,20 @@ export const useExperimentRunStore = create<ExperimentRunState>((set, get) => ({
       {
         config,
         hasOptimization: false,
-        openStream: (callbacks, controller) => {
-          createBatchExperimentStream(
-            config,
-            organismParamName,
-            targets,
-            {
-              onProgress: callbacks.onProgress,
-              onComplete: (experiments) => {
-                const first = experiments[0] ?? null;
-                useExperimentViewStore.setState({
-                  currentExperiment: first,
-                  view: first ? "results" : "list",
-                });
-                useExperimentViewStore.getState().fetchExperiments(config.siteId);
-                callbacks.onRunComplete();
-              },
-              onError: callbacks.onError,
+        openStream: async (callbacks) => {
+          return createBatchExperimentStream(config, organismParamName, targets, {
+            onProgress: callbacks.onProgress,
+            onComplete: (experiments) => {
+              const first = experiments[0] ?? null;
+              useExperimentViewStore.setState({
+                currentExperiment: first,
+                view: first ? "results" : "list",
+              });
+              useExperimentViewStore.getState().fetchExperiments(config.siteId);
+              callbacks.onRunComplete();
             },
-            controller,
-          );
+            onError: callbacks.onError,
+          });
         },
       },
     );
@@ -116,41 +107,33 @@ export const useExperimentRunStore = create<ExperimentRunState>((set, get) => ({
       {
         config,
         hasOptimization: false,
-        openStream: (callbacks, controller) => {
-          createBenchmarkStream(
-            config,
-            controlSets,
-            {
-              onProgress: callbacks.onProgress,
-              onComplete: (experiments) => {
-                const primary =
-                  experiments.find((e) => e.isPrimaryBenchmark) ??
-                  experiments[0] ??
-                  null;
-                useExperimentViewStore.setState({
-                  currentExperiment: primary,
-                  benchmarkExperiments: experiments,
-                  view: "benchmark-results",
-                });
-                useExperimentViewStore.getState().fetchExperiments(config.siteId);
-                callbacks.onRunComplete();
-              },
-              onError: callbacks.onError,
+        openStream: async (callbacks) => {
+          return createBenchmarkStream(config, controlSets, {
+            onProgress: callbacks.onProgress,
+            onComplete: (experiments) => {
+              const primary =
+                experiments.find((e) => e.isPrimaryBenchmark) ?? experiments[0] ?? null;
+              useExperimentViewStore.setState({
+                currentExperiment: primary,
+                benchmarkExperiments: experiments,
+                view: "benchmark-results",
+              });
+              useExperimentViewStore.getState().fetchExperiments(config.siteId);
+              callbacks.onRunComplete();
             },
-            controller,
-          );
+            onError: callbacks.onError,
+          });
         },
       },
     );
   },
 
   cancelExperiment: () => {
-    const controller = get().abortController;
-    controller?.abort();
+    get().subscription?.unsubscribe();
     set({
       isRunning: false,
       hasOptimization: false,
-      abortController: null,
+      subscription: null,
       runningConfig: null,
     });
   },
@@ -158,7 +141,7 @@ export const useExperimentRunStore = create<ExperimentRunState>((set, get) => ({
   clearError: () => set({ error: null }),
 
   reset: () => {
-    get().abortController?.abort();
+    get().subscription?.unsubscribe();
     set({
       isRunning: false,
       hasOptimization: false,
@@ -166,7 +149,7 @@ export const useExperimentRunStore = create<ExperimentRunState>((set, get) => ({
       trialHistory: [],
       stepAnalysisItems: EMPTY_LIVE_ITEMS,
       error: null,
-      abortController: null,
+      subscription: null,
       runningConfig: null,
     });
   },

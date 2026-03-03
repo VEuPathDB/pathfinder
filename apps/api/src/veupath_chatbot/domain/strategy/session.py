@@ -115,7 +115,12 @@ class StrategyGraph:
             )
 
     def undo(self) -> bool:
-        """Undo to previous state."""
+        """Undo to previous state.
+
+        Restores ``current_strategy`` **and** the derived graph state
+        (``steps``, ``roots``, ``last_step_id``) so that tools that inspect
+        the step graph see a consistent picture after undo.
+        """
         if len(self.history) < 2:
             return False
         self.history.pop()  # remove current
@@ -123,6 +128,9 @@ class StrategyGraph:
         strategy_value = previous.get("strategy")
         if isinstance(strategy_value, dict):
             self.current_strategy = from_dict(as_json_object(strategy_value))
+            self.steps = {s.id: s for s in self.current_strategy.get_all_steps()}
+            self.recompute_roots()
+            self.last_step_id = self.current_strategy.root.id
         return True
 
 

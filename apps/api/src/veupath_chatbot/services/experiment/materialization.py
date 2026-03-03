@@ -14,6 +14,7 @@ from veupath_chatbot.integrations.veupathdb.strategy_api import (
 )
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject, as_json_object
+from veupath_chatbot.services.experiment.helpers import coerce_step_id
 from veupath_chatbot.services.experiment.types import (
     Experiment,
     ExperimentConfig,
@@ -21,14 +22,8 @@ from veupath_chatbot.services.experiment.types import (
 
 logger = get_logger(__name__)
 
-
-def _coerce_step_id(payload: JSONObject | None) -> int:
-    """Extract step ID from a WDK step-creation response."""
-    if isinstance(payload, dict):
-        raw = payload.get("id")
-        if isinstance(raw, int):
-            return raw
-    raise ValueError("Failed to extract step ID from WDK response")
+# Re-export for backwards compatibility with existing callers.
+_coerce_step_id = coerce_step_id
 
 
 async def _materialize_step_tree(

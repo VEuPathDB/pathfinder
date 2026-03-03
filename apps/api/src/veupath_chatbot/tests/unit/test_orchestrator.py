@@ -1,4 +1,4 @@
-"""Unit tests for the chat orchestrator module.
+"""Unit tests for the CQRS chat orchestrator module.
 
 Covers the mock stream provider, mock chat provider detection, and the
 start_chat_stream entry point with mocked dependencies.
@@ -89,7 +89,6 @@ class TestMockStreamChat:
         async for ev in _mock_stream_chat(message="Test input"):
             events.append(ev)
 
-        # The assistant_message should contain the input
         assistant_messages = [e for e in events if e["type"] == "assistant_message"]
         assert len(assistant_messages) == 1
         content = assistant_messages[0]["data"]["content"]
@@ -125,23 +124,12 @@ class TestMockStreamChat:
         assert "assistant_message" in types
         assert types[-1] == "message_end"
 
-        # strategy_update should use the provided strategy_id
         su_events = [e for e in events if e["type"] == "strategy_update"]
         assert len(su_events) >= 1
         assert su_events[0]["data"]["graphId"] == "test-strat-123"
 
     @pytest.mark.asyncio
-    async def test_delegation_keyword_in_message(self) -> None:
-        events: list[dict[str, Any]] = []
-        async for ev in _mock_stream_chat(message="run delegation now"):
-            events.append(ev)
-
-        types = [e["type"] for e in events]
-        assert "subkani_task_start" in types
-
-    @pytest.mark.asyncio
     async def test_slow_message_still_completes(self) -> None:
-        """Messages with 'slow' keyword add delays but should still complete."""
         events: list[dict[str, Any]] = []
         async for ev in _mock_stream_chat(message="slow test"):
             events.append(ev)
@@ -151,7 +139,6 @@ class TestMockStreamChat:
 
     @pytest.mark.asyncio
     async def test_delegation_default_strategy_id(self) -> None:
-        """When no strategy_id is given, uses default 'mock_graph_delegation'."""
         events: list[dict[str, Any]] = []
         async for ev in _mock_stream_chat(message="delegation test"):
             events.append(ev)
@@ -161,401 +148,93 @@ class TestMockStreamChat:
 
 
 # ---------------------------------------------------------------------------
-# start_chat_stream
+# start_chat_stream (CQRS version)
 # ---------------------------------------------------------------------------
 
 
-def _make_fake_strategy(
-    strategy_id: UUID | None = None,
-    model_id: str | None = None,
-) -> SimpleNamespace:
-    sid = strategy_id or uuid4()
-    return SimpleNamespace(
-        id=sid,
-        name="Draft Strategy",
-        title="Draft Strategy",
-        site_id="plasmodb",
-        record_type=None,
-        wdk_strategy_id=None,
-        plan={},
-        steps=[],
-        root_step_id=None,
-        model_id=model_id,
-        messages=[],
-        created_at=None,
-        updated_at=None,
-    )
+def _make_fake_stream(stream_id: UUID | None = None) -> SimpleNamespace:
+    return SimpleNamespace(id=stream_id or uuid4())
 
 
 class TestStartChatStream:
-    """Test the start_chat_stream orchestrator entry point."""
+    """Test the CQRS start_chat_stream orchestrator.
+
+    The new orchestrator:
+    1. Ensures user exists
+    2. Ensures stream exists (creates if needed)
+    3. Emits user_message to Redis
+    4. Registers operation in PostgreSQL
+    5. Parses selected nodes from message
+    6. Launches background _chat_producer
+    7. Returns (operation_id, stream_id)
+    """
 
     @pytest.mark.asyncio
-    async def test_start_chat_stream_returns_async_iterator(self) -> None:
-        """start_chat_stream should return an async iterator of SSE strings."""
-        strategy = _make_fake_strategy()
+    async def test_returns_operation_and_stream_ids(self) -> None:
+        stream = _make_fake_stream()
         user_id = uuid4()
 
         user_repo = MagicMock()
         user_repo.get_or_create = AsyncMock(return_value=None)
 
-        strategy_repo = MagicMock()
-        strategy_repo.add_message = AsyncMock()
-        strategy_repo.clear_thinking = AsyncMock()
-        strategy_repo.update = AsyncMock(return_value=strategy)
-        strategy_repo.refresh = AsyncMock()
+        stream_repo = MagicMock()
+        stream_repo.get_by_id = AsyncMock(return_value=stream)
+        stream_repo.create = AsyncMock(return_value=stream)
+        stream_repo.register_operation = AsyncMock()
+        stream_repo.session = AsyncMock()
+
+        mock_emit = AsyncMock(return_value="1234-0")
 
         with (
             patch(
-                "veupath_chatbot.services.chat.orchestrator.ensure_strategy",
-                new=AsyncMock(return_value=strategy),
+                "veupath_chatbot.services.chat.orchestrator.emit",
+                mock_emit,
             ),
             patch(
-                "veupath_chatbot.services.chat.orchestrator.append_user_message",
-                new=AsyncMock(),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_chat_history",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_strategy_payload",
-                return_value={"id": str(strategy.id)},
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.resolve_effective_model_id",
-                return_value="openai/gpt-5",
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.create_agent",
+                "veupath_chatbot.services.chat.orchestrator.get_redis",
                 return_value=MagicMock(),
             ),
             patch(
-                "veupath_chatbot.services.chat.orchestrator._use_mock_chat_provider",
-                return_value=True,
+                "veupath_chatbot.services.chat.orchestrator.asyncio.create_task",
             ),
         ):
-            result = await start_chat_stream(
+            operation_id, stream_id = await start_chat_stream(
                 message="Hello",
                 site_id="plasmodb",
                 strategy_id=None,
                 user_id=user_id,
                 user_repo=user_repo,
-                strategy_repo=strategy_repo,
+                stream_repo=stream_repo,
             )
 
-            # Collect all yielded SSE strings
-            events: list[str] = []
-            async for sse_line in result:
-                events.append(sse_line)
-
-            # Should yield at least a start event
-            assert len(events) > 0
-            # First event should be the message_start
-            assert "message_start" in events[0]
+            assert operation_id.startswith("op_")
+            assert stream_id == str(stream.id)
 
     @pytest.mark.asyncio
-    async def test_start_chat_stream_persists_model_id_on_change(self) -> None:
-        """When effective_model differs from strategy.model_id, it should be persisted."""
-        strategy = _make_fake_strategy(model_id="openai/gpt-4o")
+    async def test_calls_get_or_create_user(self) -> None:
+        stream = _make_fake_stream()
         user_id = uuid4()
 
         user_repo = MagicMock()
         user_repo.get_or_create = AsyncMock(return_value=None)
 
-        strategy_repo = MagicMock()
-        strategy_repo.add_message = AsyncMock()
-        strategy_repo.clear_thinking = AsyncMock()
-        strategy_repo.update = AsyncMock(return_value=strategy)
-        strategy_repo.refresh = AsyncMock()
+        stream_repo = MagicMock()
+        stream_repo.get_by_id = AsyncMock(return_value=stream)
+        stream_repo.create = AsyncMock(return_value=stream)
+        stream_repo.register_operation = AsyncMock()
+        stream_repo.session = AsyncMock()
 
         with (
             patch(
-                "veupath_chatbot.services.chat.orchestrator.ensure_strategy",
-                new=AsyncMock(return_value=strategy),
+                "veupath_chatbot.services.chat.orchestrator.emit",
+                AsyncMock(return_value="1234-0"),
             ),
             patch(
-                "veupath_chatbot.services.chat.orchestrator.append_user_message",
-                new=AsyncMock(),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_chat_history",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_strategy_payload",
-                return_value={"id": str(strategy.id)},
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.resolve_effective_model_id",
-                return_value="openai/gpt-5",  # different from strategy.model_id
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.create_agent",
+                "veupath_chatbot.services.chat.orchestrator.get_redis",
                 return_value=MagicMock(),
             ),
             patch(
-                "veupath_chatbot.services.chat.orchestrator._use_mock_chat_provider",
-                return_value=True,
-            ),
-        ):
-            result = await start_chat_stream(
-                message="Hello",
-                site_id="plasmodb",
-                strategy_id=None,
-                user_id=user_id,
-                user_repo=user_repo,
-                strategy_repo=strategy_repo,
-            )
-
-            # Consume the iterator to trigger side effects
-            async for _ in result:
-                pass
-
-            # Should have called update to persist the new model_id
-            strategy_repo.update.assert_called_once_with(
-                strategy.id, model_id="openai/gpt-5", model_id_set=True
-            )
-
-    @pytest.mark.asyncio
-    async def test_start_chat_stream_skips_model_persist_when_unchanged(self) -> None:
-        """When effective_model matches strategy.model_id, no update is needed."""
-        strategy = _make_fake_strategy(model_id="openai/gpt-5")
-        user_id = uuid4()
-
-        user_repo = MagicMock()
-        user_repo.get_or_create = AsyncMock(return_value=None)
-
-        strategy_repo = MagicMock()
-        strategy_repo.add_message = AsyncMock()
-        strategy_repo.clear_thinking = AsyncMock()
-        strategy_repo.update = AsyncMock(return_value=strategy)
-        strategy_repo.refresh = AsyncMock()
-
-        with (
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.ensure_strategy",
-                new=AsyncMock(return_value=strategy),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.append_user_message",
-                new=AsyncMock(),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_chat_history",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_strategy_payload",
-                return_value={"id": str(strategy.id)},
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.resolve_effective_model_id",
-                return_value="openai/gpt-5",  # same as strategy.model_id
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.create_agent",
-                return_value=MagicMock(),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator._use_mock_chat_provider",
-                return_value=True,
-            ),
-        ):
-            result = await start_chat_stream(
-                message="Hello",
-                site_id="plasmodb",
-                strategy_id=None,
-                user_id=user_id,
-                user_repo=user_repo,
-                strategy_repo=strategy_repo,
-            )
-
-            # Consume the iterator
-            async for _ in result:
-                pass
-
-            # Should NOT have called update since model_id unchanged
-            strategy_repo.update.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_start_chat_stream_with_mentions(self) -> None:
-        """When mentions are provided, build_mention_context should be called."""
-        strategy = _make_fake_strategy()
-        user_id = uuid4()
-
-        user_repo = MagicMock()
-        user_repo.get_or_create = AsyncMock(return_value=None)
-
-        strategy_repo = MagicMock()
-        strategy_repo.add_message = AsyncMock()
-        strategy_repo.clear_thinking = AsyncMock()
-        strategy_repo.update = AsyncMock(return_value=strategy)
-        strategy_repo.refresh = AsyncMock()
-
-        mock_build_mention = AsyncMock(return_value="Context about strategy X")
-
-        with (
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.ensure_strategy",
-                new=AsyncMock(return_value=strategy),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.append_user_message",
-                new=AsyncMock(),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_chat_history",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_strategy_payload",
-                return_value={"id": str(strategy.id)},
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.resolve_effective_model_id",
-                return_value="openai/gpt-5",
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.create_agent",
-                return_value=MagicMock(),
-            ) as mock_create_agent,
-            patch(
-                "veupath_chatbot.services.chat.orchestrator._use_mock_chat_provider",
-                return_value=True,
-            ),
-            patch(
-                "veupath_chatbot.services.chat.mention_context.build_mention_context",
-                mock_build_mention,
-            ),
-        ):
-            result = await start_chat_stream(
-                message="Hello",
-                site_id="plasmodb",
-                strategy_id=None,
-                user_id=user_id,
-                user_repo=user_repo,
-                strategy_repo=strategy_repo,
-                mentions=[{"type": "strategy", "id": "abc123"}],
-            )
-
-            # Consume the iterator
-            async for _ in result:
-                pass
-
-            mock_build_mention.assert_called_once()
-            # create_agent should receive mentioned_context
-            call_kwargs = mock_create_agent.call_args
-            assert (
-                call_kwargs.kwargs.get("mentioned_context")
-                == "Context about strategy X"
-            )
-
-    @pytest.mark.asyncio
-    async def test_start_chat_stream_selected_nodes_parsed(self) -> None:
-        """Messages with __NODE__ prefix should have nodes parsed out."""
-        strategy = _make_fake_strategy()
-        user_id = uuid4()
-
-        user_repo = MagicMock()
-        user_repo.get_or_create = AsyncMock(return_value=None)
-
-        strategy_repo = MagicMock()
-        strategy_repo.add_message = AsyncMock()
-        strategy_repo.clear_thinking = AsyncMock()
-        strategy_repo.update = AsyncMock(return_value=strategy)
-        strategy_repo.refresh = AsyncMock()
-
-        with (
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.ensure_strategy",
-                new=AsyncMock(return_value=strategy),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.append_user_message",
-                new=AsyncMock(),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_chat_history",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_strategy_payload",
-                return_value={"id": str(strategy.id)},
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.resolve_effective_model_id",
-                return_value="openai/gpt-5",
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.create_agent",
-                return_value=MagicMock(),
-            ) as mock_create_agent,
-            patch(
-                "veupath_chatbot.services.chat.orchestrator._use_mock_chat_provider",
-                return_value=True,
-            ),
-        ):
-            result = await start_chat_stream(
-                message='__NODE__{"stepId":"s1"}\nModify this step',
-                site_id="plasmodb",
-                strategy_id=None,
-                user_id=user_id,
-                user_repo=user_repo,
-                strategy_repo=strategy_repo,
-            )
-
-            # Consume
-            async for _ in result:
-                pass
-
-            # create_agent should receive selected_nodes
-            call_kwargs = mock_create_agent.call_args
-            assert call_kwargs.kwargs.get("selected_nodes") == {"stepId": "s1"}
-
-    @pytest.mark.asyncio
-    async def test_start_chat_stream_calls_get_or_create_user(self) -> None:
-        """The orchestrator should ensure the user exists."""
-        strategy = _make_fake_strategy()
-        user_id = uuid4()
-
-        user_repo = MagicMock()
-        user_repo.get_or_create = AsyncMock(return_value=None)
-
-        strategy_repo = MagicMock()
-        strategy_repo.add_message = AsyncMock()
-        strategy_repo.clear_thinking = AsyncMock()
-        strategy_repo.update = AsyncMock(return_value=strategy)
-        strategy_repo.refresh = AsyncMock()
-
-        with (
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.ensure_strategy",
-                new=AsyncMock(return_value=strategy),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.append_user_message",
-                new=AsyncMock(),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_chat_history",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.build_strategy_payload",
-                return_value={"id": str(strategy.id)},
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.resolve_effective_model_id",
-                return_value="openai/gpt-5",
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator.create_agent",
-                return_value=MagicMock(),
-            ),
-            patch(
-                "veupath_chatbot.services.chat.orchestrator._use_mock_chat_provider",
-                return_value=True,
+                "veupath_chatbot.services.chat.orchestrator.asyncio.create_task",
             ),
         ):
             await start_chat_stream(
@@ -564,8 +243,218 @@ class TestStartChatStream:
                 strategy_id=None,
                 user_id=user_id,
                 user_repo=user_repo,
-                strategy_repo=strategy_repo,
+                stream_repo=stream_repo,
             )
 
-            # Just getting the iterator triggers pre-stream setup
             user_repo.get_or_create.assert_called_once_with(user_id)
+
+    @pytest.mark.asyncio
+    async def test_emits_user_message_to_redis(self) -> None:
+        stream = _make_fake_stream()
+        user_id = uuid4()
+
+        user_repo = MagicMock()
+        user_repo.get_or_create = AsyncMock(return_value=None)
+
+        stream_repo = MagicMock()
+        stream_repo.get_by_id = AsyncMock(return_value=stream)
+        stream_repo.create = AsyncMock(return_value=stream)
+        stream_repo.register_operation = AsyncMock()
+        stream_repo.session = AsyncMock()
+
+        mock_emit = AsyncMock(return_value="1234-0")
+
+        with (
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.emit",
+                mock_emit,
+            ),
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.get_redis",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.asyncio.create_task",
+            ),
+        ):
+            await start_chat_stream(
+                message="Hello world",
+                site_id="plasmodb",
+                strategy_id=None,
+                user_id=user_id,
+                user_repo=user_repo,
+                stream_repo=stream_repo,
+            )
+
+            # emit was called with user_message type
+            mock_emit.assert_called_once()
+            call_args = mock_emit.call_args
+            assert call_args[0][2] is not None  # operation_id
+            assert call_args[0][3] == "user_message"
+            assert call_args[0][4]["content"] == "Hello world"
+
+    @pytest.mark.asyncio
+    async def test_registers_operation(self) -> None:
+        stream = _make_fake_stream()
+        user_id = uuid4()
+
+        user_repo = MagicMock()
+        user_repo.get_or_create = AsyncMock(return_value=None)
+
+        stream_repo = MagicMock()
+        stream_repo.get_by_id = AsyncMock(return_value=stream)
+        stream_repo.create = AsyncMock(return_value=stream)
+        stream_repo.register_operation = AsyncMock()
+        stream_repo.session = AsyncMock()
+
+        with (
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.emit",
+                AsyncMock(return_value="1234-0"),
+            ),
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.get_redis",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.asyncio.create_task",
+            ),
+        ):
+            operation_id, _ = await start_chat_stream(
+                message="Hello",
+                site_id="plasmodb",
+                strategy_id=None,
+                user_id=user_id,
+                user_repo=user_repo,
+                stream_repo=stream_repo,
+            )
+
+            stream_repo.register_operation.assert_called_once_with(
+                operation_id, stream.id, "chat"
+            )
+
+    @pytest.mark.asyncio
+    async def test_creates_stream_when_not_found(self) -> None:
+        new_stream = _make_fake_stream()
+        user_id = uuid4()
+
+        user_repo = MagicMock()
+        user_repo.get_or_create = AsyncMock(return_value=None)
+
+        stream_repo = MagicMock()
+        stream_repo.get_by_id = AsyncMock(return_value=None)
+        stream_repo.create = AsyncMock(return_value=new_stream)
+        stream_repo.register_operation = AsyncMock()
+        stream_repo.session = AsyncMock()
+
+        with (
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.emit",
+                AsyncMock(return_value="1234-0"),
+            ),
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.get_redis",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.asyncio.create_task",
+            ),
+        ):
+            _, stream_id = await start_chat_stream(
+                message="Hello",
+                site_id="plasmodb",
+                strategy_id=uuid4(),
+                user_id=user_id,
+                user_repo=user_repo,
+                stream_repo=stream_repo,
+            )
+
+            stream_repo.create.assert_called_once()
+            assert stream_id == str(new_stream.id)
+
+    @pytest.mark.asyncio
+    async def test_launches_background_producer(self) -> None:
+        stream = _make_fake_stream()
+        user_id = uuid4()
+
+        user_repo = MagicMock()
+        user_repo.get_or_create = AsyncMock(return_value=None)
+
+        stream_repo = MagicMock()
+        stream_repo.get_by_id = AsyncMock(return_value=stream)
+        stream_repo.create = AsyncMock(return_value=stream)
+        stream_repo.register_operation = AsyncMock()
+        stream_repo.session = AsyncMock()
+
+        mock_create_task = MagicMock()
+
+        with (
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.emit",
+                AsyncMock(return_value="1234-0"),
+            ),
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.get_redis",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.asyncio.create_task",
+                mock_create_task,
+            ),
+        ):
+            await start_chat_stream(
+                message="Hello",
+                site_id="plasmodb",
+                strategy_id=None,
+                user_id=user_id,
+                user_repo=user_repo,
+                stream_repo=stream_repo,
+            )
+
+            mock_create_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_selected_nodes_parsed_from_message(self) -> None:
+        stream = _make_fake_stream()
+        user_id = uuid4()
+
+        user_repo = MagicMock()
+        user_repo.get_or_create = AsyncMock(return_value=None)
+
+        stream_repo = MagicMock()
+        stream_repo.get_by_id = AsyncMock(return_value=stream)
+        stream_repo.create = AsyncMock(return_value=stream)
+        stream_repo.register_operation = AsyncMock()
+        stream_repo.session = AsyncMock()
+
+        def capture_create_task(coro: Any) -> MagicMock:
+            # Close the coroutine to avoid warnings.
+            coro.close()
+            return MagicMock()
+
+        with (
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.emit",
+                AsyncMock(return_value="1234-0"),
+            ),
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.get_redis",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "veupath_chatbot.services.chat.orchestrator.asyncio.create_task",
+                side_effect=capture_create_task,
+            ),
+        ):
+            # __NODE__ prefix encodes selected nodes.
+            operation_id, _ = await start_chat_stream(
+                message='__NODE__{"stepId":"s1"}\nModify this step',
+                site_id="plasmodb",
+                strategy_id=None,
+                user_id=user_id,
+                user_repo=user_repo,
+                stream_repo=stream_repo,
+            )
+
+            # Verify the operation was registered and returned.
+            assert operation_id.startswith("op_")

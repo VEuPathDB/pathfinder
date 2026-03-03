@@ -10,7 +10,7 @@ test("conversation sidebar: create and filter conversations", async ({ page }) =
 
   await expect(newBtn).toBeVisible();
 
-  // The initial gotoHome creates a plan session implicitly.
+  // The initial gotoHome creates a conversation implicitly.
   await expect(items.first()).toBeVisible();
 
   await newBtn.click();
@@ -22,7 +22,7 @@ test("conversation sidebar: create and filter conversations", async ({ page }) =
 
   // Send a message in the active conversation.
   await sendMessage(page, "hello from sidebar test");
-  await expect(page.getByText("[mock:plan]").first()).toBeVisible();
+  await expect(page.getByText("[mock]").first()).toBeVisible({ timeout: 20_000 });
 
   // Capture total count before filtering.
   const totalCount = await items.count();

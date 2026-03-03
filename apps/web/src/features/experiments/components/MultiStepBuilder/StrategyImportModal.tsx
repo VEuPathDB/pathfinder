@@ -1,24 +1,15 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { requestJson } from "@/lib/api/http";
 import { Modal } from "@/lib/components/Modal";
 import { Button } from "@/lib/components/ui/Button";
-import { Import, Loader2 } from "lucide-react";
+import { Import } from "lucide-react";
 import {
   wdkOperatorToCombine,
   type CombineOperator,
   type StrategyStep,
 } from "@pathfinder/shared";
 import { useAsyncAction } from "@/lib/utils/asyncAction";
-
-interface ImportableStrategy {
-  wdkStrategyId: number;
-  name: string;
-  recordType: string;
-  stepCount: number | null;
-  estimatedSize: number | null;
-  lastModified: string | null;
-  isSaved: boolean;
-}
+import { useStrategyListStore } from "@/state/useStrategyListStore";
 
 interface StrategyImportModalProps {
   open: boolean;
@@ -93,23 +84,16 @@ export function StrategyImportModal({
   onImport,
   onClose,
 }: StrategyImportModalProps) {
-  const [strategies, setStrategies] = useState<ImportableStrategy[]>([]);
+  const storeStrategies = useStrategyListStore((s) => s.strategies);
+  const strategies = useMemo(
+    () => storeStrategies.filter((s) => s.wdkStrategyId != null && s.siteId === siteId),
+    [storeStrategies, siteId],
+  );
   const [importing, setImporting] = useState<number | null>(null);
-  const { run: loadStrategies, loading, error: loadError } = useAsyncAction();
   const { run, error } = useAsyncAction();
 
-  useEffect(() => {
-    if (!open) return;
-    void loadStrategies(async () => {
-      const result = await requestJson<ImportableStrategy[]>(
-        `/api/v1/experiments/importable-strategies?siteId=${encodeURIComponent(siteId)}`,
-      );
-      setStrategies(result);
-    });
-  }, [open, siteId, loadStrategies]);
-
-  const handleImport = async (strategyId: number) => {
-    setImporting(strategyId);
+  const handleImport = async (wdkStrategyId: number) => {
+    setImporting(wdkStrategyId);
     await run(async () => {
       const detail = await requestJson<{
         name: string;
@@ -117,7 +101,7 @@ export function StrategyImportModal({
         stepTree: unknown;
         steps: unknown[];
       }>(
-        `/api/v1/experiments/importable-strategies/${strategyId}/details?siteId=${encodeURIComponent(siteId)}`,
+        `/api/v1/experiments/importable-strategies/${wdkStrategyId}/details?siteId=${encodeURIComponent(siteId)}`,
       );
 
       const imported = flattenEnrichedTree(
@@ -141,19 +125,13 @@ export function StrategyImportModal({
   return (
     <Modal open={open} onClose={onClose} title="Import Strategy">
       <div className="max-h-96 min-h-48 overflow-y-auto">
-        {loading && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        )}
-
-        {(error ?? loadError) && (
+        {error && (
           <div className="mb-3 rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-            {error ?? loadError}
+            {error}
           </div>
         )}
 
-        {!loading && strategies.length === 0 && (
+        {strategies.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No strategies found. Create strategies from the chat tab first.
           </p>
@@ -169,15 +147,16 @@ export function StrategyImportModal({
                 {strat.name || `Strategy #${strat.wdkStrategyId}`}
               </p>
               <p className="text-xs text-muted-foreground">
-                {strat.recordType || "unknown"} &middot; {strat.stepCount ?? "?"} steps
-                &middot; {strat.estimatedSize?.toLocaleString() ?? "?"} results
+                {strat.recordType || "unknown"} &middot; {strat.stepCount ?? 0} steps
+                {strat.resultCount != null &&
+                  ` · ${strat.resultCount.toLocaleString()} results`}
                 {strat.isSaved && " (saved)"}
               </p>
             </div>
             <Button
               size="sm"
               variant="outline"
-              onClick={() => void handleImport(strat.wdkStrategyId)}
+              onClick={() => void handleImport(strat.wdkStrategyId!)}
               disabled={importing !== null}
               loading={importing === strat.wdkStrategyId}
             >

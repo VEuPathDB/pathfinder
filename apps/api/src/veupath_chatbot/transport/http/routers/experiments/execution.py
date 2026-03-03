@@ -1,19 +1,18 @@
-"""Experiment execution endpoints: create, batch, benchmark with SSE streaming."""
+"""Experiment execution endpoints: create, batch, benchmark."""
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
-from veupath_chatbot.services.experiment.core.config import config_from_request
 from veupath_chatbot.services.experiment.core.streaming import (
-    batch_sse_generator,
-    benchmark_sse_generator,
-    experiment_sse_generator,
+    start_batch_experiment,
+    start_benchmark,
+    start_experiment,
 )
 from veupath_chatbot.services.experiment.types import (
     BatchExperimentConfig,
@@ -22,59 +21,70 @@ from veupath_chatbot.services.experiment.types import (
 from veupath_chatbot.transport.http.deps import (
     ControlSetRepo,
     CurrentUser,
-    StrategyRepo,
+    StreamRepo,
 )
 from veupath_chatbot.transport.http.schemas.experiments import (
     CreateBatchExperimentRequest,
     CreateBenchmarkRequest,
     CreateExperimentRequest,
 )
-from veupath_chatbot.transport.http.sse import sse_stream
+from veupath_chatbot.transport.http.sse import SSE_HEADERS, sse_stream
+
+from ._config import config_from_request
 
 router = APIRouter()
 logger = get_logger(__name__)
 
-_SSE_HEADERS = {
-    "Cache-Control": "no-cache",
-    "Connection": "keep-alive",
-    "X-Accel-Buffering": "no",
-}
-
 
 @router.post(
     "/",
-    response_class=StreamingResponse,
+    status_code=202,
     responses={
-        200: {
-            "description": "SSE stream of experiment progress",
-            "content": {"text/event-stream": {"schema": {"type": "string"}}},
+        202: {
+            "description": "Experiment launched as background task",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {"operationId": {"type": "string"}},
+                    }
+                }
+            },
         }
     },
 )
-async def create_experiment(request: CreateExperimentRequest) -> StreamingResponse:
-    """Create and run an experiment with SSE progress streaming."""
+async def create_experiment(
+    request: CreateExperimentRequest,
+    user_id: CurrentUser,
+) -> JSONResponse:
+    """Create and run an experiment as a background task."""
     config = config_from_request(request)
-    return StreamingResponse(
-        experiment_sse_generator(config),
-        media_type="text/event-stream",
-        headers=_SSE_HEADERS,
-    )
+    operation_id = await start_experiment(config)
+    return JSONResponse({"operationId": operation_id}, status_code=202)
 
 
 @router.post(
     "/batch",
-    response_class=StreamingResponse,
+    status_code=202,
     responses={
-        200: {
-            "description": "SSE stream of batch experiment progress",
-            "content": {"text/event-stream": {"schema": {"type": "string"}}},
+        202: {
+            "description": "Batch experiment launched as background task",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {"operationId": {"type": "string"}},
+                    }
+                }
+            },
         }
     },
 )
 async def create_batch_experiment(
     request: CreateBatchExperimentRequest,
-) -> StreamingResponse:
-    """Run the same search across multiple organisms with SSE progress."""
+    user_id: CurrentUser,
+) -> JSONResponse:
+    """Run the same search across multiple organisms as a background task."""
     base_config = config_from_request(request.base)
     batch_config = BatchExperimentConfig(
         base_config=base_config,
@@ -88,27 +98,32 @@ async def create_batch_experiment(
             for t in request.target_organisms
         ],
     )
-    return StreamingResponse(
-        batch_sse_generator(batch_config),
-        media_type="text/event-stream",
-        headers=_SSE_HEADERS,
-    )
+    operation_id = await start_batch_experiment(batch_config)
+    return JSONResponse({"operationId": operation_id}, status_code=202)
 
 
 @router.post(
     "/benchmark",
-    response_class=StreamingResponse,
+    status_code=202,
     responses={
-        200: {
-            "description": "SSE stream of benchmark suite progress",
-            "content": {"text/event-stream": {"schema": {"type": "string"}}},
+        202: {
+            "description": "Benchmark suite launched as background task",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {"operationId": {"type": "string"}},
+                    }
+                }
+            },
         }
     },
 )
 async def create_benchmark(
     request: CreateBenchmarkRequest,
-) -> StreamingResponse:
-    """Run the same strategy against multiple control sets in parallel with SSE."""
+    user_id: CurrentUser,
+) -> JSONResponse:
+    """Run the same strategy against multiple control sets as a background task."""
     base_config = config_from_request(request.base)
     control_sets = [
         (
@@ -121,7 +136,7 @@ async def create_benchmark(
         for cs in request.control_sets
     ]
     has_primary = any(cs.is_primary for cs in request.control_sets)
-    if not has_primary:
+    if not has_primary and control_sets:
         control_sets[0] = (
             control_sets[0][0],
             control_sets[0][1],
@@ -130,11 +145,8 @@ async def create_benchmark(
             True,
         )
 
-    return StreamingResponse(
-        benchmark_sse_generator(base_config, control_sets),
-        media_type="text/event-stream",
-        headers=_SSE_HEADERS,
-    )
+    operation_id = await start_benchmark(base_config, control_sets)
+    return JSONResponse({"operationId": operation_id}, status_code=202)
 
 
 @router.post(
@@ -149,7 +161,7 @@ async def create_benchmark(
 )
 async def seed_strategies(
     user_id: CurrentUser,
-    strategy_repo: StrategyRepo,
+    stream_repo: StreamRepo,
     control_set_repo: ControlSetRepo,
 ) -> StreamingResponse:
     """Seed demo strategies and control sets across multiple VEuPathDB sites."""
@@ -159,7 +171,7 @@ async def seed_strategies(
         try:
             async for event in run_seed(
                 user_id=user_id,
-                strategy_repo=strategy_repo,
+                stream_repo=stream_repo,
                 control_set_repo=control_set_repo,
             ):
                 await send(event)
@@ -175,5 +187,5 @@ async def seed_strategies(
     return StreamingResponse(
         sse_stream(_producer, {"seed_complete"}),
         media_type="text/event-stream",
-        headers=_SSE_HEADERS,
+        headers=SSE_HEADERS,
     )

@@ -13,6 +13,16 @@ from .base import StrategyToolsBase
 from .graph_integrity import find_root_step_ids
 
 
+def _serialize_step_decorations(step: PlanStepNode, info: JSONObject) -> None:
+    """Add filter/analysis/report data to a step dict (if non-empty)."""
+    if step.filters:
+        info["filters"] = [f.to_dict() for f in step.filters]
+    if step.analyses:
+        info["analyses"] = [a.to_dict() for a in step.analyses]
+    if step.reports:
+        info["reports"] = [r.to_dict() for r in step.reports]
+
+
 class GraphOpsMixin(StrategyToolsBase):
     def _derive_strategy_name(
         self,
@@ -113,15 +123,7 @@ class GraphOpsMixin(StrategyToolsBase):
         # Only include heavy fields when non-empty.
         if step.parameters:
             info["parameters"] = step.parameters
-        filters = [f.to_dict() for f in getattr(step, "filters", []) or []]
-        if filters:
-            info["filters"] = filters
-        analyses = [a.to_dict() for a in getattr(step, "analyses", []) or []]
-        if analyses:
-            info["analyses"] = analyses
-        reports = [r.to_dict() for r in getattr(step, "reports", []) or []]
-        if reports:
-            info["reports"] = reports
+        _serialize_step_decorations(step, info)
         return info
 
     def _serialize_graph_step(self, step: PlanStepNode) -> JSONObject:
@@ -165,15 +167,7 @@ class GraphOpsMixin(StrategyToolsBase):
         # Only include heavy fields when non-empty.
         if step.parameters:
             base["parameters"] = step.parameters
-        filters = [f.to_dict() for f in getattr(step, "filters", []) or []]
-        if filters:
-            base["filters"] = filters
-        analyses = [a.to_dict() for a in getattr(step, "analyses", []) or []]
-        if analyses:
-            base["analyses"] = analyses
-        reports = [r.to_dict() for r in getattr(step, "reports", []) or []]
-        if reports:
-            base["reports"] = reports
+        _serialize_step_decorations(step, base)
         return base
 
     def _build_graph_snapshot(self, graph: StrategyGraph) -> JSONObject:

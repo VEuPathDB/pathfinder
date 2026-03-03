@@ -1,19 +1,25 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import TypeVar
+from itertools import batched
 
 from qdrant_client import AsyncQdrantClient
 from veupath_chatbot.platform.logging import get_logger
+from veupath_chatbot.platform.types import JSONObject
 
 logger = get_logger(__name__)
 
-T = TypeVar("T")
+
+def extract_search_name(obj: JSONObject) -> str:
+    """Extract a search/record-type name, preferring urlSegment over name."""
+    return str(obj.get("urlSegment") or obj.get("name") or "").strip()
 
 
-def chunks[T](items: list[T], *, size: int) -> Iterable[list[T]]:
-    for i in range(0, len(items), size):
-        yield items[i : i + size]
+def parse_sites(value: str) -> list[str] | None:
+    """Parse a comma-separated list of site IDs or 'all' → None (meaning all)."""
+    v = (value or "").strip()
+    if not v or v == "all":
+        return None
+    return [s.strip() for s in v.split(",") if s.strip()]
 
 
 async def existing_point_ids(
@@ -32,7 +38,7 @@ async def existing_point_ids(
 
     existing: set[str] = set()
 
-    for chunk in chunks(ids, size=max(1, int(chunk_size))):
+    for chunk in batched(ids, max(1, int(chunk_size)), strict=False):
         try:
             points = await qdrant_client.retrieve(
                 collection_name=collection,

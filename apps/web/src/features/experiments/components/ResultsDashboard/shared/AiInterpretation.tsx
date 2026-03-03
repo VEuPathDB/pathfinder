@@ -4,6 +4,7 @@ import { streamAiAssist } from "../../../api";
 import { ChatMarkdown } from "@/features/chat/components/message/ChatMarkdown";
 import { Sparkles, Loader2 } from "lucide-react";
 import { Section } from "./Section";
+import { flattenPlanStepNode } from "../../MultiStepBuilder/multiStepUtils";
 
 interface AiInterpretationProps {
   experiment: Experiment;
@@ -40,14 +41,62 @@ export function AiInterpretation({ experiment, siteId }: AiInterpretationProps) 
       })
       .join("\n");
 
+    const config = experiment.config;
+    const stepTree = config.stepTree;
+    const strategySummary =
+      stepTree && config.recordType
+        ? flattenPlanStepNode(stepTree, config.recordType)
+            .map((s) => s.searchName)
+            .join(" → ")
+        : `Single search: ${config.searchName}`;
+
+    const sampleGenes = (ids: string[], names: (string | null | undefined)[]) =>
+      ids
+        .slice(0, 10)
+        .map((id, i) => `${id}${names[i] ? ` (${names[i]})` : ""}`)
+        .join(", ");
+
+    const geneListsParts: string[] = [];
+    if (experiment.truePositiveGenes?.length) {
+      geneListsParts.push(
+        `True positives (${experiment.truePositiveGenes.length}): ${sampleGenes(
+          experiment.truePositiveGenes.map((g) => g.id),
+          experiment.truePositiveGenes.map((g) => g.name),
+        )}`,
+      );
+    }
+    if (experiment.falsePositiveGenes?.length) {
+      geneListsParts.push(
+        `False positives (${experiment.falsePositiveGenes.length}): ${sampleGenes(
+          experiment.falsePositiveGenes.map((g) => g.id),
+          experiment.falsePositiveGenes.map((g) => g.name),
+        )}`,
+      );
+    }
+    if (experiment.falseNegativeGenes?.length) {
+      geneListsParts.push(
+        `False negatives (${experiment.falseNegativeGenes.length}): ${sampleGenes(
+          experiment.falseNegativeGenes.map((g) => g.id),
+          experiment.falseNegativeGenes.map((g) => g.name),
+        )}`,
+      );
+    }
+    const geneListsSummary = geneListsParts.length > 0 ? geneListsParts.join("\n") : "";
+
     const context: Record<string, unknown> = {
-      searchName: experiment.config.searchName,
-      recordType: experiment.config.recordType,
-      parameters:
-        experiment.config.parameterDisplayValues ?? experiment.config.parameters,
-      positiveControls: experiment.config.positiveControls.slice(0, 20),
-      negativeControls: experiment.config.negativeControls.slice(0, 20),
+      experimentId: experiment.id,
+      searchName: config.searchName,
+      recordType: config.recordType,
+      mode: config.mode ?? "single",
+      strategySummary,
+      parameters: config.parameterDisplayValues ?? config.parameters,
+      positiveControls: config.positiveControls.slice(0, 20),
+      negativeControls: config.negativeControls.slice(0, 20),
     };
+
+    if (geneListsSummary) {
+      context.geneListsSummary = geneListsSummary;
+    }
 
     if (m) {
       context.metrics = {

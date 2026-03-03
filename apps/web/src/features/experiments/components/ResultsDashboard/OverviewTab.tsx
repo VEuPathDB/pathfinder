@@ -2,6 +2,7 @@ import type { Experiment, ExperimentMetrics, RankMetrics } from "@pathfinder/sha
 import { ArrowUpDown, FlaskConical, Info, Sparkles } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
 import { Badge } from "@/lib/components/ui/Badge";
+import { Card, CardContent } from "@/lib/components/ui/Card";
 import { AiInterpretation } from "./shared/AiInterpretation";
 import { MetricsOverview } from "./metrics/MetricsOverview";
 import { ConfusionMatrixSection } from "./metrics/ConfusionMatrixSection";
@@ -12,6 +13,14 @@ import { OptimizationSection } from "./analysis/OptimizationSection";
 import { RankMetricsSection } from "./metrics/RankMetricsSection";
 import { RobustnessSection } from "./metrics/RobustnessSection";
 import { StepDecompositionSection } from "./analysis/StepDecompositionSection";
+
+function pct(v: number): string {
+  return `${(v * 100).toFixed(1)}%`;
+}
+
+function fmtMcc(v: number): string {
+  return v.toFixed(3);
+}
 
 function getVerdict(metrics: ExperimentMetrics, rankMetrics?: RankMetrics | null) {
   const p50 = rankMetrics?.precisionAtK["50"] ?? null;
@@ -74,12 +83,10 @@ function getVerdict(metrics: ExperimentMetrics, rankMetrics?: RankMetrics | null
 }
 
 const VERDICT_STYLES = {
-  excellent:
-    "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-300",
-  good: "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300",
-  moderate:
-    "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  poor: "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-300",
+  excellent: "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950",
+  good: "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950",
+  moderate: "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950",
+  poor: "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950",
 } as const;
 
 const VERDICT_BADGE_STYLES = {
@@ -89,6 +96,20 @@ const VERDICT_BADGE_STYLES = {
   moderate:
     "border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200",
   poor: "border-red-300 bg-red-100 text-red-900 dark:border-red-700 dark:bg-red-900 dark:text-red-200",
+} as const;
+
+const VERDICT_ICON_STYLES = {
+  excellent: "text-green-600 dark:text-green-400",
+  good: "text-blue-600 dark:text-blue-400",
+  moderate: "text-amber-600 dark:text-amber-400",
+  poor: "text-red-600 dark:text-red-400",
+} as const;
+
+const VERDICT_TEXT_STYLES = {
+  excellent: "text-green-800 dark:text-green-300",
+  good: "text-blue-800 dark:text-blue-300",
+  moderate: "text-amber-800 dark:text-amber-300",
+  poor: "text-red-800 dark:text-red-300",
 } as const;
 
 function SummaryVerdict({
@@ -103,15 +124,78 @@ function SummaryVerdict({
   const { level, sentence } = getVerdict(metrics, rankMetrics);
 
   return (
-    <div
-      className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${VERDICT_STYLES[level]}`}
-    >
-      <Badge
-        className={`shrink-0 text-xs font-semibold capitalize ${VERDICT_BADGE_STYLES[level]}`}
-      >
-        {level}
-      </Badge>
-      <span className="text-sm font-medium">{sentence}</span>
+    <Card className={`${VERDICT_STYLES[level]} shadow-sm`}>
+      <CardContent className="flex items-center gap-4 p-4">
+        <FlaskConical className={`h-6 w-6 shrink-0 ${VERDICT_ICON_STYLES[level]}`} />
+        <div className="min-w-0 flex-1">
+          <Badge
+            className={`mb-1 text-xs font-semibold capitalize ${VERDICT_BADGE_STYLES[level]}`}
+          >
+            {level}
+          </Badge>
+          <p className={`text-sm font-medium ${VERDICT_TEXT_STYLES[level]}`}>
+            {sentence}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Key metrics summary cards ─────────────────────────────────────── */
+
+function metricColor(
+  value: number,
+  thresholds: { good: number; moderate: number },
+): string {
+  if (value >= thresholds.good) return "text-green-600 dark:text-green-400";
+  if (value >= thresholds.moderate) return "text-amber-600 dark:text-amber-400";
+  return "text-red-600 dark:text-red-400";
+}
+
+function KeyMetricsRow({ metrics }: { metrics: ExperimentMetrics }) {
+  const cards = [
+    {
+      label: "F1 Score",
+      value: pct(metrics.f1Score),
+      colorClass: metricColor(metrics.f1Score, { good: 0.7, moderate: 0.4 }),
+    },
+    {
+      label: "Sensitivity",
+      value: pct(metrics.sensitivity),
+      colorClass: metricColor(metrics.sensitivity, { good: 0.7, moderate: 0.4 }),
+    },
+    {
+      label: "Precision",
+      value: pct(metrics.precision),
+      colorClass: metricColor(metrics.precision, { good: 0.7, moderate: 0.4 }),
+    },
+    {
+      label: "MCC",
+      value: fmtMcc(metrics.mcc),
+      colorClass: metricColor(
+        (metrics.mcc + 1) / 2, // normalize MCC from [-1,1] to [0,1]
+        { good: 0.7, moderate: 0.4 },
+      ),
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {cards.map((card) => (
+        <Card key={card.label} className="shadow-xs">
+          <CardContent className="px-4 py-3 text-center">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {card.label}
+            </div>
+            <div
+              className={`mt-1 font-mono text-2xl font-bold tabular-nums ${card.colorClass}`}
+            >
+              {card.value}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
@@ -157,6 +241,9 @@ export function OverviewTab({ experiment, siteId, onOptimize }: OverviewTabProps
 
   return (
     <>
+      {/* Key metrics at-a-glance */}
+      {metrics && <KeyMetricsRow metrics={metrics} />}
+
       <SummaryVerdict metrics={metrics} rankMetrics={experiment.rankMetrics} />
       <RankingStatusBanner config={experiment.config} />
       <AiInterpretation experiment={experiment} siteId={siteId} />

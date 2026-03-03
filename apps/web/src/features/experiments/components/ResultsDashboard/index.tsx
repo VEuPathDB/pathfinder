@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { Experiment } from "@pathfinder/shared";
 import {
   ArrowLeft,
@@ -8,6 +7,7 @@ import {
   FlaskConical,
   GitBranch,
   GitCompare,
+  MoreHorizontal,
   RotateCcw,
   Settings,
   Sparkles,
@@ -15,6 +15,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
 import { Badge } from "@/lib/components/ui/Badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/lib/components/ui/Tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/lib/components/ui/DropdownMenu";
 import { exportExperiment } from "../../api";
 import { useExperimentViewStore } from "../../store";
 import { TabErrorBoundary, NoStrategyNotice } from "./shared/DashboardShared";
@@ -24,16 +31,6 @@ import { NotesEditor } from "./shared/NotesEditor";
 import { ConfigSection } from "./shared/ConfigSection";
 import { ResultsTable } from "./tabs/ResultsTable";
 import { StrategyGraph } from "./shared/StrategyGraph";
-
-const TABS = [
-  { id: "overview", label: "Overview", icon: BarChart3 },
-  { id: "results", label: "Results Table", icon: Table },
-  { id: "analyses", label: "Analyses", icon: FlaskConical },
-  { id: "strategy", label: "Strategy", icon: GitBranch },
-  { id: "config", label: "Config", icon: Settings },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
 
 interface ResultsDashboardProps {
   experiment: Experiment;
@@ -48,7 +45,6 @@ export function ResultsDashboard({ experiment, siteId }: ResultsDashboardProps) 
     experiments,
     optimizeFromEvaluation,
   } = useExperimentViewStore();
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
 
   const parentId = experiment.config.parentExperimentId;
   const parentName = parentId
@@ -114,91 +110,111 @@ export function ResultsDashboard({ experiment, siteId }: ResultsDashboardProps) 
                 </div>
               )}
             </div>
+
+            {/* Primary action + dropdown for secondary actions */}
             <div className="flex shrink-0 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => exportExperiment(experiment.id, experiment.config.name)}
-              >
-                <Download className="h-3.5 w-3.5" />
-                Export CSV
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  const { getExperimentReport } = await import("../../api/controlSets");
-                  await getExperimentReport(experiment.id);
-                }}
-              >
-                <FileText className="h-3.5 w-3.5" />
-                HTML Report
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const mode = experiment.config.mode;
-                  const isMultiStep = mode === "multi-step" || mode === "import";
-                  setView(isMultiStep ? "multi-step-setup" : "setup");
-                }}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Re-run
-              </Button>
-              {experiments.length > 1 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const other = experiments.find((e) => e.id !== experiment.id);
-                    if (other) loadCompareExperiment(other.id);
-                  }}
-                >
-                  <GitCompare className="h-3.5 w-3.5" />
-                  Compare
-                </Button>
-              )}
-              {!wasOptimized && (
+              {!wasOptimized ? (
                 <Button size="sm" onClick={() => optimizeFromEvaluation(experiment.id)}>
                   <Sparkles className="h-3.5 w-3.5" />
                   Optimize This
                 </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => optimizeFromEvaluation(experiment.id)}
+                >
+                  <FlaskConical className="h-3.5 w-3.5" />
+                  Analyze Again
+                </Button>
               )}
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="px-2">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() =>
+                      exportExperiment(experiment.id, experiment.config.name)
+                    }
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Export CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      const { getExperimentReport } =
+                        await import("../../api/controlSets");
+                      await getExperimentReport(experiment.id);
+                    }}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    HTML Report
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const mode = experiment.config.mode;
+                      const isMultiStep = mode === "multi-step" || mode === "import";
+                      setView(isMultiStep ? "multi-step-setup" : "setup");
+                    }}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Re-run
+                  </DropdownMenuItem>
+                  {experiments.length > 1 && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        const other = experiments.find((e) => e.id !== experiment.id);
+                        if (other) loadCompareExperiment(other.id);
+                      }}
+                    >
+                      <GitCompare className="h-3.5 w-3.5" />
+                      Compare
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
 
-        <nav className="mt-6 flex gap-1 border-b border-border" role="tablist">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === id}
-              onClick={() => setActiveTab(id)}
-              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors duration-150 ${
-                activeTab === id
-                  ? "border-blue-500 font-semibold text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </button>
-          ))}
-        </nav>
+        {/* shadcn Tabs — keyboard nav + ARIA for free */}
+        <Tabs defaultValue="overview" className="mt-6">
+          <TabsList>
+            <TabsTrigger value="overview">
+              <BarChart3 className="h-3.5 w-3.5" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="results">
+              <Table className="h-3.5 w-3.5" />
+              Results Table
+            </TabsTrigger>
+            <TabsTrigger value="analyses">
+              <FlaskConical className="h-3.5 w-3.5" />
+              Analyses
+            </TabsTrigger>
+            <TabsTrigger value="strategy">
+              <GitBranch className="h-3.5 w-3.5" />
+              Strategy
+            </TabsTrigger>
+            <TabsTrigger value="config">
+              <Settings className="h-3.5 w-3.5" />
+              Config
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="mt-8 space-y-8">
-          {activeTab === "overview" && (
+          <TabsContent value="overview">
             <OverviewTab
               experiment={experiment}
               siteId={siteId}
               onOptimize={() => optimizeFromEvaluation(experiment.id)}
             />
-          )}
+          </TabsContent>
 
-          {activeTab === "results" && (
+          <TabsContent value="results">
             <TabErrorBoundary>
               {experiment.wdkStepId ? (
                 <ResultsTable experimentId={experiment.id} />
@@ -206,15 +222,15 @@ export function ResultsDashboard({ experiment, siteId }: ResultsDashboardProps) 
                 <NoStrategyNotice />
               )}
             </TabErrorBoundary>
-          )}
+          </TabsContent>
 
-          {activeTab === "analyses" && (
+          <TabsContent value="analyses">
             <TabErrorBoundary>
               <AnalysesTabs experiment={experiment} />
             </TabErrorBoundary>
-          )}
+          </TabsContent>
 
-          {activeTab === "strategy" && (
+          <TabsContent value="strategy">
             <TabErrorBoundary>
               {experiment.wdkStrategyId ? (
                 <StrategyGraph experimentId={experiment.id} />
@@ -222,18 +238,16 @@ export function ResultsDashboard({ experiment, siteId }: ResultsDashboardProps) 
                 <NoStrategyNotice />
               )}
             </TabErrorBoundary>
-          )}
+          </TabsContent>
 
-          {activeTab === "config" && (
-            <>
-              <NotesEditor
-                experimentId={experiment.id}
-                initialNotes={experiment.notes ?? ""}
-              />
-              <ConfigSection experiment={experiment} />
-            </>
-          )}
-        </div>
+          <TabsContent value="config">
+            <NotesEditor
+              experimentId={experiment.id}
+              initialNotes={experiment.notes ?? ""}
+            />
+            <ConfigSection experiment={experiment} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

@@ -22,7 +22,7 @@ export const EXECUTE_EPITOPE_SEARCH_EVENTS: AnySSEEvent[] = [
       strategyId: "strat-001",
       strategy: {
         id: "strat-001",
-        name: "Draft Strategy",
+        name: "New Conversation",
         siteId: "plasmodb",
         recordType: null,
         steps: [],
@@ -83,7 +83,7 @@ export const EXECUTE_EPITOPE_SEARCH_EVENTS: AnySSEEvent[] = [
         displayName: "P. falciparum epitope genes",
         recordType: "transcript",
         graphId: "strat-001",
-        graphName: "Draft Strategy",
+        graphName: "New Conversation",
         parameters: {
           organism: ["Plasmodium falciparum 3D7"],
           epitope_confidence: ["High", "Medium"],
@@ -106,7 +106,7 @@ export const EXECUTE_EPITOPE_SEARCH_EVENTS: AnySSEEvent[] = [
           organism: ["Plasmodium falciparum 3D7"],
           epitope_confidence: ["High", "Medium"],
         },
-        graphName: "Draft Strategy",
+        graphName: "New Conversation",
       },
       allSteps: [
         {
@@ -217,16 +217,21 @@ export const EXECUTE_EPITOPE_SEARCH_EVENTS: AnySSEEvent[] = [
   { type: "message_end", data: {} },
 ];
 
-// Plan mode: catalog exploration + planning artifact + executor request
+// Planning artifact + executor request events
 export const PLAN_ARTIFACT_EVENTS: AnySSEEvent[] = [
   {
     type: "message_start",
     data: {
-      planSessionId: "plan-001",
-      planSession: {
-        id: "plan-001",
+      strategyId: "strat-plan-001",
+      strategy: {
+        id: "strat-plan-001",
+        name: "Vaccine planning",
         siteId: "plasmodb",
-        title: "Vaccine planning",
+        recordType: null,
+        steps: [],
+        rootStepId: null,
+        createdAt: "2025-02-15T00:00:00Z",
+        updatedAt: "2025-02-15T00:00:00Z",
       },
     },
   },
@@ -330,15 +335,6 @@ export const PLAN_ARTIFACT_EVENTS: AnySSEEvent[] = [
       },
     },
   },
-  // Executor build request
-  {
-    type: "executor_build_request",
-    data: {
-      executorBuildRequest: {
-        message: "Build the epitope gene strategy as planned",
-      },
-    },
-  },
   // Assistant message
   {
     type: "assistant_delta",
@@ -362,8 +358,17 @@ export const OPTIMIZATION_PROGRESS_EVENTS: AnySSEEvent[] = [
   {
     type: "message_start",
     data: {
-      planSessionId: "plan-opt",
-      planSession: { id: "plan-opt", siteId: "plasmodb", title: "Optimization" },
+      strategyId: "strat-opt",
+      strategy: {
+        id: "strat-opt",
+        name: "Optimization",
+        siteId: "plasmodb",
+        recordType: null,
+        steps: [],
+        rootStepId: null,
+        createdAt: "2025-02-15T00:00:00Z",
+        updatedAt: "2025-02-15T00:00:00Z",
+      },
     },
   },
   {

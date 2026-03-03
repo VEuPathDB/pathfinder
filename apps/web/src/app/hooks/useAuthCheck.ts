@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getVeupathdbAuthStatus } from "@/lib/api/client";
 import { useSessionStore } from "@/state/useSessionStore";
 
@@ -10,15 +10,21 @@ import { useSessionStore } from "@/state/useSessionStore";
  * Authentication always runs against the VEuPathDB portal, regardless of
  * which component site is selected.
  *
- * :returns: Whether the initial auth check is still in progress.
+ * Returns loading state and an apiError string when the backend is
+ * unreachable so the page can render a proper error screen.
  */
-export function useAuthCheck(): { authLoading: boolean } {
+export function useAuthCheck(): {
+  authLoading: boolean;
+  apiError: string | null;
+  retry: () => void;
+} {
   const authStatusKnown = useSessionStore((s) => s.authStatusKnown);
   const setVeupathdbAuth = useSessionStore((s) => s.setVeupathdbAuth);
   const setAuthStatusKnown = useSessionStore((s) => s.setAuthStatusKnown);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (authStatusKnown) return;
+  const runCheck = useCallback(() => {
+    setApiError(null);
     let cancelled = false;
     getVeupathdbAuthStatus()
       .then((status) => {
@@ -30,14 +36,31 @@ export function useAuthCheck(): { authLoading: boolean } {
       .catch((err) => {
         console.error("[useAuthCheck]", err);
         if (!cancelled) {
-          setVeupathdbAuth(false, null);
+          setApiError(err instanceof Error ? err.message : "Unable to reach the API.");
           setAuthStatusKnown(true);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [authStatusKnown, setVeupathdbAuth, setAuthStatusKnown]);
+  }, [setVeupathdbAuth, setAuthStatusKnown]);
 
-  return { authLoading: !authStatusKnown };
+  useEffect(() => {
+    if (authStatusKnown && !apiError) return;
+    let cleanup: (() => void) | undefined;
+    const id = setTimeout(() => {
+      cleanup = runCheck();
+    }, 0);
+    return () => {
+      clearTimeout(id);
+      cleanup?.();
+    };
+  }, [authStatusKnown, apiError, runCheck]);
+
+  const retry = useCallback(() => {
+    setApiError(null);
+    setAuthStatusKnown(false);
+  }, [setAuthStatusKnown]);
+
+  return { authLoading: !authStatusKnown, apiError, retry };
 }

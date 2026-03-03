@@ -1,8 +1,7 @@
-"""Local strategy CRUD endpoints."""
+"""Strategy CRUD endpoints — CQRS only (streams + stream_projections)."""
 
 from __future__ import annotations
 
-import asyncio
 from typing import Annotated
 from uuid import UUID
 
@@ -10,12 +9,18 @@ from fastapi import APIRouter, Query, Response
 
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.platform.errors import ErrorCode, NotFoundError
+from veupath_chatbot.platform.events import read_stream_messages, read_stream_thinking
 from veupath_chatbot.platform.logging import get_logger
+from veupath_chatbot.platform.redis import get_redis
+from veupath_chatbot.platform.tasks import spawn
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.strategies.auto_push import try_auto_push_to_wdk
 from veupath_chatbot.services.strategies.plan_validation import validate_plan_or_raise
-from veupath_chatbot.services.strategies.serialization import build_steps_data_from_plan
-from veupath_chatbot.transport.http.deps import CurrentUser, StrategyRepo
+from veupath_chatbot.services.strategies.serialization import (
+    build_steps_data_from_plan,
+    count_steps_in_plan,
+)
+from veupath_chatbot.transport.http.deps import CurrentUser, StreamRepo
 from veupath_chatbot.transport.http.schemas import (
     CreateStrategyRequest,
     StrategyResponse,
@@ -23,10 +28,10 @@ from veupath_chatbot.transport.http.schemas import (
     UpdateStrategyRequest,
 )
 
+from .._authz import get_owned_projection_or_404
 from ._shared import (
-    build_strategy_response,
-    build_summary_response,
-    extract_root_step_id,
+    build_projection_response,
+    build_projection_summary,
 )
 
 router = APIRouter(prefix="/api/v1/strategies", tags=["strategies"])
@@ -35,163 +40,167 @@ logger = get_logger(__name__)
 
 @router.get("", response_model=list[StrategySummaryResponse])
 async def list_strategies(
-    strategy_repo: StrategyRepo,
+    stream_repo: StreamRepo,
     user_id: CurrentUser,
     site_id: Annotated[str | None, Query(alias="siteId")] = None,
 ) -> list[StrategySummaryResponse]:
-    """List user's saved strategies."""
-    strategies = await strategy_repo.list_by_user(user_id, site_id)
-    return [build_summary_response(s) for s in strategies]
+    """List user's conversation streams (projections)."""
+    projections = await stream_repo.list_projections(user_id, site_id)
+    return [build_projection_summary(p, site_id=site_id or "") for p in projections]
 
 
 @router.post("", response_model=StrategyResponse, status_code=201)
 async def create_strategy(
     request: CreateStrategyRequest,
-    strategy_repo: StrategyRepo,
+    stream_repo: StreamRepo,
     user_id: CurrentUser,
 ) -> StrategyResponse:
-    """Create a new strategy."""
+    """Create a new strategy (CQRS only)."""
     plan_in = request.plan.model_dump(exclude_none=True)
     strategy_ast = validate_plan_or_raise(plan_in)
     plan = strategy_ast.to_dict()
     steps_data = build_steps_data_from_plan(plan)
 
-    strategy = await strategy_repo.create(
+    stream = await stream_repo.create(
         user_id=user_id,
-        name=request.name,
-        title=request.name,
         site_id=request.site_id,
-        record_type=strategy_ast.record_type,
+        name=request.name,
+    )
+    await stream_repo.update_projection(
+        stream.id,
         plan=plan,
+        steps=list(steps_data),
+        record_type=strategy_ast.record_type,
+        root_step_id=strategy_ast.root.id,
+        root_step_id_set=True,
+        step_count=count_steps_in_plan(plan),
     )
 
-    return build_strategy_response(
-        strategy,
-        plan=plan,
-        steps_data=steps_data,
-        root_step_id=strategy_ast.root.id,
-    )
+    projection = await stream_repo.get_projection(stream.id)
+    if not projection:
+        raise NotFoundError(
+            code=ErrorCode.STRATEGY_NOT_FOUND, title="Strategy not found"
+        )
+    return build_projection_response(projection)
 
 
 @router.get("/{strategyId:uuid}", response_model=StrategyResponse)
 async def get_strategy(
     strategyId: UUID,
-    strategy_repo: StrategyRepo,
+    stream_repo: StreamRepo,
+    user_id: CurrentUser,
 ) -> StrategyResponse:
-    """Get a strategy by ID."""
-    strategy = await strategy_repo.get_by_id(strategyId)
-    if not strategy:
-        raise NotFoundError(
-            code=ErrorCode.STRATEGY_NOT_FOUND, title="Strategy not found"
-        )
+    """Get a strategy/stream by ID from the CQRS projection + Redis."""
+    projection = await get_owned_projection_or_404(stream_repo, strategyId, user_id)
 
-    plan: JSONObject = strategy.plan if isinstance(strategy.plan, dict) else {}
-    steps = build_steps_data_from_plan(plan)
-    if not steps and strategy.steps:
-        steps = strategy.steps if isinstance(strategy.steps, list) else []
-
-    root_step_id = extract_root_step_id(plan, strategy.root_step_id)
-
-    return build_strategy_response(
-        strategy,
-        plan=plan,
-        steps_data=steps,
-        root_step_id=root_step_id,
-    )
+    redis = get_redis()
+    messages = await read_stream_messages(redis, str(strategyId))
+    thinking = await read_stream_thinking(redis, str(strategyId))
+    return build_projection_response(projection, messages=messages, thinking=thinking)
 
 
 @router.patch("/{strategyId:uuid}", response_model=StrategyResponse)
 async def update_strategy(
     strategyId: UUID,
     request: UpdateStrategyRequest,
-    strategy_repo: StrategyRepo,
+    stream_repo: StreamRepo,
+    user_id: CurrentUser,
 ) -> StrategyResponse:
-    """Update a strategy."""
+    """Update a strategy (CQRS only)."""
+    await get_owned_projection_or_404(stream_repo, strategyId, user_id)
+
     record_type = None
+    steps_data = None
+    root_step_id = None
+    plan: JSONObject | None = None
     if request.plan:
         plan_in = request.plan.model_dump(exclude_none=True)
         strategy_ast = validate_plan_or_raise(plan_in)
         plan = strategy_ast.to_dict()
         record_type = strategy_ast.record_type
-    else:
-        plan = None
+        steps_data = build_steps_data_from_plan(plan)
+        root_step_id = strategy_ast.root.id
 
     fields_set: set[str] = getattr(request, "model_fields_set", set())
     wdk_strategy_id_set = "wdk_strategy_id" in fields_set
     is_saved_set = "is_saved" in fields_set
 
-    strategy = await strategy_repo.update(
-        strategy_id=strategyId,
+    await stream_repo.update_projection(
+        strategyId,
         name=request.name,
-        title=request.name,
         plan=plan,
+        steps=list(steps_data) if steps_data is not None else None,
         record_type=record_type,
+        root_step_id=root_step_id,
+        root_step_id_set=plan is not None,
         wdk_strategy_id=request.wdk_strategy_id,
         wdk_strategy_id_set=wdk_strategy_id_set,
         is_saved=request.is_saved,
         is_saved_set=is_saved_set,
+        step_count=count_steps_in_plan(plan) if plan else None,
     )
-    if not strategy:
+
+    # Re-fetch updated projection.
+    updated = await stream_repo.get_projection(strategyId)
+    if not updated:
         raise NotFoundError(
             code=ErrorCode.STRATEGY_NOT_FOUND, title="Strategy not found"
         )
-    await strategy_repo.refresh(strategy)
-
-    plan_obj: JSONObject = strategy.plan if isinstance(strategy.plan, dict) else {}
-    steps = build_steps_data_from_plan(plan_obj)
-    root_step_id = extract_root_step_id(plan_obj, None)
 
     # If isSaved was toggled and WDK strategy exists, sync the flag to WDK.
-    if is_saved_set and strategy.wdk_strategy_id:
-        try:
-            api = get_strategy_api(strategy.site_id)
-            await api.set_saved(strategy.wdk_strategy_id, strategy.is_saved)
-        except Exception as e:
-            logger.warning(
-                "Failed to sync isSaved to WDK",
-                strategy_id=str(strategyId),
-                error=str(e),
-            )
+    if is_saved_set and updated.wdk_strategy_id:
+        site_id = updated.stream.site_id if updated.stream else ""
+        if site_id:
+            try:
+                api = get_strategy_api(site_id)
+                await api.set_saved(updated.wdk_strategy_id, updated.is_saved)
+            except Exception as e:
+                logger.warning(
+                    "Failed to sync isSaved to WDK",
+                    strategy_id=str(strategyId),
+                    error=str(e),
+                )
 
     # Best-effort auto-push to WDK (fire-and-forget).
-    if strategy.wdk_strategy_id and not is_saved_set:
-        asyncio.create_task(try_auto_push_to_wdk(strategyId))
+    if updated.wdk_strategy_id and not is_saved_set:
+        spawn(try_auto_push_to_wdk(strategyId))
 
-    return build_strategy_response(
-        strategy,
-        plan=plan_obj,
-        steps_data=steps,
-        root_step_id=root_step_id,
-    )
+    return build_projection_response(updated)
 
 
 @router.delete("/{strategyId:uuid}", status_code=204, response_class=Response)
 async def delete_strategy(
     strategyId: UUID,
-    strategy_repo: StrategyRepo,
+    stream_repo: StreamRepo,
+    user_id: CurrentUser,
 ) -> Response:
-    """Delete a strategy."""
-    strategy = await strategy_repo.get_by_id(strategyId)
-    if not strategy:
-        raise NotFoundError(
-            code=ErrorCode.STRATEGY_NOT_FOUND, title="Strategy not found"
-        )
+    """Delete a strategy: cancel ops, clean Redis stream, delete CQRS records."""
+    projection = await get_owned_projection_or_404(stream_repo, strategyId, user_id)
 
-    if strategy.wdk_strategy_id:
+    # Cancel any active operations for this stream before deleting.
+    from veupath_chatbot.services.chat.orchestrator import cancel_chat_operation
+
+    active_ops = await stream_repo.get_active_operations(strategyId)
+    for op in active_ops:
+        await cancel_chat_operation(op.operation_id)
+
+    # Delete WDK counterpart if linked.
+    if projection.wdk_strategy_id and projection.stream:
         try:
-            api = get_strategy_api(strategy.site_id)
-            await api.delete_strategy(strategy.wdk_strategy_id)
+            api = get_strategy_api(projection.stream.site_id)
+            await api.delete_strategy(projection.wdk_strategy_id)
         except Exception as e:
             logger.warning(
                 "WDK strategy delete skipped",
-                wdk_strategy_id=strategy.wdk_strategy_id,
-                site_id=strategy.site_id,
+                wdk_strategy_id=projection.wdk_strategy_id,
                 error=str(e),
             )
 
-    deleted = await strategy_repo.delete(strategyId)
-    if not deleted:
-        raise NotFoundError(
-            code=ErrorCode.STRATEGY_NOT_FOUND, title="Strategy not found"
-        )
+    # Clean up Redis stream.
+    redis = get_redis()
+    await redis.delete(f"stream:{strategyId}")
+
+    # Delete CQRS records (cascade deletes projection + operations).
+    await stream_repo.delete(strategyId)
+
     return Response(status_code=204)

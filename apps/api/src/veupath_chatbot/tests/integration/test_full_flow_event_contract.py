@@ -16,6 +16,7 @@ Skip with:
 from __future__ import annotations
 
 import pytest
+from shared_py.defaults import DEFAULT_STREAM_NAME
 
 from veupath_chatbot.tests.fixtures.scripted_engine import (
     ScriptedToolCall,
@@ -71,16 +72,16 @@ class TestEventOrdering:
                 authed_client,
                 message="Build an epitope search strategy",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
         types = result.event_types
 
-        # 1. message_start is always first
-        assert types[0] == "message_start", (
-            f"First event must be message_start, got {types[0]}"
+        # 1. message_start appears in the stream (may be preceded by
+        #    user_message and model_selected in the CQRS event bus)
+        assert "message_start" in types, (
+            f"Expected message_start in events, got {types}"
         )
 
         # 2. message_end is always last
@@ -160,11 +161,10 @@ class TestMultiTurnPersistence:
                 authed_client,
                 message="Create an epitope search for P. falciparum",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert r1.http_status == 200
+        assert r1.http_status == 202
         strategy_id = r1.strategy_id
         assert strategy_id
 
@@ -185,12 +185,11 @@ class TestMultiTurnPersistence:
                 authed_client,
                 message="What steps do I have?",
                 site_id="plasmodb",
-                mode="execute",
                 strategy_id=strategy_id,
                 timeout=60.0,
             )
 
-        assert r2.http_status == 200
+        assert r2.http_status == 202
 
         # Fetch the strategy and check messages
         resp = await authed_client.get(f"/api/v1/strategies/{strategy_id}")
@@ -238,11 +237,10 @@ class TestThinkingCleared:
                 authed_client,
                 message="Search for epitope-related searches",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=60.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
         strategy_id = result.strategy_id
         assert strategy_id
 
@@ -302,11 +300,10 @@ class TestStrategyMetaPersistence:
                 authed_client,
                 message="Build an epitope strategy for persistence test",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
         strategy_id = result.strategy_id
         assert strategy_id
 
@@ -318,8 +315,8 @@ class TestStrategyMetaPersistence:
         assert strategy.get("recordType") == "transcript", (
             f"Unexpected recordType: {strategy.get('recordType')}"
         )
-        # The name should be set (not default "Draft Strategy")
+        # The name should be set (not the default)
         name = strategy.get("name") or strategy.get("title", "")
-        assert name and name != "Draft Strategy", (
+        assert name and name != DEFAULT_STREAM_NAME, (
             f"Strategy name should be set, got: {name}"
         )

@@ -1,58 +1,37 @@
 /**
  * Catch-all route for /api/v1/experiments/:experimentId/:action
- * (e.g. cross-validate, enrich). Proxies POST to the upstream backend.
+ * (e.g. cross-validate, enrich, importable-strategies details).
+ * Proxies GET and POST to the upstream backend.
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
+import { proxyJsonRequest } from "../../../_proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function getUpstreamBase(): string {
-  return (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(
-    /\/+$/,
-    "",
-  );
-}
-
-function forwardHeaders(req: NextRequest): Record<string, string> {
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
-  const auth = req.headers.get("authorization");
-  if (auth) headers["Authorization"] = auth;
-  const cookie = req.headers.get("cookie");
-  if (cookie) headers["Cookie"] = cookie;
-  return headers;
-}
-
 type Ctx = { params: Promise<{ experimentId: string; action: string[] }> };
+
+function upstreamPath(
+  req: NextRequest,
+  experimentId: string,
+  action: string[],
+): string {
+  const actionPath = action.join("/");
+  const base = `/api/v1/experiments/${encodeURIComponent(experimentId)}/${actionPath}`;
+  const qs = new URL(req.url).searchParams.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+export async function GET(req: NextRequest, ctx: Ctx) {
+  const { experimentId, action } = await ctx.params;
+  return proxyJsonRequest(req, upstreamPath(req, experimentId, action));
+}
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { experimentId, action } = await ctx.params;
-  const actionPath = action.join("/");
-  const url = `${getUpstreamBase()}/api/v1/experiments/${encodeURIComponent(experimentId)}/${actionPath}`;
-  const body = await req.text();
-
-  try {
-    const upstream = await fetch(url, {
-      method: "POST",
-      headers: forwardHeaders(req),
-      body,
-    });
-    const respBody = await upstream.text();
-    return new Response(respBody, {
-      status: upstream.status,
-      headers: {
-        "Content-Type": upstream.headers.get("content-type") || "application/json",
-      },
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      { detail: `Upstream unreachable: ${message}` },
-      { status: 502 },
-    );
-  }
+  return proxyJsonRequest(req, upstreamPath(req, experimentId, action), {
+    method: "POST",
+    includeBody: true,
+  });
 }

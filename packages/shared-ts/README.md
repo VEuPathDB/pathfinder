@@ -20,7 +20,7 @@ src/
 
 **Step and strategy types**: `Step`, `Strategy`, `StrategySummary`, `StepFilter`, `StepAnalysis`, `StepReport`.
 
-**Chat types**: `ChatMode`, `Message`, `ToolCall`, `ChatRequest`, `Conversation`.
+**Chat types**: `Message`, `ToolCall`, `ChatRequest`, `Conversation`.
 
 **Site types**: `VEuPathDBSite`, `RecordType`, `Search`, `SearchParameter`.
 

@@ -8,6 +8,7 @@ overfitting.
 from __future__ import annotations
 
 import math
+import operator
 import random
 from collections.abc import Callable, Coroutine
 from typing import Any
@@ -89,31 +90,13 @@ def _std_metrics(
     if n < 2:
         return {}
 
-    def _get_sensitivity(m: ExperimentMetrics) -> float:
-        return m.sensitivity
-
-    def _get_specificity(m: ExperimentMetrics) -> float:
-        return m.specificity
-
-    def _get_precision(m: ExperimentMetrics) -> float:
-        return m.precision
-
-    def _get_f1_score(m: ExperimentMetrics) -> float:
-        return m.f1_score
-
-    def _get_mcc(m: ExperimentMetrics) -> float:
-        return m.mcc
-
-    def _get_balanced_accuracy(m: ExperimentMetrics) -> float:
-        return m.balanced_accuracy
-
     fields: list[tuple[str, Callable[[ExperimentMetrics], float]]] = [
-        ("sensitivity", _get_sensitivity),
-        ("specificity", _get_specificity),
-        ("precision", _get_precision),
-        ("f1Score", _get_f1_score),
-        ("mcc", _get_mcc),
-        ("balancedAccuracy", _get_balanced_accuracy),
+        ("sensitivity", operator.attrgetter("sensitivity")),
+        ("specificity", operator.attrgetter("specificity")),
+        ("precision", operator.attrgetter("precision")),
+        ("f1Score", operator.attrgetter("f1_score")),
+        ("mcc", operator.attrgetter("mcc")),
+        ("balancedAccuracy", operator.attrgetter("balanced_accuracy")),
     ]
 
     result: dict[str, float] = {}
@@ -147,32 +130,25 @@ def _compute_overfitting_score(
     return score, level
 
 
-async def run_cross_validation(
+FoldEvaluator = Callable[
+    [list[str] | None, list[str] | None],
+    Coroutine[Any, Any, JSONObject],
+]
+"""Async callback(holdout_pos, holdout_neg) → control-test result dict."""
+
+
+async def _run_kfold(
     *,
-    site_id: str,
-    record_type: str,
-    search_name: str,
-    parameters: JSONObject,
-    controls_search_name: str,
-    controls_param_name: str,
     positive_controls: list[str],
     negative_controls: list[str],
-    controls_value_format: ControlValueFormat = "newline",
+    evaluator: FoldEvaluator,
     k: int = 5,
     full_metrics: ExperimentMetrics | None = None,
     progress_callback: ProgressCallback | None = None,
 ) -> CrossValidationResult:
-    """Run k-fold cross-validation on control gene lists.
+    """Shared k-fold cross-validation loop.
 
-    :param site_id: VEuPathDB site.
-    :param record_type: WDK record type.
-    :param search_name: WDK search to evaluate.
-    :param parameters: Fixed search parameters.
-    :param controls_search_name: Search that accepts control IDs.
-    :param controls_param_name: Parameter name for the ID list.
-    :param positive_controls: Known-positive gene IDs.
-    :param negative_controls: Known-negative gene IDs.
-    :param controls_value_format: Format for encoding ID lists.
+    :param evaluator: Async callable that evaluates one fold's held-out controls.
     :param k: Number of folds.
     :param full_metrics: Pre-computed full-set metrics (for overfitting comparison).
     :param progress_callback: Optional progress reporter.
@@ -197,16 +173,9 @@ async def run_cross_validation(
             await progress_callback(fold_idx, k)
 
         try:
-            result = await run_positive_negative_controls(
-                site_id=site_id,
-                record_type=record_type,
-                target_search_name=search_name,
-                target_parameters=parameters,
-                controls_search_name=controls_search_name,
-                controls_param_name=controls_param_name,
-                positive_controls=holdout_pos if holdout_pos else None,
-                negative_controls=holdout_neg if holdout_neg else None,
-                controls_value_format=controls_value_format,
+            result = await evaluator(
+                holdout_pos if holdout_pos else None,
+                holdout_neg if holdout_neg else None,
             )
             fold_metrics = metrics_from_control_result(result)
         except Exception as exc:
@@ -247,6 +216,46 @@ async def run_cross_validation(
     )
 
 
+async def run_cross_validation(
+    *,
+    site_id: str,
+    record_type: str,
+    search_name: str,
+    parameters: JSONObject,
+    controls_search_name: str,
+    controls_param_name: str,
+    positive_controls: list[str],
+    negative_controls: list[str],
+    controls_value_format: ControlValueFormat = "newline",
+    k: int = 5,
+    full_metrics: ExperimentMetrics | None = None,
+    progress_callback: ProgressCallback | None = None,
+) -> CrossValidationResult:
+    """Run k-fold cross-validation on control gene lists (single-step mode)."""
+
+    async def _evaluate(pos: list[str] | None, neg: list[str] | None) -> JSONObject:
+        return await run_positive_negative_controls(
+            site_id=site_id,
+            record_type=record_type,
+            target_search_name=search_name,
+            target_parameters=parameters,
+            controls_search_name=controls_search_name,
+            controls_param_name=controls_param_name,
+            positive_controls=pos,
+            negative_controls=neg,
+            controls_value_format=controls_value_format,
+        )
+
+    return await _run_kfold(
+        positive_controls=positive_controls,
+        negative_controls=negative_controls,
+        evaluator=_evaluate,
+        k=k,
+        full_metrics=full_metrics,
+        progress_callback=progress_callback,
+    )
+
+
 async def run_cross_validation_tree(
     *,
     site_id: str,
@@ -261,77 +270,28 @@ async def run_cross_validation_tree(
     full_metrics: ExperimentMetrics | None = None,
     progress_callback: ProgressCallback | None = None,
 ) -> CrossValidationResult:
-    """Tree-aware k-fold cross-validation.
-
-    Like :func:`run_cross_validation` but materialises a full
-    ``PlanStepNode`` tree instead of a single search step.
-
-    :param tree: ``PlanStepNode``-shaped dict (the strategy tree).
-    """
+    """Tree-aware k-fold cross-validation."""
     from veupath_chatbot.services.experiment.step_analysis import (
         run_controls_against_tree,
     )
 
-    size_caps = [len(s) for s in (positive_controls, negative_controls) if len(s) >= 2]
-    k = max(2, min(k, *size_caps)) if size_caps else 2
-
-    pos_folds = _stratified_kfold(positive_controls, k)
-    neg_folds = _stratified_kfold(negative_controls, k)
-
-    fold_results: list[FoldMetrics] = []
-
-    for fold_idx in range(k):
-        holdout_pos = pos_folds[fold_idx]
-        holdout_neg = neg_folds[fold_idx]
-
-        if progress_callback:
-            await progress_callback(fold_idx, k)
-
-        try:
-            result = await run_controls_against_tree(
-                site_id=site_id,
-                record_type=record_type,
-                tree=tree,
-                controls_search_name=controls_search_name,
-                controls_param_name=controls_param_name,
-                controls_value_format=controls_value_format,
-                positive_controls=holdout_pos if holdout_pos else None,
-                negative_controls=holdout_neg if holdout_neg else None,
-            )
-            fold_metrics = metrics_from_control_result(result)
-        except Exception as exc:
-            logger.warning("Tree fold %d failed: %s", fold_idx, exc)
-            cm = compute_confusion_matrix(
-                positive_hits=0,
-                total_positives=len(holdout_pos),
-                negative_hits=0,
-                total_negatives=len(holdout_neg),
-            )
-            fold_metrics = compute_metrics(cm)
-
-        fold_results.append(
-            FoldMetrics(
-                fold_index=fold_idx,
-                metrics=fold_metrics,
-                positive_control_ids=holdout_pos,
-                negative_control_ids=holdout_neg,
-            )
+    async def _evaluate(pos: list[str] | None, neg: list[str] | None) -> JSONObject:
+        return await run_controls_against_tree(
+            site_id=site_id,
+            record_type=record_type,
+            tree=tree,
+            controls_search_name=controls_search_name,
+            controls_param_name=controls_param_name,
+            controls_value_format=controls_value_format,
+            positive_controls=pos,
+            negative_controls=neg,
         )
 
-    metrics_list = [f.metrics for f in fold_results]
-    mean = _average_metrics(metrics_list)
-    std = _std_metrics(metrics_list, mean)
-
-    if full_metrics is not None:
-        ov_score, ov_level = _compute_overfitting_score(full_metrics, mean)
-    else:
-        ov_score, ov_level = 0.0, "low"
-
-    return CrossValidationResult(
+    return await _run_kfold(
+        positive_controls=positive_controls,
+        negative_controls=negative_controls,
+        evaluator=_evaluate,
         k=k,
-        folds=fold_results,
-        mean_metrics=mean,
-        std_metrics=std,
-        overfitting_score=ov_score,
-        overfitting_level=ov_level,
+        full_metrics=full_metrics,
+        progress_callback=progress_callback,
     )

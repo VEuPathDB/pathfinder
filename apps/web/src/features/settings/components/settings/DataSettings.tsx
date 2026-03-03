@@ -1,26 +1,21 @@
 "use client";
 
 /**
- * DataSettings -- destructive data-clearing actions (strategies, plans, all data).
+ * DataSettings -- destructive data-clearing actions (strategies, all data).
  */
 
 import { useState, useCallback } from "react";
 import { useSettingsStore } from "@/state/useSettingsStore";
-import { listStrategies, deleteStrategy, deletePlanSession } from "@/lib/api/client";
+import { listStrategies, deleteStrategy } from "@/lib/api/client";
 import { useAsyncAction } from "@/lib/utils/asyncAction";
 import { Loader2, Trash2 } from "lucide-react";
 
 interface DataSettingsProps {
   siteId: string;
-  onPlansCleared?: () => void;
   onStrategiesCleared?: () => void;
 }
 
-export function DataSettings({
-  siteId,
-  onPlansCleared,
-  onStrategiesCleared,
-}: DataSettingsProps) {
+export function DataSettings({ siteId, onStrategiesCleared }: DataSettingsProps) {
   const [clearing, setClearing] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
   const { run, error } = useAsyncAction();
@@ -37,32 +32,15 @@ export function DataSettings({
     setConfirmAction(null);
   }, [siteId, onStrategiesCleared, run]);
 
-  const clearPlans = useCallback(async () => {
-    setClearing("plans");
-    await run(async () => {
-      // Plans are scoped to user; we need to fetch via the API.
-      // Using a batch delete approach.
-      const { requestJson } = await import("@/lib/api/http");
-      const plans = await requestJson<{ id: string }[]>(
-        `/api/v1/plans?siteId=${encodeURIComponent(siteId)}`,
-      );
-      await Promise.allSettled(plans.map((p) => deletePlanSession(p.id)));
-      onPlansCleared?.();
-    });
-    setClearing(null);
-    setConfirmAction(null);
-  }, [siteId, onPlansCleared, run]);
-
   const clearAll = useCallback(async () => {
     setClearing("all");
     await run(async () => {
       await clearStrategies();
-      await clearPlans();
       resetToDefaults();
     });
     setClearing(null);
     setConfirmAction(null);
-  }, [clearStrategies, clearPlans, resetToDefaults, run]);
+  }, [clearStrategies, resetToDefaults, run]);
 
   return (
     <div className="space-y-4">
@@ -71,16 +49,6 @@ export function DataSettings({
           {error}
         </div>
       )}
-
-      <DangerAction
-        label="Clear all plans"
-        description="Delete all planning sessions for the current site."
-        loading={clearing === "plans"}
-        confirmed={confirmAction === "plans"}
-        onConfirm={() => setConfirmAction("plans")}
-        onExecute={clearPlans}
-        onCancel={() => setConfirmAction(null)}
-      />
 
       <DangerAction
         label="Clear all strategies"
@@ -94,7 +62,7 @@ export function DataSettings({
 
       <DangerAction
         label="Clear all data"
-        description="Delete all plans, strategies, and reset settings."
+        description="Delete all strategies and reset settings."
         loading={clearing === "all"}
         confirmed={confirmAction === "all"}
         onConfirm={() => setConfirmAction("all")}

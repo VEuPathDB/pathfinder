@@ -13,24 +13,19 @@ import {
   APIError,
   computeStepCounts,
   createStrategy,
-  deletePlanSession,
   deleteStrategy,
   getParamSpecs,
-  getPlanSession,
   getRecordTypes,
   getSearches,
   getStrategy,
   getVeupathdbAuthStatus,
-  listPlans,
   listSites,
   listStrategies,
   loginVeupathdb,
   logoutVeupathdb,
   normalizePlan,
-  openPlanSession,
   openStrategy,
   syncWdkStrategies,
-  updatePlanSession,
   updateStrategy,
   validateSearchParams,
 } from "./client";
@@ -188,38 +183,6 @@ describe("lib/api/client", () => {
     expect(requestJsonMock).toHaveBeenLastCalledWith("/api/v1/strategies/sync-wdk", {
       method: "POST",
       query: { siteId: "plasmodb" },
-    });
-  });
-
-  it("plan session endpoints use expected methods", async () => {
-    requestJsonMock.mockResolvedValueOnce([]);
-    await listPlans("plasmodb");
-    expect(requestJsonMock).toHaveBeenLastCalledWith("/api/v1/plans", {
-      query: { siteId: "plasmodb" },
-    });
-
-    requestJsonMock.mockResolvedValueOnce({ planSessionId: "p1" });
-    await openPlanSession({ siteId: "plasmodb", title: "T" });
-    expect(requestJsonMock).toHaveBeenLastCalledWith("/api/v1/plans/open", {
-      method: "POST",
-      body: { siteId: "plasmodb", title: "T" },
-    });
-
-    requestJsonMock.mockResolvedValueOnce({ id: "p1" } as any);
-    await getPlanSession("p1");
-    expect(requestJsonMock).toHaveBeenLastCalledWith("/api/v1/plans/p1");
-
-    requestJsonMock.mockResolvedValueOnce({ planSessionId: "p1" } as any);
-    await updatePlanSession("p1", { title: "New" });
-    expect(requestJsonMock).toHaveBeenLastCalledWith("/api/v1/plans/p1", {
-      method: "PATCH",
-      body: { title: "New" },
-    });
-
-    requestJsonMock.mockResolvedValueOnce({ success: true } as any);
-    await deletePlanSession("p1");
-    expect(requestJsonMock).toHaveBeenLastCalledWith("/api/v1/plans/p1", {
-      method: "DELETE",
     });
   });
 

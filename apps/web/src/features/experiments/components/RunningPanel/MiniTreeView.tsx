@@ -13,6 +13,7 @@ import {
   OP_FILL,
   OP_TEXT,
 } from "./constants";
+import { flattenTree } from "../../utils/treeUtils";
 
 interface LayoutNode {
   node: PlanStepNode;
@@ -89,12 +90,6 @@ function layoutTree(node: PlanStepNode, x: number, yStart: number): LayoutNode {
   };
 }
 
-function flattenLayout(ln: LayoutNode): LayoutNode[] {
-  const out: LayoutNode[] = [ln];
-  for (const c of ln.children) out.push(...flattenLayout(c));
-  return out;
-}
-
 interface MiniTreeProps {
   tree: PlanStepNode;
   mutatedNodeIds?: Set<string>;
@@ -106,7 +101,7 @@ export function MiniTreeView({ tree, mutatedNodeIds }: MiniTreeProps) {
   const PAD = 12;
 
   const root = layoutTree(tree, rootX, PAD);
-  const allNodes = flattenLayout(root);
+  const allNodes = flattenTree(root, (n) => n.children);
 
   const minX = Math.min(...allNodes.map((n) => n.x));
   const offsetX = -minX + PAD;

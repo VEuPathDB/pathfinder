@@ -1,12 +1,11 @@
 "use client";
 
 /**
- * ConversationSidebar — unified sidebar that merges plan sessions and strategies
- * into a single chronologically sorted list. Replaces the old separate
- * PlansSidebar + StrategySidebar + sidebar tabs.
+ * ConversationSidebar — sidebar listing strategy conversations
+ * in chronologically sorted order.
  *
  * Composed from:
- * - `useConversationSidebarData` — data fetching, merging, filtering
+ * - `useConversationSidebarData` — data fetching, filtering
  * - `useConversationSidebarActions` — selection, rename, delete, duplicate
  * - `ConversationList` — list rendering
  */
@@ -40,10 +39,7 @@ export function ConversationSidebar({ siteId, onToast }: ConversationSidebarProp
   const actions = useConversationSidebarActions({
     siteId,
     reportError,
-    handlePlanError: data.handlePlanError,
-    refreshPlans: data.refreshPlans,
     refreshStrategies: data.refreshStrategies,
-    setPlanItems: data.setPlanItems,
     setStrategyItems: data.setStrategyItems,
   });
 

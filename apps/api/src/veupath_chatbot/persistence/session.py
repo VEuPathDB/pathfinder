@@ -93,6 +93,13 @@ async def init_db() -> None:
             )
         )
 
+        # One-time migration: copy strategy data into new CQRS tables.
+        from veupath_chatbot.persistence.migrate_to_streams import (
+            migrate_strategies_to_streams,
+        )
+
+        await migrate_strategies_to_streams(conn)
+
 
 async def close_db() -> None:
     """Close database connections."""

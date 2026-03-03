@@ -175,7 +175,7 @@ class TestSingleStepLifecycle:
                 return_value=control_result,
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
         ):
@@ -211,7 +211,7 @@ class TestSingleStepLifecycle:
                 return_value=control_result,
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
         ):
@@ -239,7 +239,7 @@ class TestProgressEvents:
                 return_value=control_result,
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
         ):
@@ -277,7 +277,7 @@ class TestProgressEvents:
                 return_value=control_result,
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
         ):
@@ -307,7 +307,7 @@ class TestMetricsComputed:
                 return_value=control_result,
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
         ):
@@ -334,7 +334,7 @@ class TestMetricsComputed:
                 return_value=control_result,
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
         ):
@@ -366,7 +366,7 @@ class TestMetricsComputed:
                 return_value=control_result,
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
         ):
@@ -425,7 +425,7 @@ class TestExperimentPersisted:
                 return_value=control_result,
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
         ):
@@ -466,7 +466,7 @@ class TestExperimentPersisted:
                 return_value=_make_control_result(),
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
         ):
@@ -484,7 +484,7 @@ class TestExperimentPersisted:
                 return_value=_make_control_result(),
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
         ):
@@ -511,7 +511,7 @@ class TestErrorSetsStatus:
                 side_effect=RuntimeError("WDK connection refused"),
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
             pytest.raises(RuntimeError, match="WDK connection refused"),
@@ -541,7 +541,7 @@ class TestErrorSetsStatus:
                 side_effect=RuntimeError("WDK timeout"),
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=_make_mock_strategy_api(),
             ),
             pytest.raises(RuntimeError),
@@ -574,7 +574,7 @@ class TestErrorSetsStatus:
                 return_value=_make_control_result(),
             ),
             patch(
-                "veupath_chatbot.services.experiment.service.get_strategy_api",
+                "veupath_chatbot.services.experiment.materialization.get_strategy_api",
                 return_value=failing_api,
             ),
         ):

@@ -35,6 +35,7 @@ export interface ResultsTableBodyProps {
 
   expandedKey: string | null;
   detail: Record<string, unknown> | null;
+  detailError: string | null;
   detailLoading: boolean;
   onExpandRow: (key: string, recordId: WdkRecord["id"]) => void;
 }
@@ -62,6 +63,7 @@ export function ResultsTableBody({
   onSort,
   expandedKey,
   detail,
+  detailError,
   detailLoading,
   onExpandRow,
 }: ResultsTableBodyProps) {
@@ -130,6 +132,7 @@ export function ResultsTableBody({
                   hasClassification={hasClassification}
                   isExpanded={isExpanded}
                   detail={isExpanded ? detail : null}
+                  detailError={isExpanded ? detailError : null}
                   detailLoading={isExpanded && detailLoading}
                   onToggle={() => onExpandRow(pk, record.id)}
                 />
@@ -230,6 +233,7 @@ function RecordRow({
   hasClassification,
   isExpanded,
   detail,
+  detailError,
   detailLoading,
   onToggle,
 }: {
@@ -239,6 +243,7 @@ function RecordRow({
   hasClassification: boolean;
   isExpanded: boolean;
   detail: Record<string, unknown> | null;
+  detailError: string | null;
   detailLoading: boolean;
   onToggle: () => void;
 }) {
@@ -284,6 +289,7 @@ function RecordRow({
             <DetailPanel
               pk={pk}
               detail={detail}
+              error={detailError}
               loading={detailLoading}
               onClose={onToggle}
             />
@@ -301,11 +307,13 @@ function RecordRow({
 function DetailPanel({
   pk,
   detail,
+  error,
   loading,
   onClose,
 }: {
   pk: string;
   detail: Record<string, unknown> | null;
+  error: string | null;
   loading: boolean;
   onClose: () => void;
 }) {
@@ -336,6 +344,10 @@ function DetailPanel({
         <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading details…
+        </div>
+      ) : error ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <p className="text-sm text-destructive">{error}</p>
         </div>
       ) : attrs ? (
         <div className="max-h-72 overflow-y-auto">

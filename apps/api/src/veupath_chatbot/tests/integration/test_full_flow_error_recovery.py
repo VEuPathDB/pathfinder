@@ -85,11 +85,10 @@ class TestInvalidParameterRecovery:
                 authed_client,
                 message="Find epitope genes in P. falciparum",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
         types = result.event_types
         assert types[0] == "message_start"
         assert "message_end" in types
@@ -200,11 +199,10 @@ class TestInvalidSearchNameRecovery:
                 authed_client,
                 message="Find epitope genes",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
 
         create_step_pairs = [
             (s, e) for s, e in result.tool_calls if s.data.get("name") == "create_step"
@@ -314,11 +312,10 @@ class TestMissingRequiredParameters:
                 authed_client,
                 message="Find epitope genes but I forgot to specify organism",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
 
         create_step_pairs = [
             (s, e) for s, e in result.tool_calls if s.data.get("name") == "create_step"

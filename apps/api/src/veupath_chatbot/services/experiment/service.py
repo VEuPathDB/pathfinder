@@ -21,8 +21,7 @@ from veupath_chatbot.services.experiment.cross_validation import (
 from veupath_chatbot.services.experiment.enrichment import run_enrichment_analysis
 from veupath_chatbot.services.experiment.helpers import (
     ProgressCallback,
-    _extract_gene_list,
-    _extract_id_set,
+    extract_and_enrich_genes,
 )
 from veupath_chatbot.services.experiment.materialization import (
     _persist_experiment_strategy,
@@ -122,22 +121,15 @@ async def run_experiment(
         metrics = metrics_from_control_result(result)
         experiment.metrics = metrics
 
-        experiment.true_positive_genes = _extract_gene_list(
-            result, "positive", "intersectionIds"
-        )
-        experiment.false_negative_genes = _extract_gene_list(
-            result, "positive", "missingIdsSample"
-        )
-        experiment.false_positive_genes = _extract_gene_list(
-            result, "negative", "intersectionIds"
-        )
-        experiment.true_negative_genes = _extract_gene_list(
-            result,
-            "negative",
-            "missingIdsSample",
-            fallback_from_controls=True,
-            all_controls=config.negative_controls,
-            hit_ids=_extract_id_set(result, "negative", "intersectionIds"),
+        (
+            experiment.true_positive_genes,
+            experiment.false_negative_genes,
+            experiment.false_positive_genes,
+            experiment.true_negative_genes,
+        ) = await extract_and_enrich_genes(
+            site_id=config.site_id,
+            result=result,
+            negative_controls=config.negative_controls,
         )
 
         await _emit(
@@ -145,6 +137,7 @@ async def run_experiment(
             message="Evaluation complete",
             metrics=metrics_to_json(metrics),
         )
+        store.save(experiment)
 
         # --- Phase 1b: Step Analysis (multi-step / import) ---
         final_tree = tree_dict if is_tree_mode else None
@@ -179,6 +172,7 @@ async def run_experiment(
                 progress_callback=_step_analysis_progress,
             )
             experiment.step_analysis = step_analysis_result
+            store.save(experiment)
 
             await _emit(
                 "step_analysis",
@@ -198,6 +192,7 @@ async def run_experiment(
             raw_step = wdk_ids.get("step_id")
             experiment.wdk_strategy_id = raw_sid if isinstance(raw_sid, int) else None
             experiment.wdk_step_id = raw_step if isinstance(raw_step, int) else None
+            store.save(experiment)
         except Exception as exc:
             logger.warning(
                 "Failed to persist WDK strategy for experiment",
@@ -230,6 +225,7 @@ async def run_experiment(
                         positive_ids=pos_set,
                         negative_ids=neg_set,
                     )
+                    store.save(experiment)
             except Exception as exc:
                 logger.warning(
                     "Rank metrics computation failed",
@@ -263,6 +259,7 @@ async def run_experiment(
                         n_bootstrap=200,
                         include_rank_metrics=is_ranked,
                     )
+                    store.save(experiment)
             except Exception as exc:
                 logger.warning(
                     "Robustness computation failed",
@@ -377,22 +374,15 @@ async def run_experiment(
                     )
                     metrics = metrics_from_control_result(result)
                     experiment.metrics = metrics
-                    experiment.true_positive_genes = _extract_gene_list(
-                        result, "positive", "intersectionIds"
-                    )
-                    experiment.false_negative_genes = _extract_gene_list(
-                        result, "positive", "missingIdsSample"
-                    )
-                    experiment.false_positive_genes = _extract_gene_list(
-                        result, "negative", "intersectionIds"
-                    )
-                    experiment.true_negative_genes = _extract_gene_list(
-                        result,
-                        "negative",
-                        "missingIdsSample",
-                        fallback_from_controls=True,
-                        all_controls=config.negative_controls,
-                        hit_ids=_extract_id_set(result, "negative", "intersectionIds"),
+                    (
+                        experiment.true_positive_genes,
+                        experiment.false_negative_genes,
+                        experiment.false_positive_genes,
+                        experiment.true_negative_genes,
+                    ) = await extract_and_enrich_genes(
+                        site_id=config.site_id,
+                        result=result,
+                        negative_controls=config.negative_controls,
                     )
 
         # --- Phase 1e: Tree-knob optimization (multi-step) ---
@@ -482,6 +472,7 @@ async def run_experiment(
                     progress_callback=cv_progress,
                 )
             experiment.cross_validation = cv_result
+            store.save(experiment)
 
         # --- Phase 3: Enrichment analysis (optional) ---
         enrich_search = config.search_name
@@ -512,6 +503,7 @@ async def run_experiment(
                         analysis_type=enrich_type,
                     )
                 experiment.enrichment_results.append(enrich_result)
+                store.save(experiment)
             except Exception as exc:
                 logger.warning(
                     "Enrichment analysis failed",

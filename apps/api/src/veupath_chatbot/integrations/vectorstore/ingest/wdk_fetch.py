@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from veupath_chatbot.integrations.vectorstore.ingest.utils import extract_search_name
 from veupath_chatbot.integrations.vectorstore.ingest.wdk_transform import (
     _unwrap_search_data,
 )
@@ -30,7 +31,7 @@ async def fetch_record_types_and_searches(
         if isinstance(rt, str):
             rt_name = rt
         elif isinstance(rt, dict):
-            rt_name = str(rt.get("urlSegment") or rt.get("name") or "").strip()
+            rt_name = extract_search_name(rt)
             searches_raw = rt.get("searches")
             searches = searches_raw if isinstance(searches_raw, list) else []
         else:
@@ -67,15 +68,14 @@ async def fetch_search_details(
     details_error: str | None = None
     details_unwrapped: JSONObject = {}
     try:
+        search_data = summary_unwrapped.get("searchData")
         has_param_defs = any(
             k in summary_unwrapped
             for k in ("parameters", "paramSpecs", "parameterSpecs")
         ) or (
-            isinstance(summary_unwrapped.get("searchData"), dict)
-            and isinstance(summary_unwrapped["searchData"], dict)
+            isinstance(search_data, dict)
             and any(
-                k in summary_unwrapped["searchData"]
-                for k in ("parameters", "paramSpecs", "parameterSpecs")
+                k in search_data for k in ("parameters", "paramSpecs", "parameterSpecs")
             )
         )
         param_names = summary_unwrapped.get("paramNames")

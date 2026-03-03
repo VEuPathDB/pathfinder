@@ -1,6 +1,18 @@
 import { useState } from "react";
 import type { ThresholdKnob, OperatorKnob } from "@pathfinder/shared";
 import { SlidersHorizontal } from "lucide-react";
+import { Checkbox } from "@/lib/components/ui/Checkbox";
+import { Input } from "@/lib/components/ui/Input";
+import { Label } from "@/lib/components/ui/Label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectGroup,
+  SelectLabel as SelectGroupLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/lib/components/ui/Select";
 
 /* ── Constants ────────────────────────────────────────────────────── */
 
@@ -61,39 +73,42 @@ function ObjectivePicker({
 
   return (
     <div className="space-y-2">
-      <label className="mb-1 block text-[10px] font-medium text-muted-foreground">
+      <Label className="text-[10px] text-muted-foreground">
         Optimization objective
-      </label>
-      <select
-        className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs"
-        value={selectedBase}
-        onChange={(e) => handleBaseChange(e.target.value)}
-      >
-        <optgroup label="Rank-based (@K)">
-          {AT_K_METRICS.map((m) => (
-            <option key={m.base} value={m.base}>
-              {m.label}@K
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="Classification">
-          {FIXED_METRICS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </optgroup>
-      </select>
+      </Label>
+      <Select value={selectedBase} onValueChange={handleBaseChange}>
+        <SelectTrigger className="h-8 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectGroupLabel>Rank-based (@K)</SelectGroupLabel>
+            {AT_K_METRICS.map((m) => (
+              <SelectItem key={m.base} value={m.base}>
+                {m.label}@K
+              </SelectItem>
+            ))}
+          </SelectGroup>
+          <SelectGroup>
+            <SelectGroupLabel>Classification</SelectGroupLabel>
+            {FIXED_METRICS.map((m) => (
+              <SelectItem key={m.value} value={m.value}>
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {AT_K_METRICS.some((m) => m.base === selectedBase) && (
         <div className="flex items-center gap-2">
-          <label className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">
+          <Label className="text-[10px] text-muted-foreground whitespace-nowrap">
             K =
-          </label>
-          <input
+          </Label>
+          <Input
             type="number"
             min={1}
             max={10000}
-            className="w-20 rounded-md border border-border bg-background px-2 py-1 text-xs font-mono tabular-nums"
+            className="h-7 w-20 font-mono text-xs tabular-nums"
             value={kDraft}
             onChange={(e) => handleKChange(e.target.value)}
           />
@@ -129,22 +144,22 @@ export function OptimizationSection({
 
   return (
     <div className="space-y-2">
-      <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <input
-          type="checkbox"
+      <Label className="flex items-center gap-2 text-xs font-normal text-muted-foreground">
+        <Checkbox
           checked={showKnobs}
-          onChange={(e) => {
-            setShowKnobs(e.target.checked);
-            if (!e.target.checked) {
+          onCheckedChange={(checked) => {
+            const val = checked === true;
+            setShowKnobs(val);
+            if (!val) {
               onThresholdKnobsChange([]);
               onOperatorKnobsChange([]);
             }
           }}
-          className="rounded border-input"
+          className="h-3.5 w-3.5"
         />
         <SlidersHorizontal className="h-3 w-3" />
         Tree optimization knobs
-      </label>
+      </Label>
       {showKnobs && (
         <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
           <ObjectivePicker

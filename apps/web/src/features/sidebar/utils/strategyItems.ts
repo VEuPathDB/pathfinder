@@ -13,6 +13,7 @@ export type StrategyListItem = {
   name: string;
   updatedAt: string;
   siteId?: string;
+  stepCount: number;
   wdkStrategyId?: number;
   isSaved: boolean;
 };

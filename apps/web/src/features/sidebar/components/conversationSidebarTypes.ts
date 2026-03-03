@@ -1,6 +1,6 @@
 import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
 
-export type ConversationKind = "plan" | "strategy";
+export type ConversationKind = "strategy";
 
 export interface ConversationItem {
   id: string;

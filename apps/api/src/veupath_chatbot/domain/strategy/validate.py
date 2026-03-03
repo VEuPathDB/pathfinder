@@ -74,9 +74,6 @@ class StrategyValidator:
                 )
             )
 
-        # Validate the tree
-        self._validate_node(strategy.root, "root", strategy.record_type, errors)
-
         # Check for empty strategy
         if strategy.root is None:
             errors.append(
@@ -86,6 +83,9 @@ class StrategyValidator:
                     code="EMPTY_STRATEGY",
                 )
             )
+        else:
+            # Validate the tree
+            self._validate_node(strategy.root, "root", strategy.record_type, errors)
 
         return (
             ValidationResult.success()

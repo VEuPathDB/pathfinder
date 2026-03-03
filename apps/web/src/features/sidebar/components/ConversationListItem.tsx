@@ -73,19 +73,21 @@ export function ConversationListItem({
             <span className="truncate text-sm font-medium text-foreground">
               {item.title}
             </span>
-            {item.kind === "strategy" && si && (
-              <span
-                className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
-                  !si.wdkStrategyId
-                    ? "bg-warning/10 text-warning"
-                    : si.isSaved
-                      ? "bg-success/10 text-success"
-                      : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {!si.wdkStrategyId ? "Building" : si.isSaved ? "Saved" : "Draft"}
-              </span>
-            )}
+            {item.kind === "strategy" &&
+              si &&
+              (si.wdkStrategyId || si.stepCount > 0) && (
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
+                    !si.wdkStrategyId
+                      ? "bg-warning/10 text-warning"
+                      : si.isSaved
+                        ? "bg-success/10 text-success"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {!si.wdkStrategyId ? "Building" : si.isSaved ? "Saved" : "Draft"}
+                </span>
+              )}
             {si && graphHasValidationIssue && (
               <span
                 className="inline-flex h-2 w-2 shrink-0 rounded-full bg-destructive/50"

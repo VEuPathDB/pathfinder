@@ -9,6 +9,7 @@ from veupath_chatbot.domain.parameters.normalize import ParameterNormalizer
 from veupath_chatbot.domain.parameters.specs import (
     adapt_param_specs,
     extract_param_specs,
+    find_missing_required_params,
 )
 from veupath_chatbot.integrations.veupathdb.client import (
     encode_context_param_values_for_wdk,
@@ -137,10 +138,7 @@ async def validate_parameters(
     param_specs = extract_param_specs(spec_payload)
     param_spec_map = adapt_param_specs(spec_payload)
     normalizer = ParameterNormalizer(param_spec_map)
-    try:
-        normalized = normalizer.normalize(parameters)
-    except ValidationError as exc:
-        raise exc
+    normalized = normalizer.normalize(parameters)
     parameters.clear()
     parameters.update(normalized)
     param_names: set[str] = set()
@@ -166,40 +164,7 @@ async def validate_parameters(
                 }
             ],
         )
-    required_params: list[JSONObject] = []
-    for p in param_specs:
-        if not isinstance(p, dict):
-            continue
-        is_required_raw = p.get("isRequired")
-        allow_empty_raw = p.get("allowEmptyValue")
-        is_required = (
-            bool(is_required_raw) if isinstance(is_required_raw, bool) else False
-        )
-        allow_empty = (
-            bool(allow_empty_raw) if isinstance(allow_empty_raw, bool) else True
-        )
-        if is_required or not allow_empty:
-            required_params.append(p)
-    missing: list[str] = []
-    for param in required_params:
-        if not isinstance(param, dict):
-            continue
-        name_raw = param.get("name")
-        name = name_raw if isinstance(name_raw, str) else None
-        if not name:
-            continue
-        if name not in parameters:
-            missing.append(name)
-            continue
-        value = parameters.get(name)
-        type_raw = param.get("type")
-        param_type = type_raw if isinstance(type_raw, str) else ""
-        if param_type == "multi-pick-vocabulary":
-            if value in (None, "", "[]"):
-                missing.append(name)
-            continue
-        if value in (None, "", [], {}):
-            missing.append(name)
+    missing = find_missing_required_params(param_specs, parameters)
 
     if missing:
         options: JSONObject = {}

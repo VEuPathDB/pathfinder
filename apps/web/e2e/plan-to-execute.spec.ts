@@ -1,13 +1,14 @@
 import { test, expect } from "@playwright/test";
 import { gotoHome, sendMessage } from "./helpers";
 
-test("plan: send message and receive plan-mode response", async ({ page }) => {
+test("chat: send message from fresh home and see response", async ({ page }) => {
   await gotoHome(page);
 
   await sendMessage(page, "please help me plan a strategy");
 
-  // In plan mode, the mock provider responds with a [mock:plan] prefix.
-  await expect(page.locator("text=[mock:plan]").first()).toBeVisible({
+  // The unified agent auto-creates a strategy-backed conversation.
+  // The mock provider responds with a [mock] prefix.
+  await expect(page.getByText("[mock]").first()).toBeVisible({
     timeout: 20_000,
   });
 

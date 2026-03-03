@@ -54,15 +54,36 @@ export async function mockExperimentList(
 }
 
 /**
- * Mock the SSE stream for experiment execution.
- * Sends the provided events as SSE frames, followed by experiment_end.
+ * Mock the experiment creation endpoint.
+ *
+ * The real endpoint returns 202 JSON `{operationId}` (fire-and-forget),
+ * then the client subscribes to GET /operations/{id}/subscribe for SSE.
+ * This helper intercepts both the POST (returns a mock operationId) and
+ * the subscribe GET (returns SSE events).
  */
 export async function mockExperimentSSE(
   page: Page,
   events: Array<{ type: string; data: object }>,
 ): Promise<void> {
+  const mockOperationId = `mock_op_${Date.now()}`;
+
+  // Intercept the POST to return a 202 with operationId.
   await page.route("**/api/v1/experiments", async (route) => {
     if (route.request().method() === "POST") {
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({ operationId: mockOperationId }),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+
+  // Intercept the subscribe SSE endpoint to return mock events.
+  await page.route(
+    `**/api/v1/operations/${mockOperationId}/subscribe`,
+    async (route) => {
       const sseBody = events
         .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e.data)}\n\n`)
         .join("");
@@ -77,10 +98,8 @@ export async function mockExperimentSSE(
         },
         body: sseBody + endFrame,
       });
-    } else {
-      await route.continue();
-    }
-  });
+    },
+  );
 }
 
 // Re-export types for convenience

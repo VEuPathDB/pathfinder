@@ -8,6 +8,7 @@ describe("StrategyListItem", () => {
       name: "My Strategy",
       updatedAt: "2026-01-01T00:00:00.000Z",
       siteId: "plasmodb",
+      stepCount: 2,
       wdkStrategyId: 42,
       isSaved: true,
     };
@@ -22,6 +23,7 @@ describe("StrategyListItem", () => {
       name: "My Draft",
       updatedAt: "2026-01-03T00:00:00.000Z",
       siteId: "plasmodb",
+      stepCount: 1,
       wdkStrategyId: 99,
       isSaved: false,
     };
@@ -35,6 +37,7 @@ describe("StrategyListItem", () => {
       id: "def-456",
       name: "Draft",
       updatedAt: "2026-01-02T00:00:00.000Z",
+      stepCount: 0,
       isSaved: false,
     };
 

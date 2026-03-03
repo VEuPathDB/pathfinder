@@ -2,53 +2,27 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import secrets
 import time
 from typing import Annotated
 from uuid import UUID
 
+import jwt
 from fastapi import Depends, Request
 from fastapi.security import APIKeyCookie
-from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from veupath_chatbot.platform.config import get_settings
 from veupath_chatbot.platform.context import user_id_ctx
-from veupath_chatbot.platform.errors import RateLimitedError, UnauthorizedError
+from veupath_chatbot.platform.errors import UnauthorizedError
 
 # Cookie-based auth is the public contract. We still accept an Authorization header
 # as a non-documented fallback (parsed from request.headers) to avoid breaking
 # internal tooling, but OpenAPI should reflect cookies.
 auth_cookie = APIKeyCookie(name="pathfinder-auth", auto_error=False)
 
-
-class TokenPayload(BaseModel):
-    """JWT-like token payload (simplified for demo)."""
-
-    user_id: UUID
-    exp: int
-
-
-def generate_csrf_token() -> str:
-    """Generate a CSRF token."""
-    return secrets.token_urlsafe(32)
-
-
-def verify_csrf_token(token: str, session_token: str) -> bool:
-    """Verify CSRF token against session.
-
-    :param token: Token to verify.
-    :param session_token: Session token for HMAC comparison.
-    :returns: True if token matches.
-    """
-    settings = get_settings()
-    expected = hmac.new(
-        settings.api_secret_key.encode(),
-        session_token.encode(),
-        hashlib.sha256,
-    ).hexdigest()
-    return hmac.compare_digest(token, expected)
+# Rate limiter (slowapi). Import and attach to the FastAPI app where needed.
+limiter = Limiter(key_func=get_remote_address)
 
 
 async def get_optional_user(
@@ -66,7 +40,6 @@ async def get_optional_user(
         return None
 
     try:
-        # Simple token validation (replace with proper JWT in production)
         scheme, _, token = token_header.partition(" ")
         if scheme.lower() == "bearer":
             if not token:
@@ -74,33 +47,12 @@ async def get_optional_user(
         else:
             token = token_header
 
-        # For demo: decode simple token format "user_id:expiry:signature"
-        parts = token.split(":")
-        if len(parts) != 3:
-            return None
-
-        user_id = UUID(parts[0])
-        expiry = int(parts[1])
-
-        if expiry < int(time.time()):
-            return None
-
-        # Verify signature
         settings = get_settings()
-        expected_sig = hmac.new(
-            settings.api_secret_key.encode(),
-            f"{user_id}:{expiry}".encode(),
-            hashlib.sha256,
-        ).hexdigest()[:16]
-
-        if not hmac.compare_digest(parts[2], expected_sig):
-            return None
-
-        # Set context
+        payload = jwt.decode(token, settings.api_secret_key, algorithms=["HS256"])
+        user_id = UUID(payload["sub"])
         user_id_ctx.set(user_id)
         return user_id
-
-    except ValueError, IndexError:
+    except jwt.InvalidTokenError, ValueError, KeyError:
         return None
 
 
@@ -114,59 +66,14 @@ async def get_current_user(
 
 
 def create_user_token(user_id: UUID, expires_in: int = 86400) -> str:
-    """Create a simple user token (for demo purposes).
+    """Create a signed JWT for the given user.
 
     :param user_id: User UUID.
     :param expires_in: Token expiry in seconds (default: 86400).
-
     """
     settings = get_settings()
-    expiry = int(time.time()) + expires_in
-    signature = hmac.new(
-        settings.api_secret_key.encode(),
-        f"{user_id}:{expiry}".encode(),
-        hashlib.sha256,
-    ).hexdigest()[:16]
-    return f"{user_id}:{expiry}:{signature}"
-
-
-class RateLimiter:
-    """Simple in-memory rate limiter (use Redis in production)."""
-
-    def __init__(self, requests_per_minute: int = 60) -> None:
-        self.requests_per_minute = requests_per_minute
-        self.requests: dict[str, list[float]] = {}
-
-    def is_allowed(self, key: str) -> bool:
-        """Check if request is allowed.
-
-        :param key: Client/request identifier.
-        :returns: True if within rate limit.
-        """
-        now = time.time()
-        minute_ago = now - 60
-
-        # Clean old requests
-        if key in self.requests:
-            self.requests[key] = [t for t in self.requests[key] if t > minute_ago]
-        else:
-            self.requests[key] = []
-
-        # Check limit
-        if len(self.requests[key]) >= self.requests_per_minute:
-            return False
-
-        self.requests[key].append(now)
-        return True
-
-
-# Global rate limiter instance
-rate_limiter = RateLimiter()
-
-
-async def check_rate_limit(request: Request) -> None:
-    """Check rate limit for request."""
-    # Use IP address as key (in production, consider user ID too)
-    client_ip = request.client.host if request.client else "unknown"
-    if not rate_limiter.is_allowed(client_ip):
-        raise RateLimitedError()
+    payload = {
+        "sub": str(user_id),
+        "exp": int(time.time()) + expires_in,
+    }
+    return jwt.encode(payload, settings.api_secret_key, algorithm="HS256")

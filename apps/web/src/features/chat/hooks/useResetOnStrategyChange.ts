@@ -6,7 +6,6 @@ import type { StreamingSession } from "@/features/chat/streaming/StreamingSessio
 export function useResetOnStrategyChange(args: {
   strategyId: string | null;
   previousStrategyId: string | null | undefined;
-  isStreaming: boolean;
   resetThinking: () => void;
   setIsStreaming: (value: boolean) => void;
   setMessages: Dispatch<SetStateAction<Message[]>>;
@@ -17,7 +16,6 @@ export function useResetOnStrategyChange(args: {
   const {
     strategyId,
     previousStrategyId,
-    isStreaming,
     resetThinking,
     setIsStreaming,
     setMessages,
@@ -27,31 +25,21 @@ export function useResetOnStrategyChange(args: {
   } = args;
 
   useEffect(() => {
-    if (!isStreaming) {
-      resetThinking();
-      setIsStreaming(false);
-    }
+    // Only act when the strategy actually changes — not on isStreaming toggles.
+    if (!strategyId || !previousStrategyId || previousStrategyId === strategyId) return;
 
-    if (strategyId && previousStrategyId && previousStrategyId !== strategyId) {
-      if (isStreaming && stopStreaming) {
-        stopStreaming();
-      }
-      setIsStreaming(false);
-      setMessages([]);
-      setUndoSnapshots({});
-      if (sessionRef.current) {
-        sessionRef.current.consumeUndoSnapshot();
-      }
+    console.log("[ResetOnStrategyChange] RESETTING messages", {
+      from: previousStrategyId,
+      to: strategyId,
+    });
+    if (stopStreaming) stopStreaming();
+    setIsStreaming(false);
+    resetThinking();
+    setMessages([]);
+    setUndoSnapshots({});
+    if (sessionRef.current) {
+      sessionRef.current.consumeUndoSnapshot();
     }
-  }, [
-    strategyId,
-    previousStrategyId,
-    isStreaming,
-    resetThinking,
-    setIsStreaming,
-    setMessages,
-    setUndoSnapshots,
-    sessionRef,
-    stopStreaming,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strategyId, previousStrategyId]);
 }

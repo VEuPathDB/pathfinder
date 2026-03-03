@@ -54,7 +54,10 @@ export async function setupAuth(page: Page) {
 }
 
 /**
- * Navigate to the home page in plan mode (default — no strategy selected).
+ * Navigate to the home page (no strategy selected).
+ *
+ * Sending a message from here will auto-create a strategy-backed
+ * conversation via the unified agent.
  */
 export async function gotoHome(page: Page) {
   await setupAuth(page);
@@ -63,11 +66,10 @@ export async function gotoHome(page: Page) {
 }
 
 /**
- * Navigate to the home page with a test strategy selected (execute mode).
+ * Navigate to the home page with a test strategy pre-selected.
  *
  * Creates a strategy via the API before navigation so it shows up in the
- * unified sidebar, then clicks it by its unique `data-conversation-id` to
- * enter execute mode.
+ * sidebar, then clicks it by its unique `data-conversation-id` to select it.
  */
 export async function gotoHomeWithStrategy(page: Page) {
   await setupAuth(page);

@@ -112,6 +112,8 @@ async def get_control_set(
     cs = await repo.get_by_id(UUID(control_set_id))
     if cs is None:
         raise NotFoundError(title="Control set not found")
+    if not cs.is_public and cs.user_id != user_id:
+        raise NotFoundError(title="Control set not found")
     return _serialize(cs)
 
 
@@ -143,7 +145,8 @@ async def delete_control_set(
     repo: ControlSetRepo,
     user_id: CurrentUser,
 ) -> None:
-    """Delete a control set."""
-    deleted = await repo.delete(UUID(control_set_id))
-    if not deleted:
+    """Delete a control set owned by the current user."""
+    cs = await repo.get_by_id(UUID(control_set_id))
+    if cs is None or cs.user_id != user_id:
         raise NotFoundError(title="Control set not found")
+    await repo.delete(UUID(control_set_id))

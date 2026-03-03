@@ -11,11 +11,9 @@
 import { type Dispatch, type SetStateAction, useCallback, useState } from "react";
 import {
   createStrategy,
-  deletePlanSession,
   deleteStrategy,
   getStrategy,
   openStrategy,
-  updatePlanSession,
   updateStrategy as updateStrategyApi,
 } from "@/lib/api/client";
 import { toUserMessage } from "@/lib/api/errors";
@@ -31,21 +29,18 @@ import {
   initDuplicateModal,
 } from "@/features/sidebar/utils/duplicateModalState";
 import { runDeleteStrategyWorkflow } from "@/features/sidebar/services/strategySidebarWorkflows";
-import type { PlanSessionSummary } from "@pathfinder/shared";
 import type { ConversationItem } from "@/features/sidebar/components/conversationSidebarTypes";
+import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 
 export interface UseConversationSidebarActionsArgs {
   siteId: string;
   reportError: (message: string) => void;
-  handlePlanError: (error: unknown, fallback: string) => void;
-  refreshPlans: () => Promise<void>;
   refreshStrategies: () => Promise<void>;
-  setPlanItems: Dispatch<SetStateAction<PlanSessionSummary[]>>;
   setStrategyItems: Dispatch<SetStateAction<StrategyListItem[]>>;
 }
 
 export interface ConversationSidebarActions {
-  /** Currently active conversation ID (strategy or plan). */
+  /** Currently active conversation ID (strategy). */
   activeId: string | null;
 
   // Selection
@@ -79,18 +74,12 @@ export interface ConversationSidebarActions {
 export function useConversationSidebarActions({
   siteId,
   reportError,
-  handlePlanError,
-  refreshPlans,
   refreshStrategies,
-  setPlanItems,
   setStrategyItems,
 }: UseConversationSidebarActionsArgs): ConversationSidebarActions {
   // --- Store selectors ---
-  const planSessionId = useSessionStore((s) => s.planSessionId);
-  const setPlanSessionId = useSessionStore((s) => s.setPlanSessionId);
   const strategyId = useSessionStore((s) => s.strategyId);
   const setStrategyId = useSessionStore((s) => s.setStrategyId);
-  const bumpPlanListVersion = useSessionStore((s) => s.bumpPlanListVersion);
 
   const removeStrategy = useStrategyListStore((s) => s.removeStrategy);
 
@@ -108,39 +97,32 @@ export function useConversationSidebarActions({
   const [renameValue, setRenameValue] = useState("");
 
   // --- Derived ---
-  const activeId = strategyId || planSessionId || null;
+  const activeId = strategyId || null;
 
   // --- Selection ---
   const handleSelect = useCallback(
     (item: ConversationItem) => {
-      if (item.kind === "plan") {
-        setStrategyId(null);
-        clearStrategy();
-        setPlanSessionId(item.id);
-      } else {
-        const si = item.strategyItem;
-        if (!si) return;
-        setStrategyId(si.id);
-        clearStrategy();
-        getStrategy(si.id)
-          .then((full) => {
-            setStrategy(full);
-            setStrategyMeta({
-              name: full.name,
-              recordType: full.recordType ?? undefined,
-              siteId: full.siteId,
-            });
-          })
-          .catch((err) => {
-            setStrategyId(null);
-            reportError(toUserMessage(err, "Couldn't load strategy. Refreshing list."));
-            void refreshStrategies();
+      const si = item.strategyItem;
+      if (!si) return;
+      setStrategyId(si.id);
+      clearStrategy();
+      getStrategy(si.id)
+        .then((full) => {
+          setStrategy(full);
+          setStrategyMeta({
+            name: full.name,
+            recordType: full.recordType ?? undefined,
+            siteId: full.siteId,
           });
-      }
+        })
+        .catch((err) => {
+          setStrategyId(null);
+          reportError(toUserMessage(err, "Couldn't load strategy. Refreshing list."));
+          void refreshStrategies();
+        });
     },
     [
       clearStrategy,
-      setPlanSessionId,
       setStrategyId,
       setStrategy,
       setStrategyMeta,
@@ -154,16 +136,16 @@ export function useConversationSidebarActions({
     try {
       const res = await openStrategy({ siteId });
       clearStrategy();
-      setPlanSessionId(null);
       setStrategyId(res.strategyId);
       // Hydrate the strategy so the sidebar can display it immediately.
       const now = new Date().toISOString();
       setStrategyItems((prev) => [
         {
           id: res.strategyId,
-          name: "New Conversation",
+          name: DEFAULT_STREAM_NAME,
           updatedAt: now,
           siteId,
+          stepCount: 0,
           isSaved: false,
         },
         ...prev.filter((s) => s.id !== res.strategyId),
@@ -178,7 +160,6 @@ export function useConversationSidebarActions({
     siteId,
     setStrategyId,
     clearStrategy,
-    setPlanSessionId,
     setStrategyItems,
     refreshStrategies,
     reportError,
@@ -189,30 +170,20 @@ export function useConversationSidebarActions({
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      if (deleteTarget.kind === "plan") {
-        // Legacy plan session: delete and clear if active.
-        await deletePlanSession(deleteTarget.id).catch((error) => {
-          handlePlanError(error, "Failed to delete conversation.");
+      const si = deleteTarget.strategyItem;
+      if (si) {
+        await runDeleteStrategyWorkflow({
+          item: si,
+          currentStrategyId: strategyId || null,
+          setStrategyItems,
+          clearStrategy,
+          removeStrategy,
+          setStrategyId,
+          setDeleteError: () => {},
+          deleteStrategyApi: deleteStrategy,
+          refreshStrategies,
+          reportError: (msg) => reportError(msg),
         });
-        if (planSessionId === deleteTarget.id) setPlanSessionId(null);
-        await refreshPlans();
-      } else {
-        // Strategy delete
-        const si = deleteTarget.strategyItem;
-        if (si) {
-          await runDeleteStrategyWorkflow({
-            item: si,
-            currentStrategyId: strategyId || null,
-            setStrategyItems,
-            clearStrategy,
-            removeStrategy,
-            setStrategyId,
-            setDeleteError: () => {},
-            deleteStrategyApi: deleteStrategy,
-            refreshStrategies,
-            reportError: (msg) => reportError(msg),
-          });
-        }
       }
     } finally {
       setIsDeleting(false);
@@ -220,15 +191,11 @@ export function useConversationSidebarActions({
     }
   }, [
     deleteTarget,
-    planSessionId,
     strategyId,
-    handlePlanError,
-    setPlanSessionId,
     setStrategyId,
     clearStrategy,
     removeStrategy,
     setStrategyItems,
-    refreshPlans,
     refreshStrategies,
     reportError,
   ]);
@@ -247,20 +214,14 @@ export function useConversationSidebarActions({
         return;
       }
       try {
-        if (item.kind === "plan") {
-          await updatePlanSession(item.id, { title: next });
-          bumpPlanListVersion();
-          void refreshPlans();
-        } else {
-          await updateStrategyApi(item.id, { name: next });
-          void refreshStrategies();
-        }
+        await updateStrategyApi(item.id, { name: next });
+        void refreshStrategies();
       } catch (err) {
         reportError(toUserMessage(err, "Failed to rename."));
       }
       setRenamingId(null);
     },
-    [renameValue, bumpPlanListVersion, refreshPlans, refreshStrategies, reportError],
+    [renameValue, refreshStrategies, reportError],
   );
 
   const cancelRename = useCallback(() => setRenamingId(null), []);

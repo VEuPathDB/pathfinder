@@ -2,7 +2,6 @@ import { useState } from "react";
 import { FileText, FlaskConical } from "lucide-react";
 import type {
   ChatMention,
-  ChatMode,
   Message,
   ToolCall,
   PlanningArtifact,
@@ -27,7 +26,6 @@ interface ChatMessageListProps {
   siteId: string;
   displayName: string;
   firstName?: string;
-  mode?: ChatMode;
   isStreaming: boolean;
   messages: Message[];
   undoSnapshots: Record<number, StrategyWithMeta>;
@@ -51,7 +49,6 @@ export function ChatMessageList({
   siteId,
   displayName,
   firstName,
-  mode = "execute",
   isStreaming,
   messages,
   undoSnapshots,

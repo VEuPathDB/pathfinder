@@ -1,21 +1,24 @@
-import type { StrategyPlan, StrategyWithMeta } from "@pathfinder/shared";
+import type {
+  StrategyPlan,
+  StrategySummary,
+  StrategyWithMeta,
+} from "@pathfinder/shared";
 import { APIError, requestJson } from "./http";
 
 export async function listStrategies(
   siteId?: string | null,
-): Promise<StrategyWithMeta[]> {
-  return await requestJson<StrategyWithMeta[]>("/api/v1/strategies", {
+): Promise<StrategySummary[]> {
+  return await requestJson<StrategySummary[]>("/api/v1/strategies", {
     query: siteId ? { siteId } : undefined,
   });
 }
 
 /**
- * Batch-sync all WDK strategies into the local DB and return the full
- * local strategy list for this site.  Replaces the old
- * ``listWdkStrategies`` + ``listStrategies`` two-call pattern.
+ * Batch-sync all WDK strategies into the local DB and return the
+ * summary list for this site.
  */
-export async function syncWdkStrategies(siteId: string): Promise<StrategyWithMeta[]> {
-  return await requestJson<StrategyWithMeta[]>("/api/v1/strategies/sync-wdk", {
+export async function syncWdkStrategies(siteId: string): Promise<StrategySummary[]> {
+  return await requestJson<StrategySummary[]>("/api/v1/strategies/sync-wdk", {
     method: "POST",
     query: { siteId },
   });

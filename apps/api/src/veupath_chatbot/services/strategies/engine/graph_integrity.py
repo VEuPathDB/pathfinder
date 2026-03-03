@@ -37,28 +37,6 @@ class GraphIntegrityError:
         return cast(JSONObject, payload)
 
 
-def find_referenced_step_ids(graph: StrategyGraph) -> set[str]:
-    """Return step IDs referenced as primary/secondary inputs (non-root steps).
-
-    This is the complement of ``graph.roots``. Prefer using ``graph.roots``
-    directly when you only need root step IDs.
-
-    :param graph: Strategy graph.
-    :returns: Set of step IDs that are referenced as inputs.
-    """
-    referenced: set[str] = set()
-    for step in graph.steps.values():
-        if not isinstance(step, PlanStepNode):
-            continue
-        primary = getattr(step.primary_input, "id", None)
-        secondary = getattr(step.secondary_input, "id", None)
-        if isinstance(primary, str) and primary:
-            referenced.add(primary)
-        if isinstance(secondary, str) and secondary:
-            referenced.add(secondary)
-    return referenced
-
-
 def find_root_step_ids(graph: StrategyGraph) -> list[str]:
     """Return root step IDs in sorted order.
 

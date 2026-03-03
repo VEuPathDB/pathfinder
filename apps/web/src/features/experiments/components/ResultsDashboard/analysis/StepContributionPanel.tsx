@@ -4,6 +4,7 @@ import { requestJson } from "@/lib/api/http";
 import { Button } from "@/lib/components/ui/Button";
 import { Loader2, AlertCircle, BarChart3 } from "lucide-react";
 import { useAsyncAction } from "@/lib/utils/asyncAction";
+import { flattenLeaves, planStepChildren } from "../../../utils/treeUtils";
 
 interface StepContribution {
   stepName: string;
@@ -20,23 +21,6 @@ interface StepContributionPanelProps {
   stepTree: PlanStepNode | null | undefined;
 }
 
-/**
- * Recursively flatten a PlanStepNode tree into a list of leaf (search) steps.
- */
-function flattenLeafSteps(node: PlanStepNode): PlanStepNode[] {
-  const results: PlanStepNode[] = [];
-  if (node.primaryInput) {
-    results.push(...flattenLeafSteps(node.primaryInput));
-  }
-  if (node.secondaryInput) {
-    results.push(...flattenLeafSteps(node.secondaryInput));
-  }
-  if (!node.primaryInput && !node.secondaryInput) {
-    results.push(node);
-  }
-  return results;
-}
-
 export function StepContributionPanel({
   experimentId,
   stepTree,
@@ -44,7 +28,7 @@ export function StepContributionPanel({
   const [contributions, setContributions] = useState<StepContribution[] | null>(null);
   const { run, error, loading } = useAsyncAction();
 
-  const leafSteps = stepTree ? flattenLeafSteps(stepTree) : [];
+  const leafSteps = stepTree ? flattenLeaves(stepTree, planStepChildren) : [];
 
   const fetchContributions = useCallback(async () => {
     if (!stepTree || leafSteps.length === 0) return;

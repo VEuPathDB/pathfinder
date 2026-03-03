@@ -118,8 +118,8 @@ class BatchOrganismTargetRequest(BaseModel):
     """Per-organism override for a cross-organism batch experiment."""
 
     organism: str
-    positive_controls: list[str] = Field(default_factory=list, alias="positiveControls")
-    negative_controls: list[str] = Field(default_factory=list, alias="negativeControls")
+    positive_controls: list[str] | None = Field(default=None, alias="positiveControls")
+    negative_controls: list[str] | None = Field(default=None, alias="negativeControls")
 
     model_config = {"populate_by_name": True}
 

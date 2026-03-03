@@ -1,13 +1,15 @@
-import { useEffect } from "react";
+import { useCallback } from "react";
+import { useEventListener } from "usehooks-ts";
 
 export function useBeforeUnloadUnsaved(isUnsaved: boolean) {
-  useEffect(() => {
-    if (!isUnsaved) return;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+  const handleBeforeUnload = useCallback(
+    (event: BeforeUnloadEvent) => {
+      if (!isUnsaved) return;
       event.preventDefault();
       event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isUnsaved]);
+    },
+    [isUnsaved],
+  );
+
+  useEventListener("beforeunload", handleBeforeUnload);
 }

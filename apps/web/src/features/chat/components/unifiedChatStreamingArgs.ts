@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { ChatMode, Message, ToolCall, StrategyWithMeta } from "@pathfinder/shared";
+import type { Message, ToolCall, StrategyWithMeta } from "@pathfinder/shared";
 import type { useThinkingState } from "@/features/chat/hooks/useThinkingState";
 import type { GraphSnapshotInput } from "@/features/chat/utils/graphSnapshot";
 import type { StreamingSession } from "@/features/chat/streaming/StreamingSession";
@@ -116,7 +116,6 @@ export function useUnifiedChatStreamingArgs({
     getStrategy,
     currentStrategy,
     attachThinkingToLastAssistant,
-    mode: "execute" as ChatMode,
     modelSelection: currentModelSelection,
     onStreamComplete: () => setChatIsStreaming(false),
     onStreamError: (error: Error) => {

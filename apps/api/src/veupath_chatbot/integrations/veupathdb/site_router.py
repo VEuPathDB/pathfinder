@@ -15,11 +15,20 @@ logger = get_logger(__name__)
 
 
 @lru_cache
-def load_sites_config() -> JSONObject:
-    """Load sites configuration from YAML."""
-    config_path = Path(__file__).parent / "sites.yaml"
-    logger.info("Loading sites config", path=str(config_path))
-    with open(config_path) as f:
+def load_sites_config(config_path: str | None = None) -> JSONObject:
+    """Load sites configuration from YAML.
+
+    :param config_path: Optional path to a YAML file. If unset or empty, uses
+        the bundled ``sites.yaml`` next to this module.
+    :returns: Parsed sites config (sites, default_site, routing, etc.).
+    """
+    path = (
+        Path(config_path).resolve()
+        if (config_path and config_path.strip())
+        else Path(__file__).parent / "sites.yaml"
+    )
+    logger.info("Loading sites config", path=str(path))
+    with open(path) as f:
         config = yaml.safe_load(f)
     logger.info(
         "Sites config loaded",
@@ -90,7 +99,8 @@ class SiteRouter:
     """Router for choosing appropriate VEuPathDB site."""
 
     def __init__(self) -> None:
-        self._config = load_sites_config()
+        settings = get_settings()
+        self._config = load_sites_config(settings.veupathdb_sites_config)
         self._sites: dict[str, SiteInfo] = {}
         self._clients: dict[str, VEuPathDBClient] = {}
         self._load_sites()

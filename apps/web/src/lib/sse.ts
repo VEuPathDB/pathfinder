@@ -1,7 +1,8 @@
 import { buildUrl, getAuthHeaders } from "./api/http";
 import { AppError } from "@/lib/errors/AppError";
+import { parseSSEChunk, type RawSSEEvent } from "./sseParser";
 
-export type RawSSEEvent = { type: string; data: string };
+export type { RawSSEEvent } from "./sseParser";
 
 type StreamSSEArgs = {
   method?: "GET" | "POST";
@@ -23,33 +24,6 @@ type StreamSSEOptions = {
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-function parseSSEChunk(buffer: string): { events: RawSSEEvent[]; rest: string } {
-  const events: RawSSEEvent[] = [];
-  // SSE messages are separated by a blank line.
-  const parts = buffer.split(/\r?\n\r?\n/);
-  const rest = parts.pop() ?? "";
-
-  for (const part of parts) {
-    const lines = part.split(/\r?\n/);
-    let type = "message";
-    const dataLines: string[] = [];
-
-    for (const line of lines) {
-      if (line.startsWith("event:")) {
-        type = line.slice("event:".length).trim() || type;
-      } else if (line.startsWith("data:")) {
-        dataLines.push(line.slice("data:".length).trimStart());
-      }
-    }
-
-    // Ignore keep-alives that have no data.
-    if (dataLines.length === 0) continue;
-    events.push({ type, data: dataLines.join("\n") });
-  }
-
-  return { events, rest };
 }
 
 async function runOnce(
@@ -94,12 +68,21 @@ async function runOnce(
   while (true) {
     // Race the reader against a timeout so we detect hung connections
     // (e.g. model process died but the TCP socket stays open).
-    const result = await Promise.race([
-      reader.read(),
-      sleep(readTimeout).then(
-        () => ({ done: false, value: undefined, timedOut: true }) as const,
-      ),
-    ]);
+    // Use a clearable timeout to avoid leaking handles when the reader wins.
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<{
+      done: false;
+      value: undefined;
+      timedOut: true;
+    }>((resolve) => {
+      timeoutId = setTimeout(
+        () => resolve({ done: false, value: undefined, timedOut: true }),
+        readTimeout,
+      );
+    });
+
+    const result = await Promise.race([reader.read(), timeoutPromise]);
+    clearTimeout(timeoutId!);
 
     if ("timedOut" in result && result.timedOut) {
       // Reader.cancel() can throw if the stream is already closed/errored — benign.
@@ -177,8 +160,8 @@ export async function streamSSEParsed<T = unknown>(
     onEvent: (raw) => {
       try {
         onFrame({ event: raw.type, data: JSON.parse(raw.data) as T });
-      } catch {
-        /* ignore parse errors for non-JSON payloads */
+      } catch (e) {
+        console.warn("[SSE] Failed to parse event data:", raw.type, raw.data, e);
       }
     },
   });

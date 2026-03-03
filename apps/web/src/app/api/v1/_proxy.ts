@@ -31,6 +31,41 @@ export function forwardHeaders(
 }
 
 /**
+ * Create a new ReadableStream that pipes from an upstream reader chunk by
+ * chunk.  Passing `upstream.body` directly to `new Response()` can cause
+ * Node.js / Next.js to buffer the entire body before forwarding to the
+ * client.  This explicit pipe ensures each SSE event is flushed immediately.
+ */
+function pipeStream(upstream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const reader = upstream.getReader();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(value);
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+    cancel() {
+      reader.cancel();
+    },
+  });
+}
+
+const SSE_RESPONSE_HEADERS = {
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache, no-transform",
+  "Content-Encoding": "identity",
+  Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
+} as const;
+
+/**
  * Proxy a POST request as an SSE stream to the upstream API.
  *
  * Reads the request body, forwards it to `upstreamPath`, and pipes
@@ -73,14 +108,52 @@ export async function proxySSEPost(
     });
   }
 
-  return new Response(upstream.body, {
+  return new Response(pipeStream(upstream.body), {
     status: 200,
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
+    headers: SSE_RESPONSE_HEADERS,
+  });
+}
+
+/**
+ * Proxy a GET request as an SSE stream to the upstream API.
+ */
+export async function proxySSEGet(
+  req: NextRequest,
+  upstreamPath: string,
+): Promise<Response> {
+  const url = `${getUpstreamBase()}${upstreamPath}`;
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(url, {
+      method: "GET",
+      headers: forwardHeaders(req, {
+        Accept: "text/event-stream",
+      }),
+      // Prevent Node.js / Next.js from caching or buffering the response.
+      cache: "no-store",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      { detail: `Upstream API unreachable: ${message}` },
+      { status: 502 },
+    );
+  }
+
+  if (!upstream.ok || !upstream.body) {
+    const errorBody = await upstream.text();
+    return new Response(errorBody, {
+      status: upstream.status,
+      headers: {
+        "Content-Type": upstream.headers.get("content-type") || "application/json",
+      },
+    });
+  }
+
+  return new Response(pipeStream(upstream.body), {
+    status: 200,
+    headers: SSE_RESPONSE_HEADERS,
   });
 }
 
@@ -98,7 +171,10 @@ export async function proxyJsonRequest(
   try {
     const upstream = await fetch(url, {
       method,
-      headers: forwardHeaders(req, { Accept: "application/json" }),
+      headers: forwardHeaders(req, {
+        Accept: "application/json",
+        ...(options?.includeBody ? { "Content-Type": "application/json" } : {}),
+      }),
       ...(options?.includeBody ? { body: await req.text() } : {}),
     });
     const body = await upstream.text();

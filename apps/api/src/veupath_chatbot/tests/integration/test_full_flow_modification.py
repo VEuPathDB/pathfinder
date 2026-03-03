@@ -114,11 +114,10 @@ class TestUpdateParameters:
                 authed_client,
                 message="Find gametocyte upregulated genes with fold change 2",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert r1.http_status == 200
+        assert r1.http_status == 202
         strategy_id = r1.strategy_id
         assert strategy_id
 
@@ -147,12 +146,11 @@ class TestUpdateParameters:
                 authed_client,
                 message="Change the fold change to 5",
                 site_id="plasmodb",
-                mode="execute",
                 strategy_id=strategy_id,
                 timeout=120.0,
             )
 
-        assert r2.http_status == 200
+        assert r2.http_status == 202
         tool_names = [s.data.get("name") for s, _ in r2.tool_calls]
         assert "update_step" in tool_names
 
@@ -248,11 +246,10 @@ class TestDeleteStep:
                 authed_client,
                 message="Create two epitope searches and list them",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
 
         # Verify 2 create_step calls succeeded
         tool_pairs = result.tool_calls
@@ -310,11 +307,10 @@ class TestClearStrategy:
                 authed_client,
                 message="Create an epitope search",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=60.0,
             )
 
-        assert r1.http_status == 200
+        assert r1.http_status == 202
         strategy_id = r1.strategy_id
 
         # Turn 2: Clear the strategy
@@ -335,12 +331,11 @@ class TestClearStrategy:
                 authed_client,
                 message="Clear everything and start over",
                 site_id="plasmodb",
-                mode="execute",
                 strategy_id=strategy_id,
                 timeout=60.0,
             )
 
-        assert r2.http_status == 200
+        assert r2.http_status == 202
         tool_names = [s.data.get("name") for s, _ in r2.tool_calls]
         assert "clear_strategy" in tool_names
 
@@ -379,11 +374,10 @@ class TestRenameStrategy:
                 authed_client,
                 message="Create an epitope search",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=60.0,
             )
 
-        assert r1.http_status == 200
+        assert r1.http_status == 202
         strategy_id = r1.strategy_id
 
         # Turn 2: Rename
@@ -409,12 +403,11 @@ class TestRenameStrategy:
                 authed_client,
                 message="Rename this strategy to Vaccine Target Candidates",
                 site_id="plasmodb",
-                mode="execute",
                 strategy_id=strategy_id,
                 timeout=60.0,
             )
 
-        assert r2.http_status == 200
+        assert r2.http_status == 202
         tool_names = [s.data.get("name") for s, _ in r2.tool_calls]
         assert "rename_strategy" in tool_names
 

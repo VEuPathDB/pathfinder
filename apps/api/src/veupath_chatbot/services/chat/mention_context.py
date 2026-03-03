@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from veupath_chatbot.persistence.repo import StrategyRepository
+from veupath_chatbot.persistence.repositories.stream import StreamRepository
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.services.experiment.store import get_experiment_store
 from veupath_chatbot.services.experiment.types import ExperimentMetrics
@@ -22,12 +22,12 @@ MentionType = Literal["strategy", "experiment"]
 
 async def build_mention_context(
     mentions: list[dict[str, str]],
-    strategy_repo: StrategyRepository,
+    stream_repo: StreamRepository,
 ) -> str:
     """Build concatenated context blocks for all mentions.
 
     :param mentions: List of ``{"type": ..., "id": ..., "displayName": ...}`` dicts.
-    :param strategy_repo: Repository for loading strategies.
+    :param stream_repo: Repository for loading stream projections.
     :returns: Markdown context string (empty if no mentions resolved).
     """
     blocks: list[str] = []
@@ -37,7 +37,7 @@ async def build_mention_context(
         m_id = m.get("id", "")
 
         if m_type == "strategy":
-            block = await _build_strategy_context(m_id, strategy_repo)
+            block = await _build_strategy_context(m_id, stream_repo)
             if block:
                 blocks.append(block)
         elif m_type == "experiment":
@@ -52,9 +52,9 @@ async def build_mention_context(
 
 async def _build_strategy_context(
     strategy_id: str,
-    strategy_repo: StrategyRepository,
+    stream_repo: StreamRepository,
 ) -> str | None:
-    """Load a strategy and format a rich context block."""
+    """Load a stream projection and format a rich context block."""
     from uuid import UUID
 
     try:
@@ -63,18 +63,18 @@ async def _build_strategy_context(
         logger.warning("Invalid strategy mention ID", strategy_id=strategy_id)
         return None
 
-    strategy = await strategy_repo.get_by_id(sid)
-    if not strategy:
+    projection = await stream_repo.get_projection(sid)
+    if not projection:
         logger.warning("Mentioned strategy not found", strategy_id=strategy_id)
         return None
 
     lines: list[str] = [
-        f'## Referenced Strategy: "{strategy.name}"',
-        f"- **ID**: {strategy.id}",
-        f"- **Record type**: {strategy.record_type or 'unknown'}",
+        f'## Referenced Strategy: "{projection.name}"',
+        f"- **ID**: {projection.stream_id}",
+        f"- **Record type**: {projection.record_type or 'unknown'}",
     ]
 
-    steps = strategy.steps
+    steps = projection.steps
     if isinstance(steps, list) and steps:
         lines.append(f"- **Steps** ({len(steps)}):")
         lines.append("")
@@ -117,11 +117,11 @@ async def _build_strategy_context(
                 lines.append(f"- Input: step {primary}")
 
             lines.append("")
-    elif isinstance(strategy.plan, dict):
+    elif isinstance(projection.plan, dict):
         lines.append("")
         lines.append("### Strategy plan (AST):")
         lines.append("```json")
-        lines.append(json.dumps(strategy.plan, indent=2, default=str)[:4000])
+        lines.append(json.dumps(projection.plan, indent=2, default=str)[:4000])
         lines.append("```")
 
     return "\n".join(lines)
@@ -229,8 +229,8 @@ def _format_metrics(m: ExperimentMetrics) -> str:
         f"| MCC | {m.mcc:.4f} |\n"
         f"| Balanced Accuracy | {m.balanced_accuracy:.4f} |\n"
         f"| Total Results | {m.total_results} |\n"
-        f"| TP={m.confusion_matrix.true_positives} | FP={m.confusion_matrix.false_positives} | "
-        f"FN={m.confusion_matrix.false_negatives} | TN={m.confusion_matrix.true_negatives} |"
+        f"| Confusion Matrix | TP={m.confusion_matrix.true_positives} FP={m.confusion_matrix.false_positives} "
+        f"FN={m.confusion_matrix.false_negatives} TN={m.confusion_matrix.true_negatives} |"
     )
 
 

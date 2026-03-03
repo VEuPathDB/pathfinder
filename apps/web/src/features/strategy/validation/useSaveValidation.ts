@@ -1,12 +1,12 @@
 import { useEffect, useMemo } from "react";
-import type { StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
+import { useDebouncedCallback } from "use-debounce";
+import type { StrategyStep } from "@pathfinder/shared";
 
 export function useSaveValidation(args: {
   steps: StrategyStep[];
   buildStepSignature: (step: StrategyStep) => string;
   debounceMs?: number;
   validate: () => Promise<boolean>;
-  strategy: StrategyWithMeta | null;
 }) {
   const { steps, buildStepSignature, debounceMs = 500, validate } = args;
 
@@ -18,11 +18,12 @@ export function useSaveValidation(args: {
       .join("|");
   }, [steps, buildStepSignature]);
 
+  const debouncedValidate = useDebouncedCallback(() => {
+    void validate();
+  }, debounceMs);
+
   useEffect(() => {
     if (steps.length === 0) return;
-    const timeout = window.setTimeout(() => {
-      void validate();
-    }, debounceMs);
-    return () => window.clearTimeout(timeout);
-  }, [steps, validationInputKey, validate, debounceMs]);
+    debouncedValidate();
+  }, [steps, validationInputKey, debouncedValidate]);
 }

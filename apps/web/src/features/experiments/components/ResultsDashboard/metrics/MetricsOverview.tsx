@@ -13,6 +13,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Button } from "@/lib/components/ui/Button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/lib/components/ui/Tooltip";
+import { Separator } from "@/lib/components/ui/Separator";
 import { Section } from "../shared/Section";
 import { pct, fmtNum } from "../utils";
 
@@ -39,6 +41,13 @@ function CIBadge({
       [{fmt(ci.lower)}, {fmt(ci.upper)}]
     </span>
   );
+}
+
+function metricValueColor(value: number, raw?: boolean): string {
+  const normalized = raw ? (value + 1) / 2 : value; // MCC is [-1,1]
+  if (normalized >= 0.7) return "text-green-600 dark:text-green-400";
+  if (normalized >= 0.4) return "text-amber-600 dark:text-amber-400";
+  return "text-red-600 dark:text-red-400";
 }
 
 export function MetricsOverview({
@@ -71,41 +80,58 @@ export function MetricsOverview({
     {
       label: "Sensitivity",
       value: metrics.sensitivity,
-      desc: "TP / (TP + FN)",
+      desc: "TP / (TP + FN) — proportion of true positives correctly identified",
     },
     {
       label: "Specificity",
       value: metrics.specificity,
-      desc: "TN / (TN + FP)",
+      desc: "TN / (TN + FP) — proportion of true negatives correctly identified",
     },
     {
       label: "Precision",
       value: metrics.precision,
-      desc: "TP / (TP + FP)",
+      desc: "TP / (TP + FP) — proportion of predicted positives that are correct",
     },
     {
       label: "F1 Score",
       value: metrics.f1Score,
-      desc: "Harmonic mean of precision & sensitivity",
+      desc: "2 × (Precision × Sensitivity) / (Precision + Sensitivity) — harmonic mean",
     },
     {
       label: "MCC",
       value: metrics.mcc,
-      desc: "Matthews Correlation Coefficient",
+      desc: "Matthews Correlation Coefficient — balanced measure even with class imbalance, range [-1, 1]",
       raw: true,
     },
     {
       label: "Balanced Accuracy",
       value: metrics.balancedAccuracy,
-      desc: "(Sensitivity + Specificity) / 2",
+      desc: "(Sensitivity + Specificity) / 2 — accounts for class imbalance",
     },
   ];
 
   const secondary = [
-    { label: "NPV", value: metrics.negativePredictiveValue },
-    { label: "FPR", value: metrics.falsePositiveRate },
-    { label: "FNR", value: metrics.falseNegativeRate },
-    { label: "Youden\u2019s J", value: metrics.youdensJ, raw: true },
+    {
+      label: "NPV",
+      value: metrics.negativePredictiveValue,
+      desc: "TN / (TN + FN) — negative predictive value",
+    },
+    {
+      label: "FPR",
+      value: metrics.falsePositiveRate,
+      desc: "FP / (FP + TN) — false positive rate",
+    },
+    {
+      label: "FNR",
+      value: metrics.falseNegativeRate,
+      desc: "FN / (FN + TP) — false negative rate",
+    },
+    {
+      label: "Youden\u2019s J",
+      value: metrics.youdensJ,
+      raw: true,
+      desc: "Sensitivity + Specificity - 1 — ranges from -1 to 1",
+    },
   ];
 
   return (
@@ -169,35 +195,60 @@ export function MetricsOverview({
       <Section title="Classification Metrics">
         <div className="rounded-lg border border-border bg-card shadow-xs">
           <div className="grid grid-cols-[1fr_280px] divide-x divide-border max-lg:grid-cols-1 max-lg:divide-x-0 max-lg:divide-y">
-            <div className="divide-y divide-border">
+            <div>
               {primary.map((m) => (
                 <div
                   key={m.label}
-                  className="flex items-center justify-between px-5 py-2.5"
+                  className="flex items-center justify-between border-b border-border px-5 py-2.5 last:border-b-0"
                 >
-                  <div>
-                    <span className="text-sm font-medium text-foreground">
-                      {m.label}
-                    </span>
-                    <span className="ml-2 text-xs text-muted-foreground">{m.desc}</span>
-                  </div>
-                  <span className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="cursor-help">
+                        <span className="text-sm font-medium text-foreground">
+                          {m.label}
+                        </span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <p>{m.desc}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <span
+                    className={`font-mono text-sm font-semibold tabular-nums ${metricValueColor(m.value, m.raw)}`}
+                  >
                     {m.raw ? fmtNum(m.value) : pct(m.value)}
                   </span>
                 </div>
               ))}
-              {showSecondary &&
-                secondary.map((m) => (
-                  <div
-                    key={m.label}
-                    className="flex items-center justify-between bg-muted/30 px-5 py-2.5"
-                  >
-                    <span className="text-sm text-muted-foreground">{m.label}</span>
-                    <span className="font-mono text-sm tabular-nums text-foreground">
-                      {m.raw ? fmtNum(m.value) : pct(m.value)}
-                    </span>
-                  </div>
-                ))}
+
+              {showSecondary && (
+                <>
+                  <Separator />
+                  {secondary.map((m) => (
+                    <div
+                      key={m.label}
+                      className="flex items-center justify-between bg-muted/30 px-5 py-2.5"
+                    >
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help text-sm text-muted-foreground">
+                            {m.label}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-xs">
+                          <p>{m.desc}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <span
+                        className={`font-mono text-sm tabular-nums ${metricValueColor(m.value, m.raw)}`}
+                      >
+                        {m.raw ? fmtNum(m.value) : pct(m.value)}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
+
               <div className="px-5 py-2">
                 <Button
                   variant="ghost"

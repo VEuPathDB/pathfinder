@@ -1,4 +1,4 @@
-import { ArrowLeft, FlaskConical, GitBranch, Import } from "lucide-react";
+import { ArrowLeft, FlaskConical, GitBranch } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
 import { useExperimentViewStore } from "../store";
 
@@ -12,19 +12,11 @@ const MODES = [
     view: "setup" as const,
   },
   {
-    id: "multi-step" as const,
-    title: "Multi-Step Strategy",
+    id: "strategy-builder" as const,
+    title: "Strategy Builder",
     description:
-      "Build a strategy graph with multiple searches, combines, and transforms. Optimise parameters across steps and identify bottlenecks.",
+      "Build a multi-step strategy graph from scratch or import an existing VEuPathDB strategy. Evaluate and optimize across steps.",
     icon: GitBranch,
-    view: "multi-step-setup" as const,
-  },
-  {
-    id: "import" as const,
-    title: "Import Strategy",
-    description:
-      "Import an existing VEuPathDB strategy and tweak its parameters for experimental evaluation.",
-    icon: Import,
     view: "multi-step-setup" as const,
   },
 ] as const;
@@ -40,11 +32,11 @@ export function ModeChooser() {
         of control over your search strategy.
       </p>
 
-      <div className="grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
         {MODES.map((mode) => (
           <button
             key={mode.id}
-            data-testid={`mode-${mode.id === "multi-step" ? "multistep" : mode.id}`}
+            data-testid={`mode-${mode.id}`}
             onClick={() => setView(mode.view)}
             className="group flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-6 text-left transition-all hover:border-primary/40 hover:shadow-md"
           >

@@ -43,12 +43,21 @@ class UserRepository:
         Creates a new row if none exists yet, avoiding race conditions with
         ``INSERT ... ON CONFLICT``.
         """
-        stmt = select(User).where(User.external_id == external_id)
-        result = await self.session.execute(stmt)
+        stmt = (
+            pg_insert(User)
+            .values(external_id=external_id)
+            .on_conflict_do_nothing(index_elements=[User.external_id])
+        )
+        await self.session.execute(stmt)
+        result = await self.session.execute(
+            select(User).where(User.external_id == external_id)
+        )
         user = result.scalar_one_or_none()
-        if user:
-            return user
-        return await self.create(external_id=external_id)
+        if user is None:
+            user = User(external_id=external_id)
+            self.session.add(user)
+            await self.session.flush()
+        return user
 
     async def create(self, external_id: str | None = None) -> User:
         """Create a new user."""

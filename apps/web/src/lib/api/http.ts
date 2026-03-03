@@ -1,13 +1,5 @@
 import { getAuthToken } from "./auth";
 
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
-
 export class APIError extends Error {
   status: number;
   statusText: string;

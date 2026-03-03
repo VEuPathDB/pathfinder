@@ -114,33 +114,4 @@ describe("state/useStrategyListStore", () => {
     expect(executedStrategies).toHaveLength(1);
     expect(executedStrategies[0]?.name).toBe("Exec 1 Updated");
   });
-
-  it("removes executed strategy by id", () => {
-    const { addExecutedStrategy, removeExecutedStrategy } =
-      useStrategyListStore.getState();
-    addExecutedStrategy({
-      id: "exec1",
-      name: "Exec 1",
-      siteId: "plasmodb",
-      recordType: "gene",
-      steps: [],
-      rootStepId: null,
-      createdAt: "t1",
-      updatedAt: "t1",
-    });
-    addExecutedStrategy({
-      id: "exec2",
-      name: "Exec 2",
-      siteId: "plasmodb",
-      recordType: "gene",
-      steps: [],
-      rootStepId: null,
-      createdAt: "t1",
-      updatedAt: "t1",
-    });
-    removeExecutedStrategy("exec1");
-    const { executedStrategies } = useStrategyListStore.getState();
-    expect(executedStrategies).toHaveLength(1);
-    expect(executedStrategies[0]?.id).toBe("exec2");
-  });
 });

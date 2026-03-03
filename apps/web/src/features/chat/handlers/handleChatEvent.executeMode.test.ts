@@ -10,7 +10,7 @@ describe("handleChatEvent — realistic execute mode", () => {
   it("processes full event stream without errors and produces correct state", () => {
     const currentStrategy = {
       id: "strat-001",
-      name: "Draft Strategy",
+      name: "New Conversation",
       siteId: "plasmodb",
       recordType: null as string | null,
       steps: [],

@@ -6,14 +6,21 @@ from typing import cast
 
 from fastapi import APIRouter
 
-from veupath_chatbot.platform.errors import NotFoundError
+from veupath_chatbot.platform.errors import (
+    InternalError,
+    NotFoundError,
+    ValidationError,
+)
+from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.experiment.store import get_experiment_store
-from veupath_chatbot.transport.http.deps import ExperimentDep
+from veupath_chatbot.transport.http.deps import CurrentUser, ExperimentDep
 from veupath_chatbot.transport.http.schemas.experiments import (
     RefineRequest,
     RunAnalysisRequest,
 )
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -63,13 +70,82 @@ def _extract_pk(record: JSONObject) -> str | None:
     return None
 
 
+def _extract_displayable_attr_names(attrs_raw: object) -> list[str]:
+    """Extract displayable attribute names from WDK record type info.
+
+    WDK record type info can return attributes in two formats:
+
+    * **dict** (``attributesMap``): ``{name: {isDisplayable, ...}, ...}``
+    * **list** (expanded): ``[{name, isDisplayable, ...}, ...]``
+
+    Empty or missing attribute names are filtered out because WDK's
+    ``RecordRequest.parseAttributeNames`` rejects names not in the
+    record class attribute field map.
+
+    :param attrs_raw: Raw attributes value from the record type info.
+    :returns: List of valid displayable attribute names.
+    """
+    attr_names: list[str] = []
+    if isinstance(attrs_raw, dict):
+        for name, meta in attrs_raw.items():
+            if not name or not isinstance(name, str):
+                continue
+            if isinstance(meta, dict) and meta.get("isDisplayable", True):
+                attr_names.append(str(name))
+    elif isinstance(attrs_raw, list):
+        for meta in attrs_raw:
+            if not isinstance(meta, dict):
+                continue
+            if not meta.get("isDisplayable", True):
+                continue
+            raw_name = meta.get("name")
+            if raw_name is None:
+                continue
+            name = str(raw_name).strip()
+            if name:
+                attr_names.append(name)
+    return attr_names
+
+
+def _order_primary_key(
+    pk_parts: list[JSONObject],
+    pk_refs: list[str],
+    pk_defaults: dict[str, str],
+) -> list[JSONObject]:
+    """Reorder and fill primary key parts to match WDK record class definition.
+
+    WDK requires PK columns in the exact order defined by
+    ``primaryKeyColumnRefs``.  Step reports may omit columns like
+    ``project_id`` and may return them in a different order.
+
+    :param pk_parts: Client-provided PK parts (``[{name, value}, ...]``).
+    :param pk_refs: Column names in record-class order.
+    :param pk_defaults: Default values for missing columns (e.g. ``project_id``).
+    :returns: Ordered PK parts matching ``pk_refs``.
+    """
+    pk_by_name: dict[str, str] = {
+        str(p.get("name", "")): str(p.get("value", ""))
+        for p in pk_parts
+        if isinstance(p, dict)
+    }
+    ordered: list[JSONObject] = []
+    for col in pk_refs:
+        if not isinstance(col, str):
+            continue
+        value = pk_by_name.get(col) or pk_defaults.get(col) or ""
+        ordered.append({"name": col, "value": value})
+    return ordered
+
+
 # ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
 
 
 @router.get("/{experiment_id}/results/attributes")
-async def get_experiment_attributes(exp: ExperimentDep) -> JSONObject:
+async def get_experiment_attributes(
+    exp: ExperimentDep, user_id: CurrentUser
+) -> JSONObject:
     """Get available attributes for an experiment's record type."""
     from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 
@@ -121,9 +197,11 @@ async def get_experiment_attributes(exp: ExperimentDep) -> JSONObject:
 
 
 @router.get("/{experiment_id}/results/sortable-attributes")
-async def get_sortable_attributes(exp: ExperimentDep) -> JSONObject:
+async def get_sortable_attributes(
+    exp: ExperimentDep, user_id: CurrentUser
+) -> JSONObject:
     """Return only sortable (numeric) attributes, with suggestions for known score columns."""
-    full = await get_experiment_attributes(exp)
+    full = await get_experiment_attributes(exp, user_id)
     all_attrs = full.get("attributes", [])
     sortable = [
         a
@@ -139,6 +217,7 @@ async def get_sortable_attributes(exp: ExperimentDep) -> JSONObject:
 @router.get("/{experiment_id}/results/records")
 async def get_experiment_records(
     exp: ExperimentDep,
+    user_id: CurrentUser,
     offset: int = 0,
     limit: int = 50,
     sort: str | None = None,
@@ -206,6 +285,7 @@ async def get_experiment_records(
 async def get_experiment_record_detail(
     exp: ExperimentDep,
     request_body: dict[str, object],
+    user_id: CurrentUser,
 ) -> JSONObject:
     """Get a single record's full details by primary key.
 
@@ -222,7 +302,7 @@ async def get_experiment_record_detail(
 
     raw_pk = request_body.get("primaryKey") or request_body.get("primary_key") or []
     if not isinstance(raw_pk, list) or not raw_pk:
-        raise NotFoundError(title="Invalid primary key: must be a non-empty array")
+        raise ValidationError(title="Invalid primary key: must be a non-empty array")
 
     pk_parts: list[JSONObject] = [
         {"name": str(part.get("name", "")), "value": str(part.get("value", ""))}
@@ -231,36 +311,34 @@ async def get_experiment_record_detail(
     ]
 
     api = get_strategy_api(exp.config.site_id)
-    info = await api.get_record_type_info(exp.config.record_type)
 
-    # WDK requires all primary key columns. Step reports sometimes return only
-    # the first part (e.g. source_id). Fill missing parts (e.g. project_id).
-    pk_refs = info.get("primaryKeyColumnRefs") or info.get("primaryKey") or []
-    if isinstance(pk_refs, list) and len(pk_parts) < len(pk_refs):
-        names_sent = {p.get("name") for p in pk_parts if isinstance(p, dict)}
-        site = get_site(exp.config.site_id)
-        for col in pk_refs:
-            if not isinstance(col, str) or col in names_sent:
-                continue
-            if col == "project_id":
-                pk_parts.append({"name": "project_id", "value": site.project_id})
-                break
-            # Other missing columns left as-is; WDK will validate.
-
-    attrs_raw = info.get("attributes") or info.get("attributesMap") or {}
+    # Fetch record type info for PK ordering and attribute discovery.
+    # If this fails, fall back to using the PK as-is with no specific
+    # attributes so the request still has a chance of succeeding.
     attr_names: list[str] = []
-    if isinstance(attrs_raw, dict):
-        attr_names = [
-            str(name)
-            for name, meta in attrs_raw.items()
-            if isinstance(meta, dict) and meta.get("isDisplayable", True)
-        ]
-    elif isinstance(attrs_raw, list):
-        attr_names = [
-            str(meta.get("name", ""))
-            for meta in attrs_raw
-            if isinstance(meta, dict) and meta.get("isDisplayable", True)
-        ]
+    try:
+        info = await api.get_record_type_info(exp.config.record_type)
+
+        pk_refs = info.get("primaryKeyColumnRefs") or info.get("primaryKey") or []
+        if isinstance(pk_refs, list) and pk_refs:
+            ref_strings = [str(r) for r in pk_refs if isinstance(r, str)]
+            if ref_strings:
+                site = get_site(exp.config.site_id)
+                pk_parts = _order_primary_key(
+                    pk_parts,
+                    ref_strings,
+                    pk_defaults={"project_id": site.project_id},
+                )
+
+        attrs_raw = info.get("attributes") or info.get("attributesMap") or {}
+        attr_names = _extract_displayable_attr_names(attrs_raw)
+    except Exception:
+        logger.warning(
+            "Failed to fetch record type info; falling back to raw PK and default attributes",
+            record_type=exp.config.record_type,
+            site_id=exp.config.site_id,
+            exc_info=True,
+        )
 
     return await api.get_single_record(
         record_type=exp.config.record_type,
@@ -270,7 +348,9 @@ async def get_experiment_record_detail(
 
 
 @router.get("/{experiment_id}/strategy")
-async def get_experiment_strategy(exp: ExperimentDep) -> JSONObject:
+async def get_experiment_strategy(
+    exp: ExperimentDep, user_id: CurrentUser
+) -> JSONObject:
     """Get the WDK strategy tree for an experiment."""
     from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 
@@ -288,6 +368,7 @@ async def get_experiment_strategy(exp: ExperimentDep) -> JSONObject:
 async def get_experiment_distribution(
     exp: ExperimentDep,
     attribute_name: str,
+    user_id: CurrentUser,
 ) -> JSONObject:
     """Get distribution data for an attribute using filter summary."""
     from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
@@ -300,7 +381,9 @@ async def get_experiment_distribution(
 
 
 @router.get("/{experiment_id}/analyses/types")
-async def get_experiment_analysis_types(exp: ExperimentDep) -> JSONObject:
+async def get_experiment_analysis_types(
+    exp: ExperimentDep, user_id: CurrentUser
+) -> JSONObject:
     """List available WDK step analysis types for an experiment."""
     from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 
@@ -316,6 +399,7 @@ async def get_experiment_analysis_types(exp: ExperimentDep) -> JSONObject:
 async def run_experiment_analysis(
     exp: ExperimentDep,
     request: RunAnalysisRequest,
+    user_id: CurrentUser,
 ) -> JSONObject:
     """Create and run a WDK step analysis on the experiment's step."""
     from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
@@ -336,6 +420,7 @@ async def run_experiment_analysis(
 async def refine_experiment(
     exp: ExperimentDep,
     request: RefineRequest,
+    user_id: CurrentUser,
 ) -> JSONObject:
     """Add a step to the experiment's strategy (combine, transform, etc.)."""
     from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
@@ -357,7 +442,7 @@ async def refine_experiment(
         )
         new_step_id = new_step.get("id") if isinstance(new_step, dict) else None
         if not isinstance(new_step_id, int):
-            raise NotFoundError(title="Failed to create new step")
+            raise InternalError(title="Failed to create new step")
 
         combined = await api.create_combined_step(
             primary_step_id=exp.wdk_step_id,
@@ -368,7 +453,7 @@ async def refine_experiment(
         )
         combined_id = combined.get("id") if isinstance(combined, dict) else None
         if not isinstance(combined_id, int):
-            raise NotFoundError(title="Failed to create combined step")
+            raise InternalError(title="Failed to create combined step")
 
         new_tree = StepTreeNode(
             combined_id,
@@ -391,7 +476,7 @@ async def refine_experiment(
         )
         new_step_id = new_step.get("id") if isinstance(new_step, dict) else None
         if not isinstance(new_step_id, int):
-            raise NotFoundError(title="Failed to create transform step")
+            raise InternalError(title="Failed to create transform step")
 
         new_tree = StepTreeNode(
             new_step_id,
@@ -403,4 +488,13 @@ async def refine_experiment(
 
         return {"success": True, "newStepId": new_step_id}
 
-    return {"success": False, "error": f"Unknown action: {request.action}"}
+    raise ValidationError(
+        title=f"Unknown refine action: {request.action}",
+        errors=[
+            {
+                "path": "action",
+                "message": f"Unknown action: {request.action}",
+                "code": "INVALID_ACTION",
+            }
+        ],
+    )

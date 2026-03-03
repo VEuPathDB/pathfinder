@@ -73,11 +73,10 @@ class TestBuildAndSave:
                 authed_client,
                 message="Build and save a strategy for epitope vaccine targets",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
         types = result.event_types
         assert types[0] == "message_start"
         assert "message_end" in types
@@ -145,11 +144,10 @@ class TestGetResultCount:
                 authed_client,
                 message="Build an epitope strategy and check results",
                 site_id="plasmodb",
-                mode="execute",
                 timeout=120.0,
             )
 
-        assert r1.http_status == 200
+        assert r1.http_status == 202
 
         # Extract the WDK step ID from build_strategy result
         wdk_step_id = None
@@ -196,12 +194,11 @@ class TestGetResultCount:
                 authed_client,
                 message="How many results?",
                 site_id="plasmodb",
-                mode="execute",
                 strategy_id=strategy_id,
                 timeout=60.0,
             )
 
-        assert r2.http_status == 200
+        assert r2.http_status == 202
         tool_names = [s.data.get("name") for s, _ in r2.tool_calls]
         assert "get_result_count" in tool_names
 
@@ -267,11 +264,10 @@ class TestToxoDBSearch:
                 authed_client,
                 message="What expression searches are available on ToxoDB?",
                 site_id="toxodb",
-                mode="execute",
                 timeout=60.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
         types = result.event_types
         assert types[0] == "message_start"
         assert "message_end" in types
@@ -323,11 +319,10 @@ class TestCryptoDBLookup:
                 authed_client,
                 message="What gene searches are available on CryptoDB?",
                 site_id="cryptodb",
-                mode="execute",
                 timeout=60.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
         types = result.event_types
         assert types[0] == "message_start"
         assert "message_end" in types
@@ -383,7 +378,7 @@ class TestGeneLookupAndResolve:
                 timeout=120.0,
             )
 
-        assert result.http_status == 200
+        assert result.http_status == 202
         types = result.event_types
         assert types[0] == "message_start"
         assert "message_end" in types

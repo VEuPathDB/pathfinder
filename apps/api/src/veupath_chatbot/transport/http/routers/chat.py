@@ -1,12 +1,12 @@
-"""Chat endpoints with SSE streaming."""
+"""Chat endpoint — starts a background chat operation."""
 
 from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse
 
 from veupath_chatbot.services.chat.orchestrator import start_chat_stream
 from veupath_chatbot.transport.http.deps import (
     CurrentUser,
-    StrategyRepo,
+    StreamRepo,
     UserRepo,
 )
 from veupath_chatbot.transport.http.schemas import ChatRequest
@@ -14,35 +14,24 @@ from veupath_chatbot.transport.http.schemas import ChatRequest
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 
-@router.post(
-    "/chat",
-    response_class=StreamingResponse,
-    responses={
-        200: {
-            "description": "Successful Response",
-            "content": {
-                "text/event-stream": {"schema": {"type": "string"}},
-            },
-        }
-    },
-)
+@router.post("/chat", status_code=202)
 async def chat(
     request: ChatRequest,
     user_repo: UserRepo,
-    strategy_repo: StrategyRepo,
+    stream_repo: StreamRepo,
     user_id: CurrentUser,
-) -> StreamingResponse:
-    """Send a chat message and receive streaming response.
+) -> JSONResponse:
+    """Start a chat operation and return its operation ID.
 
-    Returns a Server-Sent Events stream with response chunks.
+    The client subscribes to GET /operations/{operationId}/subscribe for SSE events.
     """
-    sse_iter = await start_chat_stream(
+    operation_id, strategy_id = await start_chat_stream(
         message=request.message,
         site_id=request.site_id,
         strategy_id=request.strategy_id,
         user_id=user_id,
         user_repo=user_repo,
-        strategy_repo=strategy_repo,
+        stream_repo=stream_repo,
         provider_override=request.provider,
         model_override=request.model_id,
         reasoning_effort=request.reasoning_effort,
@@ -50,12 +39,7 @@ async def chat(
         if request.mentions
         else None,
     )
-    return StreamingResponse(
-        sse_iter,
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+    return JSONResponse(
+        {"operationId": operation_id, "strategyId": strategy_id},
+        status_code=202,
     )

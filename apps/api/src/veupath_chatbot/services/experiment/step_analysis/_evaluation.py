@@ -153,7 +153,9 @@ async def run_controls_against_tree(
             if isinstance(intersection_ids_val, list)
             else set()
         )
-        missing = [x for x in pos if found and x not in found]
+        # Only enumerate missing when we fetched intersection IDs (≤500 controls).
+        # For >500 controls we don't have per-ID data.
+        missing = [x for x in pos if x not in found] if len(pos) <= 500 else []
 
         result["target"] = {
             "searchName": "__tree__",

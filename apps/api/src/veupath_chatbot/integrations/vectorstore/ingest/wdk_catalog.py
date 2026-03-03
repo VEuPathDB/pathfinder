@@ -13,6 +13,10 @@ from veupath_chatbot.integrations.vectorstore.collections import (
     WDK_RECORD_TYPES_V1,
     WDK_SEARCHES_V1,
 )
+from veupath_chatbot.integrations.vectorstore.ingest.utils import (
+    extract_search_name,
+    parse_sites,
+)
 from veupath_chatbot.integrations.vectorstore.ingest.wdk_fetch import (
     fetch_record_types_and_searches,
     fetch_search_details,
@@ -73,7 +77,7 @@ async def ingest_site(
             return None, False
         if s.get("isInternal", False):
             return None, False
-        search_name = str(s.get("urlSegment") or s.get("name") or "").strip()
+        search_name = extract_search_name(s)
         if not search_name:
             return None, False
 
@@ -112,16 +116,13 @@ async def ingest_wdk_catalog(
     dim = len(await embed_one(text="dimension probe", model=settings.embeddings_model))
 
     if reset:
-        reset_client = AsyncQdrantClient(
-            url=store.url,
-            api_key=store.api_key,
-            timeout=int(store.timeout_seconds)
-            if store.timeout_seconds is not None
-            else None,
-        )
-        for name in (WDK_SEARCHES_V1, WDK_RECORD_TYPES_V1):
-            if await reset_client.collection_exists(collection_name=name):
-                await reset_client.delete_collection(collection_name=name)
+        reset_client = store._client()
+        try:
+            for name in (WDK_SEARCHES_V1, WDK_RECORD_TYPES_V1):
+                if await reset_client.collection_exists(collection_name=name):
+                    await reset_client.delete_collection(collection_name=name)
+        finally:
+            await reset_client.close()
 
     await store.ensure_collection(name=WDK_RECORD_TYPES_V1, vector_size=dim)
     await store.ensure_collection(name=WDK_SEARCHES_V1, vector_size=dim)
@@ -139,13 +140,7 @@ async def ingest_wdk_catalog(
     all_sites = [s.id for s in router.list_sites()]
     selected = all_sites if not sites else [s for s in all_sites if s in set(sites)]
 
-    qdrant_client = AsyncQdrantClient(
-        url=store.url,
-        api_key=store.api_key,
-        timeout=int(store.timeout_seconds)
-        if store.timeout_seconds is not None
-        else None,
-    )
+    qdrant_client = store._client()
     try:
         for site_id in selected:
             logger.info("WDK ingest site", siteId=site_id)
@@ -160,13 +155,6 @@ async def ingest_wdk_catalog(
             )
     finally:
         await qdrant_client.close()
-
-
-def _parse_sites(value: str) -> list[str] | None:
-    v = (value or "").strip()
-    if not v or v == "all":
-        return None
-    return [s.strip() for s in v.split(",") if s.strip()]
 
 
 async def _cli_async(argv: list[str] | None = None) -> None:
@@ -189,7 +177,7 @@ async def _cli_async(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     await ingest_wdk_catalog(
-        sites=_parse_sites(args.sites),
+        sites=parse_sites(args.sites),
         reset=bool(args.reset),
         skip_existing=bool(args.skip_existing),
         batch_size=int(args.batch_size),

@@ -29,15 +29,6 @@ export {
   computeStepCounts,
 } from "./strategies";
 
-// Plan sessions
-export {
-  listPlans,
-  openPlanSession,
-  getPlanSession,
-  updatePlanSession,
-  deletePlanSession,
-} from "./plans";
-
 // VEuPathDB auth bridge
 export {
   getVeupathdbAuthStatus,
@@ -47,12 +38,6 @@ export {
 } from "./veupathdb-auth";
 
 // Gene search
-export type {
-  GeneSearchResult,
-  GeneSearchResponse,
-  ResolvedGene,
-  GeneResolveResponse,
-} from "./genes";
 export { searchGenes, resolveGeneIds } from "./genes";
 
 // Models / catalog

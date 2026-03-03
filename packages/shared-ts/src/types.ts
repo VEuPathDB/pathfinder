@@ -419,8 +419,6 @@ export type StrategyWithMeta = Strategy & {
 
 export type MessageRole = "user" | "assistant" | "system";
 
-export type ChatMode = "execute" | "plan";
-
 export type ModelProvider = "openai" | "anthropic" | "google";
 export type ReasoningEffort = "none" | "low" | "medium" | "high";
 
@@ -511,7 +509,6 @@ export interface Message {
   content: string;
   toolCalls?: ToolCall[];
   subKaniActivity?: SubKaniActivity;
-  mode?: ChatMode;
   citations?: Citation[];
   planningArtifacts?: PlanningArtifact[];
   /** Model reasoning text captured during the turn. */
@@ -538,42 +535,8 @@ export interface Conversation {
 
 export interface ChatRequest {
   strategyId?: string;
-  planSessionId?: string;
   siteId: string;
   message: string;
-  mode?: ChatMode;
-}
-
-// Planning (plan sessions)
-
-export interface PlanSessionSummary {
-  id: string;
-  siteId: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PlanSession {
-  id: string;
-  siteId: string;
-  title: string;
-  messages?: Message[];
-  thinking?: Thinking;
-  planningArtifacts?: PlanningArtifact[];
-  modelId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface OpenPlanSessionRequest {
-  planSessionId?: string;
-  siteId: string;
-  title?: string;
-}
-
-export interface OpenPlanSessionResponse {
-  planSessionId: string;
 }
 
 // Search parameter validation/specs (UI-facing)

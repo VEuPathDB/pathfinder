@@ -89,6 +89,9 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://postgres:postgres@localhost:5432/pathfinder"
     )
 
+    # Redis (event store + live SSE delivery)
+    redis_url: str = "redis://localhost:6379/0"
+
     # OpenAI
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
@@ -143,6 +146,10 @@ class Settings(BaseSettings):
 
     # VEuPathDB
     veupathdb_default_site: str = "plasmodb"
+    veupathdb_sites_config: str | None = Field(
+        default=None,
+        description="Optional path to a YAML file for site list and base URLs; defaults to bundled sites.yaml if unset.",
+    )
     veupathdb_cache_ttl: int = 3600
     veupathdb_auth_token: str | None = None
     veupathdb_oauth_url: str | None = None
