@@ -483,10 +483,10 @@ paths:
       tags:
       - chat
       summary: Chat
-      description: 'Send a chat message and receive streaming response.
+      description: 'Start a chat operation and return its operation ID.
 
 
-        Returns a Server-Sent Events stream with response chunks.'
+        The client subscribes to GET /operations/{operationId}/subscribe for SSE events.'
       operationId: chat_api_v1_chat_post
       requestBody:
         content:
@@ -495,12 +495,11 @@ paths:
               $ref: '#/components/schemas/ChatRequest'
         required: true
       responses:
-        '200':
+        '202':
           description: Successful Response
           content:
-            text/event-stream:
-              schema:
-                type: string
+            application/json:
+              schema: {}
         '422':
           description: Validation Error
           content:
@@ -514,7 +513,7 @@ paths:
       tags:
       - strategies
       summary: List Strategies
-      description: List user's saved strategies.
+      description: List user's conversation streams (projections).
       operationId: list_strategies_api_v1_strategies_get
       security:
       - APIKeyCookie: []
@@ -547,7 +546,7 @@ paths:
       tags:
       - strategies
       summary: Create Strategy
-      description: Create a new strategy.
+      description: Create a new strategy (CQRS only).
       operationId: create_strategy_api_v1_strategies_post
       security:
       - APIKeyCookie: []
@@ -575,8 +574,10 @@ paths:
       tags:
       - strategies
       summary: Get Strategy
-      description: Get a strategy by ID.
+      description: Get a strategy/stream by ID from the CQRS projection + Redis.
       operationId: get_strategy_api_v1_strategies__strategyId__get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: strategyId
         in: path
@@ -602,8 +603,10 @@ paths:
       tags:
       - strategies
       summary: Update Strategy
-      description: Update a strategy.
+      description: Update a strategy (CQRS only).
       operationId: update_strategy_api_v1_strategies__strategyId__patch
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: strategyId
         in: path
@@ -635,8 +638,10 @@ paths:
       tags:
       - strategies
       summary: Delete Strategy
-      description: Delete a strategy.
+      description: 'Delete a strategy: cancel ops, clean Redis stream, delete CQRS records.'
       operationId: delete_strategy_api_v1_strategies__strategyId__delete
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: strategyId
         in: path
@@ -748,6 +753,8 @@ paths:
       summary: List Wdk Strategies
       description: List strategies from VEuPathDB WDK.
       operationId: list_wdk_strategies_api_v1_strategies_wdk_get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: siteId
         in: query
@@ -778,14 +785,7 @@ paths:
       tags:
       - strategies
       summary: Sync All Wdk Strategies
-      description: 'Batch-sync all WDK strategies into the local DB and return the full list.
-
-
-        For each non-internal WDK strategy, fetches the full payload and upserts
-
-        a local copy. Returns the complete list of local strategies for this site
-
-        (including non-WDK drafts).'
+      description: Batch-sync all WDK strategies into the CQRS layer and return the full list.
       operationId: sync_all_wdk_strategies_api_v1_strategies_sync_wdk_post
       security:
       - APIKeyCookie: []
@@ -819,6 +819,8 @@ paths:
       summary: Delete Wdk Strategy
       description: Delete a strategy from VEuPathDB WDK.
       operationId: delete_wdk_strategy_api_v1_strategies_wdk__wdkStrategyId__delete
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: wdkStrategyId
         in: path
@@ -846,14 +848,12 @@ paths:
       tags:
       - strategies
       summary: Import Wdk Strategy
-      description: 'Import a WDK strategy as a local snapshot.
+      description: 'Import a WDK strategy as a local snapshot (CQRS only).
 
 
-        Upserts: if a local row already exists for this WDK strategy ID
+        Upserts: if a stream already exists for this WDK strategy ID,
 
-        (e.g. from a previous sync or double-click), it is updated rather
-
-        than creating a duplicate.'
+        it is updated rather than creating a duplicate.'
       operationId: import_wdk_strategy_api_v1_strategies_wdk__wdkStrategyId__import_post
       security:
       - APIKeyCookie: []
@@ -888,8 +888,10 @@ paths:
       tags:
       - strategies
       summary: Sync Strategy From Wdk
-      description: Sync local strategy snapshot from VEuPathDB WDK.
+      description: Sync local stream projection from VEuPathDB WDK.
       operationId: sync_strategy_from_wdk_api_v1_strategies__strategyId__sync_wdk_post
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: strategyId
         in: path
@@ -1313,8 +1315,10 @@ paths:
       tags:
       - experiments
       summary: Create Experiment
-      description: Create and run an experiment with SSE progress streaming.
+      description: Create and run an experiment as a background task.
       operationId: create_experiment_api_v1_experiments__post
+      security:
+      - APIKeyCookie: []
       requestBody:
         required: true
         content:
@@ -1322,12 +1326,15 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateExperimentRequest'
       responses:
-        '200':
-          description: SSE stream of experiment progress
+        '202':
+          description: Experiment launched as background task
           content:
-            text/event-stream:
+            application/json:
               schema:
-                type: string
+                type: object
+                properties:
+                  operationId:
+                    type: string
         '422':
           description: Validation Error
           content:
@@ -1340,6 +1347,8 @@ paths:
       summary: List Experiments
       description: List all experiments, optionally filtered by site.
       operationId: list_experiments_api_v1_experiments__get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: siteId
         in: query
@@ -1370,7 +1379,7 @@ paths:
       tags:
       - experiments
       summary: Create Batch Experiment
-      description: Run the same search across multiple organisms with SSE progress.
+      description: Run the same search across multiple organisms as a background task.
       operationId: create_batch_experiment_api_v1_experiments_batch_post
       requestBody:
         content:
@@ -1379,24 +1388,29 @@ paths:
               $ref: '#/components/schemas/CreateBatchExperimentRequest'
         required: true
       responses:
-        '200':
-          description: SSE stream of batch experiment progress
+        '202':
+          description: Batch experiment launched as background task
           content:
-            text/event-stream:
+            application/json:
               schema:
-                type: string
+                properties:
+                  operationId:
+                    type: string
+                type: object
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - APIKeyCookie: []
   /api/v1/experiments/benchmark:
     post:
       tags:
       - experiments
       summary: Create Benchmark
-      description: Run the same strategy against multiple control sets in parallel with SSE.
+      description: Run the same strategy against multiple control sets as a background task.
       operationId: create_benchmark_api_v1_experiments_benchmark_post
       requestBody:
         content:
@@ -1405,18 +1419,23 @@ paths:
               $ref: '#/components/schemas/CreateBenchmarkRequest'
         required: true
       responses:
-        '200':
-          description: SSE stream of benchmark suite progress
+        '202':
+          description: Benchmark suite launched as background task
           content:
-            text/event-stream:
+            application/json:
               schema:
-                type: string
+                properties:
+                  operationId:
+                    type: string
+                type: object
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - APIKeyCookie: []
   /api/v1/experiments/seed:
     post:
       tags:
@@ -1459,6 +1478,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - APIKeyCookie: []
   /api/v1/experiments/enrichment-compare:
     post:
       tags:
@@ -1485,6 +1506,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - APIKeyCookie: []
   /api/v1/experiments/ai-assist:
     post:
       tags:
@@ -1516,6 +1539,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - APIKeyCookie: []
   /api/v1/experiments/{experiment_id}/cross-validate:
     post:
       tags:
@@ -1523,6 +1548,8 @@ paths:
       summary: Run Cv
       description: Run cross-validation on an existing experiment.
       operationId: run_cv_api_v1_experiments__experiment_id__cross_validate_post
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1556,6 +1583,8 @@ paths:
       summary: Run Enrichment
       description: Run enrichment analysis on an existing experiment's results.
       operationId: run_enrichment_api_v1_experiments__experiment_id__enrich_post
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1592,6 +1621,8 @@ paths:
       summary: Custom Enrichment
       description: Test enrichment of a custom gene set against the experiment results.
       operationId: custom_enrichment_api_v1_experiments__experiment_id__custom_enrich_post
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1625,6 +1656,8 @@ paths:
       summary: Re Evaluate Experiment
       description: Re-run control evaluation against the (possibly modified) strategy.
       operationId: re_evaluate_experiment_api_v1_experiments__experiment_id__re_evaluate_post
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1650,8 +1683,17 @@ paths:
       tags:
       - experiments
       summary: Threshold Sweep
-      description: Sweep a numeric parameter across a range and compute metrics at each point.
+      description: 'Sweep a numeric parameter across a range and stream metrics as they complete.
+
+
+        Returns an SSE stream with ``sweep_point`` events for each completed point
+
+        and a final ``sweep_complete`` event with all results.  This gives the
+
+        frontend live progress instead of a loading spinner for several minutes.'
       operationId: threshold_sweep_api_v1_experiments__experiment_id__threshold_sweep_post
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1670,8 +1712,7 @@ paths:
           description: Successful Response
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
+              schema: {}
         '422':
           description: Validation Error
           content:
@@ -1690,6 +1731,8 @@ paths:
 
         each step contributes to the final strategy result.'
       operationId: step_contributions_api_v1_experiments__experiment_id__step_contributions_post
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1725,6 +1768,8 @@ paths:
       summary: Get Experiment Report
       description: Generate and return a self-contained HTML report for an experiment.
       operationId: get_experiment_report_api_v1_experiments__experiment_id__report_get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1738,36 +1783,6 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/experiments/importable-strategies:
-    get:
-      tags:
-      - experiments
-      summary: List Importable Strategies
-      description: List Pathfinder strategies available for import into experiments.
-      operationId: list_importable_strategies_api_v1_experiments_importable_strategies_get
-      parameters:
-      - name: siteId
-        in: query
-        required: true
-        schema:
-          type: string
-          title: Siteid
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/JSONObject'
-                title: Response List Importable Strategies Api V1 Experiments Importable Strategies Get
         '422':
           description: Validation Error
           content:
@@ -1805,6 +1820,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - APIKeyCookie: []
   /api/v1/experiments/importable-strategies/{strategy_id}/details:
     get:
       tags:
@@ -1816,6 +1833,8 @@ paths:
         \ ``customName``, etc.\n\nThis endpoint flattens the steps map into an array and enriches the\nstep tree so the frontend\
         \ can display search names and parameters."
       operationId: get_strategy_details_api_v1_experiments_importable_strategies__strategy_id__details_get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: strategy_id
         in: path
@@ -1849,6 +1868,8 @@ paths:
       summary: Get Experiment
       description: Get full experiment details including all results.
       operationId: get_experiment_api_v1_experiments__experiment_id__get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1875,6 +1896,8 @@ paths:
       summary: Update Experiment
       description: Update experiment metadata (e.g. notes).
       operationId: update_experiment_api_v1_experiments__experiment_id__patch
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1909,6 +1932,8 @@ paths:
       summary: Delete Experiment
       description: Delete an experiment and clean up its WDK strategy.
       operationId: delete_experiment_api_v1_experiments__experiment_id__delete
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1917,12 +1942,8 @@ paths:
           type: string
           title: Experiment Id
       responses:
-        '200':
+        '204':
           description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
         '422':
           description: Validation Error
           content:
@@ -1936,6 +1957,8 @@ paths:
       summary: Get Experiment Attributes
       description: Get available attributes for an experiment's record type.
       operationId: get_experiment_attributes_api_v1_experiments__experiment_id__results_attributes_get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1963,6 +1986,8 @@ paths:
       summary: Get Sortable Attributes
       description: Return only sortable (numeric) attributes, with suggestions for known score columns.
       operationId: get_sortable_attributes_api_v1_experiments__experiment_id__results_sortable_attributes_get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -1993,6 +2018,8 @@ paths:
 
         Requires a persisted WDK strategy (``wdkStepId`` must be set).'
       operationId: get_experiment_records_api_v1_experiments__experiment_id__results_records_get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -2068,6 +2095,8 @@ paths:
 
         from the site so WDK accepts the request.'
       operationId: get_experiment_record_detail_api_v1_experiments__experiment_id__results_record_post
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -2103,6 +2132,8 @@ paths:
       summary: Get Experiment Strategy
       description: Get the WDK strategy tree for an experiment.
       operationId: get_experiment_strategy_api_v1_experiments__experiment_id__strategy_get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -2130,6 +2161,8 @@ paths:
       summary: Get Experiment Distribution
       description: Get distribution data for an attribute using filter summary.
       operationId: get_experiment_distribution_api_v1_experiments__experiment_id__results_distributions__attribute_name__get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: attribute_name
         in: path
@@ -2163,6 +2196,8 @@ paths:
       summary: Get Experiment Analysis Types
       description: List available WDK step analysis types for an experiment.
       operationId: get_experiment_analysis_types_api_v1_experiments__experiment_id__analyses_types_get
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -2190,6 +2225,8 @@ paths:
       summary: Run Experiment Analysis
       description: Create and run a WDK step analysis on the experiment's step.
       operationId: run_experiment_analysis_api_v1_experiments__experiment_id__analyses_run_post
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -2223,6 +2260,8 @@ paths:
       summary: Refine Experiment
       description: Add a step to the experiment's strategy (combine, transform, etc.).
       operationId: refine_experiment_api_v1_experiments__experiment_id__refine_post
+      security:
+      - APIKeyCookie: []
       parameters:
       - name: experiment_id
         in: path
@@ -2351,7 +2390,7 @@ paths:
       tags:
       - control-sets
       summary: Delete Control Set
-      description: Delete a control set.
+      description: Delete a control set owned by the current user.
       operationId: delete_control_set_api_v1_control_sets__control_set_id__delete
       security:
       - APIKeyCookie: []
@@ -2379,12 +2418,6 @@ paths:
       description: Login via VEuPathDB /login, link internal user, and store auth cookies.
       operationId: login_with_password_api_v1_veupathdb_auth_login_post
       parameters:
-      - name: siteId
-        in: query
-        required: true
-        schema:
-          type: string
-          title: Siteid
       - name: redirectTo
         in: query
         required: false
@@ -2482,13 +2515,6 @@ paths:
       summary: Auth Status
       description: Return current VEuPathDB auth status.
       operationId: auth_status_api_v1_veupathdb_auth_status_get
-      parameters:
-      - name: siteId
-        in: query
-        required: true
-        schema:
-          type: string
-          title: Siteid
       responses:
         '200':
           description: Successful Response
@@ -2496,6 +2522,125 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthStatusResponse'
+  /api/v1/operations/{operation_id}/subscribe:
+    get:
+      tags:
+      - operations
+      summary: Subscribe
+      description: 'SSE stream backed by Redis Streams.
+
+
+        Catchup: replays events from `lastEventId` (or from the beginning).
+
+        Live: uses XREAD BLOCK for new events until a terminal event is seen.'
+      operationId: subscribe_api_v1_operations__operation_id__subscribe_get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Operation Id
+      - name: lastEventId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Resume from this Redis entry ID (for reconnection).
+          title: Lasteventid
+        description: Resume from this Redis entry ID (for reconnection).
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/operations/{operation_id}/cancel:
+    post:
+      tags:
+      - operations
+      summary: Cancel
+      description: 'Cancel a running operation.
+
+
+        For chat operations this cancels the background asyncio task running
+
+        the LLM agent. The producer''s CancelledError handler emits a
+
+        ``message_end`` event so any connected subscribers close cleanly.'
+      operationId: cancel_api_v1_operations__operation_id__cancel_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Operation Id
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSONObject'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/operations/active:
+    get:
+      tags:
+      - operations
+      summary: List Active
+      description: List active operations, optionally filtered by stream and/or type.
+      operationId: list_active_api_v1_operations_active_get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: streamId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by stream/strategy ID.
+          title: Streamid
+        description: Filter by stream/strategy ID.
+      - name: type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by operation type (chat, experiment).
+          title: Type
+        description: Filter by operation type (chat, experiment).
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JSONObject'
+                title: Response List Active Api V1 Operations Active Get
         '422':
           description: Validation Error
           content:
@@ -2581,17 +2726,19 @@ components:
           type: string
           title: Organism
         positiveControls:
-          items:
-            type: string
-          type: array
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
           title: Positivecontrols
-          nullable: true
         negativeControls:
-          items:
-            type: string
-          type: array
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
           title: Negativecontrols
-          nullable: true
       type: object
       required:
       - organism
@@ -3280,11 +3427,6 @@ components:
           anyOf:
           - $ref: '#/components/schemas/SubKaniActivityResponse'
           - type: 'null'
-        mode:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Mode
         citations:
           anyOf:
           - $ref: '#/components/schemas/JSONArray'

@@ -287,9 +287,9 @@ export type paths = {
         put?: never;
         /**
          * Chat
-         * @description Send a chat message and receive streaming response.
+         * @description Start a chat operation and return its operation ID.
          *
-         *     Returns a Server-Sent Events stream with response chunks.
+         *     The client subscribes to GET /operations/{operationId}/subscribe for SSE events.
          */
         post: operations["chat_api_v1_chat_post"];
         delete?: never;
@@ -307,13 +307,13 @@ export type paths = {
         };
         /**
          * List Strategies
-         * @description List user's saved strategies.
+         * @description List user's conversation streams (projections).
          */
         get: operations["list_strategies_api_v1_strategies_get"];
         put?: never;
         /**
          * Create Strategy
-         * @description Create a new strategy.
+         * @description Create a new strategy (CQRS only).
          */
         post: operations["create_strategy_api_v1_strategies_post"];
         delete?: never;
@@ -331,21 +331,21 @@ export type paths = {
         };
         /**
          * Get Strategy
-         * @description Get a strategy by ID.
+         * @description Get a strategy/stream by ID from the CQRS projection + Redis.
          */
         get: operations["get_strategy_api_v1_strategies__strategyId__get"];
         put?: never;
         post?: never;
         /**
          * Delete Strategy
-         * @description Delete a strategy.
+         * @description Delete a strategy: cancel ops, clean Redis stream, delete CQRS records.
          */
         delete: operations["delete_strategy_api_v1_strategies__strategyId__delete"];
         options?: never;
         head?: never;
         /**
          * Update Strategy
-         * @description Update a strategy.
+         * @description Update a strategy (CQRS only).
          */
         patch: operations["update_strategy_api_v1_strategies__strategyId__patch"];
         trace?: never;
@@ -444,11 +444,7 @@ export type paths = {
         put?: never;
         /**
          * Sync All Wdk Strategies
-         * @description Batch-sync all WDK strategies into the local DB and return the full list.
-         *
-         *     For each non-internal WDK strategy, fetches the full payload and upserts
-         *     a local copy. Returns the complete list of local strategies for this site
-         *     (including non-WDK drafts).
+         * @description Batch-sync all WDK strategies into the CQRS layer and return the full list.
          */
         post: operations["sync_all_wdk_strategies_api_v1_strategies_sync_wdk_post"];
         delete?: never;
@@ -488,11 +484,10 @@ export type paths = {
         put?: never;
         /**
          * Import Wdk Strategy
-         * @description Import a WDK strategy as a local snapshot.
+         * @description Import a WDK strategy as a local snapshot (CQRS only).
          *
-         *     Upserts: if a local row already exists for this WDK strategy ID
-         *     (e.g. from a previous sync or double-click), it is updated rather
-         *     than creating a duplicate.
+         *     Upserts: if a stream already exists for this WDK strategy ID,
+         *     it is updated rather than creating a duplicate.
          */
         post: operations["import_wdk_strategy_api_v1_strategies_wdk__wdkStrategyId__import_post"];
         delete?: never;
@@ -512,7 +507,7 @@ export type paths = {
         put?: never;
         /**
          * Sync Strategy From Wdk
-         * @description Sync local strategy snapshot from VEuPathDB WDK.
+         * @description Sync local stream projection from VEuPathDB WDK.
          */
         post: operations["sync_strategy_from_wdk_api_v1_strategies__strategyId__sync_wdk_post"];
         delete?: never;
@@ -704,7 +699,7 @@ export type paths = {
         put?: never;
         /**
          * Create Experiment
-         * @description Create and run an experiment with SSE progress streaming.
+         * @description Create and run an experiment as a background task.
          */
         post: operations["create_experiment_api_v1_experiments__post"];
         delete?: never;
@@ -724,7 +719,7 @@ export type paths = {
         put?: never;
         /**
          * Create Batch Experiment
-         * @description Run the same search across multiple organisms with SSE progress.
+         * @description Run the same search across multiple organisms as a background task.
          */
         post: operations["create_batch_experiment_api_v1_experiments_batch_post"];
         delete?: never;
@@ -744,7 +739,7 @@ export type paths = {
         put?: never;
         /**
          * Create Benchmark
-         * @description Run the same strategy against multiple control sets in parallel with SSE.
+         * @description Run the same strategy against multiple control sets as a background task.
          */
         post: operations["create_benchmark_api_v1_experiments_benchmark_post"];
         delete?: never;
@@ -927,7 +922,11 @@ export type paths = {
         put?: never;
         /**
          * Threshold Sweep
-         * @description Sweep a numeric parameter across a range and compute metrics at each point.
+         * @description Sweep a numeric parameter across a range and stream metrics as they complete.
+         *
+         *     Returns an SSE stream with ``sweep_point`` events for each completed point
+         *     and a final ``sweep_complete`` event with all results.  This gives the
+         *     frontend live progress instead of a loading spinner for several minutes.
          */
         post: operations["threshold_sweep_api_v1_experiments__experiment_id__threshold_sweep_post"];
         delete?: never;
@@ -971,26 +970,6 @@ export type paths = {
          * @description Generate and return a self-contained HTML report for an experiment.
          */
         get: operations["get_experiment_report_api_v1_experiments__experiment_id__report_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/experiments/importable-strategies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Importable Strategies
-         * @description List Pathfinder strategies available for import into experiments.
-         */
-        get: operations["list_importable_strategies_api_v1_experiments_importable_strategies_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1306,7 +1285,7 @@ export type paths = {
         post?: never;
         /**
          * Delete Control Set
-         * @description Delete a control set.
+         * @description Delete a control set owned by the current user.
          */
         delete: operations["delete_control_set_api_v1_control_sets__control_set_id__delete"];
         options?: never;
@@ -1409,6 +1388,73 @@ export type paths = {
          * @description Return current VEuPathDB auth status.
          */
         get: operations["auth_status_api_v1_veupathdb_auth_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/{operation_id}/subscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Subscribe
+         * @description SSE stream backed by Redis Streams.
+         *
+         *     Catchup: replays events from `lastEventId` (or from the beginning).
+         *     Live: uses XREAD BLOCK for new events until a terminal event is seen.
+         */
+        get: operations["subscribe_api_v1_operations__operation_id__subscribe_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/{operation_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel
+         * @description Cancel a running operation.
+         *
+         *     For chat operations this cancels the background asyncio task running
+         *     the LLM agent. The producer's CancelledError handler emits a
+         *     ``message_end`` event so any connected subscribers close cleanly.
+         */
+        post: operations["cancel_api_v1_operations__operation_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Active
+         * @description List active operations, optionally filtered by stream and/or type.
+         */
+        get: operations["list_active_api_v1_operations_active_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1886,8 +1932,6 @@ export type components = {
             /** Toolcalls */
             toolCalls?: components["schemas"]["ToolCallResponse"][] | null;
             subKaniActivity?: components["schemas"]["SubKaniActivityResponse"] | null;
-            /** Mode */
-            mode?: string | null;
             citations?: components["schemas"]["JSONArray"] | null;
             planningArtifacts?: components["schemas"]["JSONArray"] | null;
             /** Reasoning */
@@ -3202,12 +3246,12 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": string;
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -4015,13 +4059,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description SSE stream of experiment progress */
-            200: {
+            /** @description Experiment launched as background task */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": string;
+                    "application/json": {
+                        operationId?: string;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -4048,13 +4094,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description SSE stream of batch experiment progress */
-            200: {
+            /** @description Batch experiment launched as background task */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": string;
+                    "application/json": {
+                        operationId?: string;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -4081,13 +4129,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description SSE stream of benchmark suite progress */
-            200: {
+            /** @description Benchmark suite launched as background task */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": string;
+                    "application/json": {
+                        operationId?: string;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -4377,7 +4427,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JSONObject"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -4446,37 +4496,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_importable_strategies_api_v1_experiments_importable_strategies_get: {
-        parameters: {
-            query: {
-                siteId: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"][];
                 };
             };
             /** @description Validation Error */
@@ -4599,13 +4618,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -5082,8 +5099,7 @@ export interface operations {
     };
     login_with_password_api_v1_veupathdb_auth_login_post: {
         parameters: {
-            query: {
-                siteId: string;
+            query?: {
                 redirectTo?: string | null;
             };
             header?: never;
@@ -5191,9 +5207,7 @@ export interface operations {
     };
     auth_status_api_v1_veupathdb_auth_status_get: {
         parameters: {
-            query: {
-                siteId: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -5207,6 +5221,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthStatusResponse"];
+                };
+            };
+        };
+    };
+    subscribe_api_v1_operations__operation_id__subscribe_get: {
+        parameters: {
+            query?: {
+                /** @description Resume from this Redis entry ID (for reconnection). */
+                lastEventId?: string | null;
+            };
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_api_v1_operations__operation_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_active_api_v1_operations_active_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by stream/strategy ID. */
+                streamId?: string | null;
+                /** @description Filter by operation type (chat, experiment). */
+                type?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"][];
                 };
             };
             /** @description Validation Error */
