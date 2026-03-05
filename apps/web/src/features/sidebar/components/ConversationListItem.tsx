@@ -1,6 +1,6 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { MoreVertical } from "lucide-react";
-import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
+import type { Strategy } from "@pathfinder/shared";
 import type { ConversationItem } from "@/features/sidebar/components/conversationSidebarTypes";
 import { formatSidebarTime } from "@/lib/formatTime";
 
@@ -16,8 +16,8 @@ interface ConversationListItemProps {
   onSelect: (item: ConversationItem) => void;
   onStartRename: (item: ConversationItem) => void;
   onStartDelete: (item: ConversationItem) => void;
-  onStartDuplicate: (strategy: StrategyListItem) => void;
-  onToggleSaved: (strategy: StrategyListItem) => void;
+  onStartDuplicate: (strategy: Strategy) => void;
+  onToggleSaved: (strategy: Strategy) => void;
 }
 
 export function ConversationListItem({
@@ -75,7 +75,7 @@ export function ConversationListItem({
             </span>
             {item.kind === "strategy" &&
               si &&
-              (si.wdkStrategyId || si.stepCount > 0) && (
+              (si.wdkStrategyId || (si.stepCount ?? 0) > 0) && (
                 <span
                   className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
                     !si.wdkStrategyId

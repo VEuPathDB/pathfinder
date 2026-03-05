@@ -8,15 +8,18 @@
  * secondary input floats above it via absolute positioning.
  */
 
-import { useMemo } from "react";
-import { Pencil } from "lucide-react";
-import type { StrategyWithMeta } from "@pathfinder/shared";
+import { useCallback, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Layers, Loader2, Pencil } from "lucide-react";
+import type { Step, Strategy } from "@pathfinder/shared";
 import {
   buildSpineLayout,
   type CompactStep,
-  type SpineSegment,
 } from "@/features/strategy/graph/utils/compactLayout";
 import { VennIcon } from "@/features/strategy/graph/components/OpBadge";
+import { createGeneSetFromStrategy } from "@/features/workbench/api/geneSets";
+import { useWorkbenchStore } from "@/features/workbench/store";
+import { useSessionStore } from "@/state/useSessionStore";
 
 // Style helpers
 
@@ -112,10 +115,20 @@ function CombineSegment({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Find the root step from a built strategy. */
+function findRootStep(strategy: Strategy): Step | null {
+  if (!strategy.rootStepId || !strategy.steps?.length) return null;
+  return strategy.steps.find((s) => s.id === strategy.rootStepId) ?? null;
+}
+
 // Main component
 
 interface CompactStrategyViewProps {
-  strategy: StrategyWithMeta | null;
+  strategy: Strategy | null;
   onEditGraph?: () => void;
 }
 
@@ -123,10 +136,44 @@ export function CompactStrategyView({
   strategy,
   onEditGraph,
 }: CompactStrategyViewProps) {
+  const router = useRouter();
+  const addGeneSet = useWorkbenchStore((s) => s.addGeneSet);
+  const selectedSite = useSessionStore((s) => s.selectedSite);
+  const [openingWorkbench, setOpeningWorkbench] = useState(false);
+
   const spine = useMemo(() => {
     if (!strategy?.steps?.length || !strategy.rootStepId) return [];
     return buildSpineLayout(strategy.steps, strategy.rootStepId);
   }, [strategy]);
+
+  const canOpenInWorkbench = !!strategy?.wdkStrategyId;
+
+  const handleOpenInWorkbench = useCallback(async () => {
+    if (!strategy?.wdkStrategyId) return;
+    setOpeningWorkbench(true);
+
+    try {
+      const rootStep = findRootStep(strategy);
+      const name = strategy.name || "Strategy results";
+
+      const geneSet = await createGeneSetFromStrategy({
+        name,
+        siteId: strategy.siteId || selectedSite,
+        wdkStrategyId: strategy.wdkStrategyId,
+        wdkStepId: rootStep?.wdkStepId,
+        searchName: rootStep?.searchName,
+        recordType: strategy.recordType ?? rootStep?.recordType,
+        parameters: rootStep?.parameters as Record<string, unknown> | undefined,
+      });
+
+      addGeneSet(geneSet);
+      router.push("/workbench");
+    } catch (err) {
+      console.error("Failed to open strategy in workbench:", err);
+    } finally {
+      setOpeningWorkbench(false);
+    }
+  }, [strategy, selectedSite, addGeneSet, router]);
 
   if (!strategy || spine.length === 0) return null;
 
@@ -147,17 +194,35 @@ export function CompactStrategyView({
           ))}
         </div>
 
-        {/* Edit button — pinned outside the scroll area */}
-        {onEditGraph && (
-          <button
-            type="button"
-            onClick={onEditGraph}
-            className="mr-3 inline-flex shrink-0 items-center gap-1 self-center rounded border border-dashed border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-input hover:text-foreground"
-          >
-            <Pencil className="h-2.5 w-2.5" aria-hidden />
-            Edit
-          </button>
-        )}
+        {/* Action buttons — pinned outside the scroll area */}
+        <div className="mr-3 flex shrink-0 items-center gap-1.5 self-center">
+          {canOpenInWorkbench && (
+            <button
+              type="button"
+              onClick={handleOpenInWorkbench}
+              disabled={openingWorkbench}
+              className="inline-flex shrink-0 items-center gap-1 rounded border border-dashed border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-input hover:text-foreground disabled:opacity-50"
+            >
+              {openingWorkbench ? (
+                <Loader2 className="h-2.5 w-2.5 animate-spin" aria-hidden />
+              ) : (
+                <Layers className="h-2.5 w-2.5" aria-hidden />
+              )}
+              Workbench
+            </button>
+          )}
+
+          {onEditGraph && (
+            <button
+              type="button"
+              onClick={onEditGraph}
+              className="inline-flex shrink-0 items-center gap-1 rounded border border-dashed border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-input hover:text-foreground"
+            >
+              <Pencil className="h-2.5 w-2.5" aria-hidden />
+              Edit
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

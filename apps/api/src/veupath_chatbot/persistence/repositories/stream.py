@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from veupath_chatbot.persistence.models import Operation, Stream, StreamProjection
-from veupath_chatbot.platform.types import JSONArray, JSONObject
+from veupath_chatbot.platform.types import JSONObject
 
 
 class StreamRepository:
@@ -111,14 +111,15 @@ class StreamRepository:
         is_saved: bool | None = None,
         is_saved_set: bool = False,
         plan: JSONObject | None = None,
-        steps: JSONArray | None = None,
-        root_step_id: str | None = None,
-        root_step_id_set: bool = False,
         step_count: int | None = None,
         result_count: int | None = None,
         result_count_set: bool = False,
     ) -> None:
-        """Dynamically update a StreamProjection based on provided kwargs."""
+        """Dynamically update a StreamProjection based on provided kwargs.
+
+        Steps and root_step_id are derived from plan at read time; only plan
+        and a denormalized step_count are persisted on write.
+        """
         values: dict[str, Any] = {"updated_at": datetime.now(UTC)}
         if name is not None:
             values["name"] = name
@@ -130,11 +131,8 @@ class StreamRepository:
             values["is_saved"] = bool(is_saved)
         if plan is not None:
             values["plan"] = plan
-        if steps is not None:
-            values["steps"] = steps
-            values["step_count"] = step_count if step_count is not None else len(steps)
-        if root_step_id_set:
-            values["root_step_id"] = root_step_id
+        if step_count is not None:
+            values["step_count"] = step_count
         if result_count_set:
             values["result_count"] = result_count
 

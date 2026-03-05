@@ -21,6 +21,7 @@ from veupath_chatbot.ai.tools.planner.artifact_tools import ArtifactToolsMixin
 from veupath_chatbot.ai.tools.planner.experiment_tools import ExperimentToolsMixin
 from veupath_chatbot.ai.tools.planner.gene_tools import GeneToolsMixin
 from veupath_chatbot.ai.tools.planner.optimization_tools import OptimizationToolsMixin
+from veupath_chatbot.ai.tools.planner.workbench_tools import WorkbenchToolsMixin
 from veupath_chatbot.ai.tools.registry import AgentToolRegistryMixin
 
 
@@ -28,6 +29,7 @@ class UnifiedToolRegistryMixin(
     GeneToolsMixin,
     ExperimentToolsMixin,
     OptimizationToolsMixin,
+    WorkbenchToolsMixin,
     ArtifactToolsMixin,
     AgentToolRegistryMixin,
 ):

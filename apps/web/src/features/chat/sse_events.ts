@@ -2,7 +2,7 @@ import type {
   Citation,
   PlanningArtifact,
   OptimizationProgressData,
-  StrategyWithMeta,
+  Strategy,
 } from "@pathfinder/shared";
 import type { RawSSEEvent } from "@/lib/sse";
 import { isRecord } from "@/lib/utils/isRecord";
@@ -12,7 +12,7 @@ export type ChatSSEEvent =
       type: "message_start";
       data: {
         strategyId?: string;
-        strategy?: StrategyWithMeta;
+        strategy?: Strategy;
         authToken?: string;
       };
     }
@@ -63,6 +63,18 @@ export type ChatSSEEvent =
       data: OptimizationProgressData;
     }
   | { type: "error"; data: { error: string } }
+  | {
+      type: "workbench_gene_set";
+      data: {
+        geneSet?: {
+          id: string;
+          name: string;
+          geneCount: number;
+          source: string;
+          siteId: string;
+        };
+      };
+    }
   | { type: "unknown"; data: Record<string, unknown> | string; rawType: string };
 
 function safeJsonParse(text: string): Record<string, unknown> | string {
@@ -101,6 +113,7 @@ export function parseChatSSEEvent(
     case "graph_cleared":
     case "optimization_progress":
     case "error":
+    case "workbench_gene_set":
       return { type, data } as ChatSSEEvent;
     default:
       return {

@@ -9,21 +9,98 @@ import {
   startTransition,
 } from "react";
 import { type Edge, type Node, useNodesState, useEdgesState } from "reactflow";
-import type { StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
+import type { Step, Strategy } from "@pathfinder/shared";
 import { useStrategyStore } from "@/state/useStrategyStore";
-import { useStrategyListStore } from "@/state/useStrategyListStore";
 import { validateStepsForSave } from "@/features/strategy/validation/save";
-import { useWarningGroupNodes } from "@/features/strategy/graph/hooks/useWarningGroupNodes";
-import { useMarkUnsavedNodes } from "@/features/strategy/graph/hooks/useMarkUnsavedNodes";
 import { useSaveValidation } from "@/features/strategy/validation/useSaveValidation";
 import { useSessionStore } from "@/state/useSessionStore";
-import { getCombineMismatchGroups, inferStepKind } from "@/lib/strategyGraph";
+import {
+  getCombineMismatchGroups,
+  inferStepKind,
+  type CombineMismatchGroup,
+} from "@/lib/strategyGraph";
+import { isRecord } from "@/lib/utils/isRecord";
 
 const DEFAULT_NODE_WIDTH = 224;
 const DEFAULT_NODE_HEIGHT = 112;
+const WARNING_PADDING = 16;
+
+type NodeData = Record<string, unknown> & {
+  isUnsaved?: boolean;
+  step?: Step;
+};
+
+function computeWarningGroupNodes(
+  nodes: Node[],
+  groups: CombineMismatchGroup[],
+): Node[] {
+  if (groups.length === 0) return [];
+  return groups.flatMap((group) => {
+    const targetNodes = nodes.filter((node) => group.ids.has(node.id));
+    if (targetNodes.length < 2) return [];
+    const minX = Math.min(...targetNodes.map((n) => n.position.x));
+    const minY = Math.min(...targetNodes.map((n) => n.position.y));
+    const maxX = Math.max(
+      ...targetNodes.map((n) => n.position.x + (n.width ?? DEFAULT_NODE_WIDTH)),
+    );
+    const maxY = Math.max(
+      ...targetNodes.map((n) => n.position.y + (n.height ?? DEFAULT_NODE_HEIGHT)),
+    );
+    const groupWidth = maxX - minX + WARNING_PADDING * 2;
+    const groupHeight = maxY - minY + WARNING_PADDING * 2;
+    const groupLeft = minX - WARNING_PADDING;
+    const groupTop = minY - WARNING_PADDING;
+    return [
+      {
+        id: `warning-group-${group.id}`,
+        type: "warningGroup",
+        position: { x: groupLeft, y: groupTop },
+        data: { message: group.message },
+        className: "warning-group-node warning-dash",
+        selectable: false,
+        draggable: false,
+        connectable: false,
+        deletable: false,
+        focusable: false,
+        width: groupWidth,
+        height: groupHeight,
+        style: {
+          width: groupWidth,
+          height: groupHeight,
+          zIndex: 50,
+          pointerEvents: "none",
+          background: "transparent",
+          overflow: "visible",
+          borderRadius: 14,
+          boxSizing: "border-box",
+        },
+      } as Node,
+      {
+        id: `warning-icon-${group.id}`,
+        type: "warningIcon",
+        position: { x: groupLeft - 8, y: groupTop - 8 },
+        data: { message: group.message },
+        selectable: false,
+        draggable: false,
+        connectable: false,
+        deletable: false,
+        focusable: false,
+        width: 24,
+        height: 24,
+        style: {
+          width: 24,
+          height: 24,
+          zIndex: 60,
+          pointerEvents: "auto",
+          background: "transparent",
+        },
+      } as Node,
+    ];
+  });
+}
 
 interface UseStrategyGraphNodesOptions {
-  strategy: StrategyWithMeta | null;
+  strategy: Strategy | null;
   siteId: string;
   variant: "full" | "compact";
 }
@@ -40,7 +117,7 @@ export function useStrategyGraphNodes(options: UseStrategyGraphNodesOptions) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [lastSavedStepsVersion, setLastSavedStepsVersion] = useState(0);
   const [lastSavedSteps, setLastSavedSteps] = useState<Map<string, string>>(new Map());
-  const [selectedStep, setSelectedStep] = useState<StrategyStep | null>(null);
+  const [selectedStep, setSelectedStep] = useState<Step | null>(null);
   const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   const draftStrategy = useStrategyStore((state) => state.strategy);
@@ -48,7 +125,7 @@ export function useStrategyGraphNodes(options: UseStrategyGraphNodesOptions) {
     (state) => state.setStepValidationErrors,
   );
   const buildPlan = useStrategyStore((state) => state.buildPlan);
-  const setGraphValidationStatus = useStrategyListStore(
+  const setGraphValidationStatus = useStrategyStore(
     (state) => state.setGraphValidationStatus,
   );
 
@@ -57,7 +134,7 @@ export function useStrategyGraphNodes(options: UseStrategyGraphNodesOptions) {
     [draftStrategy?.steps, strategy?.steps],
   );
 
-  const buildStepSignature = useCallback((step: StrategyStep) => {
+  const buildStepSignature = useCallback((step: Step) => {
     const kind = inferStepKind(step);
     return JSON.stringify({
       kind,
@@ -76,12 +153,10 @@ export function useStrategyGraphNodes(options: UseStrategyGraphNodesOptions) {
     return getCombineMismatchGroups(steps);
   }, [draftStrategy?.steps, strategy?.steps]);
 
-  const warningGroupNodes = useWarningGroupNodes({
-    nodes,
-    groups: combineMismatchGroups,
-    defaultNodeWidth: DEFAULT_NODE_WIDTH,
-    defaultNodeHeight: DEFAULT_NODE_HEIGHT,
-  });
+  const warningGroupNodes = useMemo(
+    () => computeWarningGroupNodes(nodes, combineMismatchGroups),
+    [nodes, combineMismatchGroups],
+  );
 
   const renderNodes = useMemo(
     () => (warningGroupNodes.length > 0 ? [...warningGroupNodes, ...nodes] : nodes),
@@ -116,7 +191,7 @@ export function useStrategyGraphNodes(options: UseStrategyGraphNodesOptions) {
   const planResult = buildPlan();
   const planHash = planResult ? JSON.stringify(planResult.plan) : null;
   const graphIdForValidation = draftStrategy?.id || strategy?.id || null;
-  const graphHasValidationIssues = useStrategyListStore((state) =>
+  const graphHasValidationIssues = useStrategyStore((state) =>
     graphIdForValidation ? !!state.graphValidationStatus[graphIdForValidation] : false,
   );
 
@@ -147,7 +222,20 @@ export function useStrategyGraphNodes(options: UseStrategyGraphNodesOptions) {
     );
   }, [nodes]);
 
-  useMarkUnsavedNodes({ dirtyStepIds, dirtyKey: dirtyStepIdsKey, setNodes });
+  // Mark nodes with unsaved indicator
+  useEffect(() => {
+    setNodes((prev) =>
+      prev.map((node) => ({
+        ...node,
+        data: {
+          ...((node.data && isRecord(node.data)
+            ? (node.data as NodeData)
+            : {}) as NodeData),
+          isUnsaved: dirtyStepIds.has(node.id),
+        },
+      })),
+    );
+  }, [dirtyStepIdsKey, dirtyStepIds, setNodes]);
 
   // Validate search steps
   const validateSearchSteps = useCallback(async () => {

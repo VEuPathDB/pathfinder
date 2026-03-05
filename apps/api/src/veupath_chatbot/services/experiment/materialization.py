@@ -14,16 +14,13 @@ from veupath_chatbot.integrations.veupathdb.strategy_api import (
 )
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject, as_json_object
-from veupath_chatbot.services.experiment.helpers import coerce_step_id
+from veupath_chatbot.services.experiment.helpers import coerce_step_id, extract_wdk_id
 from veupath_chatbot.services.experiment.types import (
     Experiment,
     ExperimentConfig,
 )
 
 logger = get_logger(__name__)
-
-# Re-export for backwards compatibility with existing callers.
-_coerce_step_id = coerce_step_id
 
 
 async def _materialize_step_tree(
@@ -66,7 +63,7 @@ async def _materialize_step_tree(
             record_type=record_type,
             custom_name=display_name,
         )
-        step_id = _coerce_step_id(step)
+        step_id = coerce_step_id(step)
         return StepTreeNode(
             step_id, primary_input=primary_tree, secondary_input=secondary_tree
         )
@@ -78,7 +75,7 @@ async def _materialize_step_tree(
             record_type=record_type,
             custom_name=display_name,
         )
-        step_id = _coerce_step_id(step)
+        step_id = coerce_step_id(step)
         return StepTreeNode(step_id, primary_input=primary_tree)
     else:
         step = await api.create_step(
@@ -87,7 +84,7 @@ async def _materialize_step_tree(
             parameters=parameters,
             custom_name=display_name,
         )
-        step_id = _coerce_step_id(step)
+        step_id = coerce_step_id(step)
         return StepTreeNode(step_id)
 
 
@@ -131,7 +128,7 @@ async def _persist_experiment_strategy(
             parameters=config.parameters or {},
             custom_name=f"Experiment: {config.name}",
         )
-        step_id = _coerce_step_id(step_payload)
+        step_id = coerce_step_id(step_payload)
         root_tree = StepTreeNode(step_id)
 
     created = await api.create_strategy(
@@ -140,11 +137,7 @@ async def _persist_experiment_strategy(
         description=f"Persisted strategy for experiment {config.name}",
         is_internal=True,
     )
-    strategy_id: int | None = None
-    if isinstance(created, dict):
-        raw = created.get("id")
-        if isinstance(raw, int):
-            strategy_id = raw
+    strategy_id = extract_wdk_id(created)
     if strategy_id is None:
         raise ValueError("Failed to create WDK strategy for experiment")
 
@@ -213,11 +206,7 @@ async def _persist_import_strategy(
         description=f"Imported strategy for experiment {config.name}",
         is_internal=True,
     )
-    strategy_id: int | None = None
-    if isinstance(created, dict):
-        raw = created.get("id")
-        if isinstance(raw, int):
-            strategy_id = raw
+    strategy_id = extract_wdk_id(created)
     if strategy_id is None:
         raise ValueError("Failed to create WDK strategy from imported tree")
 

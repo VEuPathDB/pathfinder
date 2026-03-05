@@ -1,25 +1,14 @@
 "use client";
 
 import { Loader2, Save } from "lucide-react";
+import { useStrategyGraphCtx } from "@/features/strategy/graph/StrategyGraphContext";
 
-interface StrategyGraphActionButtonsProps {
-  canSave: boolean;
-  onSave: () => void;
-  onSaveDisabled?: () => void;
-  saveDisabledReason?: string;
-  isSaving: boolean;
-  isUnsaved: boolean;
-}
+export function StrategyGraphActionButtons() {
+  const { canSave, handleSave, saveDisabledReason, isSaving, isUnsaved, onToast } =
+    useStrategyGraphCtx();
 
-export function StrategyGraphActionButtons({
-  canSave,
-  onSave,
-  onSaveDisabled,
-  saveDisabledReason,
-  isSaving,
-  isUnsaved,
-}: StrategyGraphActionButtonsProps) {
   const saveIsDisabled = !canSave || isSaving;
+
   return (
     <div className="pointer-events-auto absolute bottom-4 right-4 z-10 flex flex-col gap-2">
       <div className="flex items-center justify-end gap-2 rounded-xl border border-border bg-card/90 p-2 shadow-sm backdrop-blur">
@@ -27,10 +16,13 @@ export function StrategyGraphActionButtons({
           type="button"
           onClick={() => {
             if (saveIsDisabled) {
-              onSaveDisabled?.();
+              onToast?.({
+                type: "warning",
+                message: saveDisabledReason || "Cannot save.",
+              });
               return;
             }
-            onSave();
+            void handleSave();
           }}
           aria-disabled={saveIsDisabled}
           aria-label={

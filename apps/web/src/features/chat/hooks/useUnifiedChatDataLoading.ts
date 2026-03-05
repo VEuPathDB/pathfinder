@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, startTransition } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { APIError, getStrategy } from "@/lib/api/client";
 import { mergeMessages } from "@/features/chat/utils/mergeMessages";
-import type { Message, StrategyWithMeta } from "@pathfinder/shared";
+import type { Message, Strategy } from "@pathfinder/shared";
 import type { useThinkingState } from "@/features/chat/hooks/useThinkingState";
 import type { StreamingSession } from "@/features/chat/streaming/StreamingSession";
 import { useSessionStore } from "@/state/useSessionStore";
@@ -36,7 +36,7 @@ export function useUnifiedChatDataLoading({
   const prevAuthRef = useRef(authToken);
 
   const applyStrategy = useCallback(
-    (strategy: StrategyWithMeta, targetStrategyId: string) => {
+    (strategy: Strategy, targetStrategyId: string) => {
       const incoming = strategy.messages || [];
       console.log("[DataLoading] applyStrategy", {
         strategyId: targetStrategyId,

@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import type { Message, ToolCall, StrategyWithMeta } from "@pathfinder/shared";
+import type { Message, ToolCall, Strategy } from "@pathfinder/shared";
 import type { Dispatch, SetStateAction } from "react";
 import {
   fetchActiveOperations,
@@ -28,14 +28,14 @@ interface UseOperationRecoveryArgs {
   isStreaming: boolean;
   setIsStreaming: (v: boolean) => void;
   setMessages: Dispatch<SetStateAction<Message[]>>;
-  setUndoSnapshots: Dispatch<SetStateAction<Record<number, StrategyWithMeta>>>;
+  setUndoSnapshots: Dispatch<SetStateAction<Record<number, Strategy>>>;
   thinking: ReturnType<typeof useThinkingState>;
-  currentStrategy: StrategyWithMeta | null;
+  currentStrategy: Strategy | null;
   setStrategyId: (id: string | null) => void;
   addStrategy: ChatEventContext["addStrategy"];
-  addExecutedStrategy: (s: StrategyWithMeta) => void;
+  addExecutedStrategy: (s: Strategy) => void;
   setWdkInfo: ChatEventContext["setWdkInfo"];
-  setStrategy: (s: StrategyWithMeta | null) => void;
+  setStrategy: (s: Strategy | null) => void;
   setStrategyMeta: ChatEventContext["setStrategyMeta"];
   clearStrategy: () => void;
   addStep: ChatEventContext["addStep"];
@@ -43,7 +43,7 @@ interface UseOperationRecoveryArgs {
   parseToolArguments: ChatEventContext["parseToolArguments"];
   parseToolResult: ChatEventContext["parseToolResult"];
   applyGraphSnapshot: ChatEventContext["applyGraphSnapshot"];
-  getStrategy: (id: string) => Promise<StrategyWithMeta>;
+  getStrategy: (id: string) => Promise<Strategy>;
   attachThinkingToLastAssistant: (
     calls: ToolCall[],
     activity?: { calls: Record<string, ToolCall[]>; status: Record<string, string> },

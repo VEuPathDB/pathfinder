@@ -1,11 +1,11 @@
-import type { StrategySummary } from "@pathfinder/shared";
+import type { Strategy } from "@pathfinder/shared";
 import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 
 export function buildDraftStrategySummary(args: {
   id: string;
   siteId: string;
   nowIso: () => string;
-}): StrategySummary {
+}): Strategy {
   const { id, siteId, nowIso } = args;
   const ts = nowIso();
   return {
@@ -19,5 +19,7 @@ export function buildDraftStrategySummary(args: {
     wdkStrategyId: undefined,
     createdAt: ts,
     updatedAt: ts,
+    steps: [],
+    rootStepId: null,
   };
 }

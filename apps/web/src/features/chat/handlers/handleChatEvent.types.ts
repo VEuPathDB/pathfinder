@@ -5,8 +5,8 @@ import type {
   Citation,
   PlanningArtifact,
   OptimizationProgressData,
-  StrategyStep,
-  StrategyWithMeta,
+  Step,
+  Strategy,
 } from "@pathfinder/shared";
 import type { useThinkingState } from "@/features/chat/hooks/useThinkingState";
 import type { StreamingSession } from "@/features/chat/streaming/StreamingSession";
@@ -34,38 +34,27 @@ export type ChatEventContext = {
 
   // Strategy/session actions
   setStrategyId: (id: string | null) => void;
-  addStrategy: (s: {
-    id: string;
-    name: string;
-    title: string;
-    siteId: string;
-    recordType: string | null;
-    stepCount: number;
-    resultCount?: number;
-    wdkStrategyId?: number;
-    createdAt: string;
-    updatedAt: string;
-  }) => void;
-  addExecutedStrategy: (s: StrategyWithMeta) => void;
+  addStrategy: (s: Strategy) => void;
+  addExecutedStrategy: (s: Strategy) => void;
   setWdkInfo: (
     wdkStrategyId: number,
     wdkUrl?: string | null,
     name?: string | null,
     description?: string | null,
   ) => void;
-  setStrategy: (s: StrategyWithMeta | null) => void;
-  setStrategyMeta: (u: Partial<StrategyWithMeta>) => void;
+  setStrategy: (s: Strategy | null) => void;
+  setStrategyMeta: (u: Partial<Strategy>) => void;
   clearStrategy: () => void;
-  addStep: (s: StrategyStep) => void;
+  addStep: (s: Step) => void;
   loadGraph: (graphId: string) => void;
 
   /** Mutable streaming session scoped to this stream. */
   session: StreamingSession;
-  currentStrategy: StrategyWithMeta | null;
+  currentStrategy: Strategy | null;
 
   // UI state setters
   setMessages: Dispatch<SetStateAction<Message[]>>;
-  setUndoSnapshots: Dispatch<SetStateAction<Record<number, StrategyWithMeta>>>;
+  setUndoSnapshots: Dispatch<SetStateAction<Record<number, Strategy>>>;
 
   // Helpers
   parseToolArguments: (args: unknown) => Record<string, unknown>;
@@ -73,7 +62,7 @@ export type ChatEventContext = {
     result?: string | null,
   ) => { graphSnapshot?: Record<string, unknown> } | null;
   applyGraphSnapshot: (graphSnapshot: Record<string, unknown>) => void;
-  getStrategy: (id: string) => Promise<StrategyWithMeta>;
+  getStrategy: (id: string) => Promise<Strategy>;
   streamState: StreamSessionState;
 
   setOptimizationProgress: Dispatch<SetStateAction<OptimizationProgressData | null>>;

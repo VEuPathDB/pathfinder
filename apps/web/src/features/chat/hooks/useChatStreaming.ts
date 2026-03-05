@@ -7,8 +7,8 @@ import type {
   ModelSelection,
   OptimizationProgressData,
   PlanningArtifact,
-  StrategyStep,
-  StrategyWithMeta,
+  Step,
+  Strategy,
 } from "@pathfinder/shared";
 import type { ChatSSEEvent } from "@/features/chat/sse_events";
 import { streamChat } from "@/features/chat/stream";
@@ -33,25 +33,23 @@ interface UseChatStreamingArgs {
   setDraftSelection: (selection: Record<string, unknown> | null) => void;
   thinking: Thinking;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
-  setUndoSnapshots: React.Dispatch<
-    React.SetStateAction<Record<number, StrategyWithMeta>>
-  >;
+  setUndoSnapshots: React.Dispatch<React.SetStateAction<Record<number, Strategy>>>;
   sessionRef: { current: StreamingSession | null };
   createSession: () => StreamingSession;
   loadGraph: (graphId: string) => void;
   addStrategy: (strategy: AddStrategyInput) => void;
-  addExecutedStrategy: (strategy: StrategyWithMeta) => void;
+  addExecutedStrategy: (strategy: Strategy) => void;
   setStrategyId: (id: string | null) => void;
   setWdkInfo: ChatEventContext["setWdkInfo"];
-  setStrategy: (strategy: StrategyWithMeta | null) => void;
+  setStrategy: (strategy: Strategy | null) => void;
   setStrategyMeta: ChatEventContext["setStrategyMeta"];
   clearStrategy: () => void;
-  addStep: (step: StrategyStep) => void;
+  addStep: (step: Step) => void;
   parseToolArguments: ChatEventContext["parseToolArguments"];
   parseToolResult: ChatEventContext["parseToolResult"];
   applyGraphSnapshot: (graphSnapshot: GraphSnapshotInput) => void;
-  getStrategy: (id: string) => Promise<StrategyWithMeta>;
-  currentStrategy: StrategyWithMeta | null;
+  getStrategy: (id: string) => Promise<Strategy>;
+  currentStrategy: Strategy | null;
   attachThinkingToLastAssistant: (
     calls: ToolCall[],
     activity?: { calls: Record<string, ToolCall[]>; status: Record<string, string> },

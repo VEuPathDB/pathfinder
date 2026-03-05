@@ -1,26 +1,26 @@
 """Tests for experiment result helpers."""
 
-from veupath_chatbot.transport.http.routers.experiments.results import (
-    _extract_displayable_attr_names,
-    _extract_pk,
-    _order_primary_key,
+from veupath_chatbot.services.wdk.helpers import (
+    extract_displayable_attr_names,
+    extract_pk,
+    order_primary_key,
 )
 
 
 class TestExtractPk:
     def test_extracts_first_value(self):
         record = {"id": [{"name": "source_id", "value": "PF3D7_0100100"}]}
-        assert _extract_pk(record) == "PF3D7_0100100"
+        assert extract_pk(record) == "PF3D7_0100100"
 
     def test_strips_whitespace(self):
         record = {"id": [{"name": "source_id", "value": "  PF3D7_0100100  "}]}
-        assert _extract_pk(record) == "PF3D7_0100100"
+        assert extract_pk(record) == "PF3D7_0100100"
 
     def test_returns_none_for_empty_list(self):
-        assert _extract_pk({"id": []}) is None
+        assert extract_pk({"id": []}) is None
 
     def test_returns_none_for_missing_id(self):
-        assert _extract_pk({}) is None
+        assert extract_pk({}) is None
 
 
 class TestOrderPrimaryKey:
@@ -37,7 +37,7 @@ class TestOrderPrimaryKey:
             {"name": "source_id", "value": "PF3D7_0100100"},
         ]
         pk_refs = ["source_id", "project_id"]
-        result = _order_primary_key(pk_parts, pk_refs, pk_defaults={})
+        result = order_primary_key(pk_parts, pk_refs, pk_defaults={})
         assert result == [
             {"name": "source_id", "value": "PF3D7_0100100"},
             {"name": "project_id", "value": "PlasmoDB"},
@@ -47,7 +47,7 @@ class TestOrderPrimaryKey:
         """Missing project_id is filled from pk_defaults."""
         pk_parts = [{"name": "source_id", "value": "PF3D7_0100100"}]
         pk_refs = ["source_id", "project_id"]
-        result = _order_primary_key(
+        result = order_primary_key(
             pk_parts, pk_refs, pk_defaults={"project_id": "PlasmoDB"}
         )
         assert result == [
@@ -62,13 +62,13 @@ class TestOrderPrimaryKey:
             {"name": "project_id", "value": "PlasmoDB"},
         ]
         pk_refs = ["source_id", "project_id"]
-        result = _order_primary_key(pk_parts, pk_refs, pk_defaults={})
+        result = order_primary_key(pk_parts, pk_refs, pk_defaults={})
         assert result == pk_parts
 
     def test_empty_refs_returns_empty(self):
         """Empty primaryKeyColumnRefs returns empty list."""
         pk_parts = [{"name": "source_id", "value": "PF3D7_0100100"}]
-        result = _order_primary_key(pk_parts, [], pk_defaults={})
+        result = order_primary_key(pk_parts, [], pk_defaults={})
         assert result == []
 
     def test_extra_pk_parts_ignored(self):
@@ -79,7 +79,7 @@ class TestOrderPrimaryKey:
             {"name": "extra_col", "value": "junk"},
         ]
         pk_refs = ["source_id", "project_id"]
-        result = _order_primary_key(pk_parts, pk_refs, pk_defaults={})
+        result = order_primary_key(pk_parts, pk_refs, pk_defaults={})
         assert len(result) == 2
         assert result[0]["name"] == "source_id"
         assert result[1]["name"] == "project_id"
@@ -88,7 +88,7 @@ class TestOrderPrimaryKey:
         """Missing PK column with no default gets empty string value."""
         pk_parts = [{"name": "source_id", "value": "PF3D7_0100100"}]
         pk_refs = ["source_id", "project_id"]
-        result = _order_primary_key(pk_parts, pk_refs, pk_defaults={})
+        result = order_primary_key(pk_parts, pk_refs, pk_defaults={})
         assert result[1] == {"name": "project_id", "value": ""}
 
 
@@ -108,7 +108,7 @@ class TestExtractDisplayableAttrNames:
             "product": {"displayName": "Product", "isDisplayable": True},
             "internal_col": {"displayName": "Internal", "isDisplayable": False},
         }
-        result = _extract_displayable_attr_names(attrs)
+        result = extract_displayable_attr_names(attrs)
         assert "source_id" in result
         assert "product" in result
         assert "internal_col" not in result
@@ -120,7 +120,7 @@ class TestExtractDisplayableAttrNames:
             {"name": "product", "displayName": "Product", "isDisplayable": True},
             {"name": "internal_col", "displayName": "Internal", "isDisplayable": False},
         ]
-        result = _extract_displayable_attr_names(attrs)
+        result = extract_displayable_attr_names(attrs)
         assert "source_id" in result
         assert "product" in result
         assert "internal_col" not in result
@@ -137,7 +137,7 @@ class TestExtractDisplayableAttrNames:
             {"isDisplayable": True},
             {"name": None, "isDisplayable": True},
         ]
-        result = _extract_displayable_attr_names(attrs)
+        result = extract_displayable_attr_names(attrs)
         assert result == ["source_id"]
 
     def test_filters_empty_names_from_dict(self):
@@ -146,14 +146,14 @@ class TestExtractDisplayableAttrNames:
             "source_id": {"isDisplayable": True},
             "": {"isDisplayable": True},
         }
-        result = _extract_displayable_attr_names(attrs)
+        result = extract_displayable_attr_names(attrs)
         assert result == ["source_id"]
 
     def test_returns_empty_for_unexpected_type(self):
         """Non-dict, non-list input returns empty list."""
-        assert _extract_displayable_attr_names("unexpected") == []
-        assert _extract_displayable_attr_names(None) == []
-        assert _extract_displayable_attr_names(42) == []
+        assert extract_displayable_attr_names("unexpected") == []
+        assert extract_displayable_attr_names(None) == []
+        assert extract_displayable_attr_names(42) == []
 
     def test_defaults_is_displayable_to_true(self):
         """Attributes missing ``isDisplayable`` are treated as displayable.
@@ -164,5 +164,5 @@ class TestExtractDisplayableAttrNames:
         attrs = [
             {"name": "gene_type", "displayName": "Gene Type"},
         ]
-        result = _extract_displayable_attr_names(attrs)
+        result = extract_displayable_attr_names(attrs)
         assert "gene_type" in result

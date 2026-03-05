@@ -97,9 +97,9 @@ def test_chat_request_with_mentions() -> None:
 # ── Strategy schemas ──
 
 
-def test_strategy_summary_response() -> None:
+def test_strategy_response_summary_fields() -> None:
     now = datetime.now(UTC)
-    summary = schemas.StrategySummaryResponse(
+    resp = schemas.StrategyResponse(
         id=uuid4(),
         name="Strategy A",
         siteId="plasmodb",
@@ -108,8 +108,9 @@ def test_strategy_summary_response() -> None:
         createdAt=now,
         updatedAt=now,
     )
-    assert summary.step_count == 3
-    assert summary.is_saved is False
+    assert resp.step_count == 3
+    assert resp.is_saved is False
+    assert resp.steps == []  # default empty for list views
 
 
 def test_open_strategy_request_requires_at_least_one_id() -> None:

@@ -1,8 +1,7 @@
-import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
-import type { StrategyWithMeta } from "@pathfinder/shared";
+import type { Strategy } from "@pathfinder/shared";
 
 export type DuplicateModalState = {
-  item: StrategyListItem;
+  item: Strategy;
   name: string;
   description: string;
   isLoading: boolean;
@@ -10,7 +9,7 @@ export type DuplicateModalState = {
   error: string | null;
 };
 
-export function initDuplicateModal(item: StrategyListItem): DuplicateModalState {
+export function initDuplicateModal(item: Strategy): DuplicateModalState {
   return {
     item,
     name: item.name,
@@ -23,7 +22,7 @@ export function initDuplicateModal(item: StrategyListItem): DuplicateModalState 
 
 export function applyDuplicateLoadSuccess(
   prev: DuplicateModalState,
-  strategy: StrategyWithMeta,
+  strategy: Strategy,
 ): DuplicateModalState {
   return {
     ...prev,

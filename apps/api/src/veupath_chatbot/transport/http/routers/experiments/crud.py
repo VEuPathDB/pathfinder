@@ -44,6 +44,7 @@ async def create_strategy(
     the WDK strategy ID so it can be used with ``mode="import"`` experiments.
     """
     from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
+    from veupath_chatbot.services.experiment.helpers import extract_wdk_id
     from veupath_chatbot.services.experiment.materialization import (
         _materialize_step_tree,
     )
@@ -63,11 +64,7 @@ async def create_strategy(
         description=request.description,
         is_saved=True,
     )
-    strategy_id: int | None = None
-    if isinstance(created, dict):
-        raw = created.get("id")
-        if isinstance(raw, int):
-            strategy_id = raw
+    strategy_id = extract_wdk_id(created)
 
     return {
         "wdkStrategyId": strategy_id,

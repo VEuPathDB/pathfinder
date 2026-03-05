@@ -1,17 +1,17 @@
 import type { Connection, Edge } from "reactflow";
-import type { StrategyStep } from "@pathfinder/shared";
+import type { Step } from "@pathfinder/shared";
 import { inferStepKind } from "@/lib/strategyGraph";
 import { resolveRecordType } from "@/lib/strategyGraph";
 
 export type GraphIndices = {
-  stepsById: Map<string, StrategyStep>;
+  stepsById: Map<string, Step>;
   usedAsInputCount: Map<string, number>;
   rootIds: string[];
   rootSet: Set<string>;
 };
 
-export function buildGraphIndices(steps: StrategyStep[]): GraphIndices {
-  const stepsById = new Map<string, StrategyStep>();
+export function buildGraphIndices(steps: Step[]): GraphIndices {
+  const stepsById = new Map<string, Step>();
   const usedAsInputCount = new Map<string, number>();
   for (const step of steps) {
     stepsById.set(step.id, step);
@@ -44,7 +44,7 @@ export function buildGraphIndices(steps: StrategyStep[]): GraphIndices {
 export function isUpstream(
   sourceId: string,
   maybeUpstreamId: string,
-  stepsById: Map<string, StrategyStep>,
+  stepsById: Map<string, Step>,
 ) {
   // Walk upstream pointers (inputs) starting from sourceId.
   const visited = new Set<string>();
@@ -99,7 +99,7 @@ export function isValidGraphConnection(connection: Connection, indices: GraphInd
 }
 
 export type ConnectionEffect =
-  | { type: "patch"; targetId: string; patch: Partial<StrategyStep> }
+  | { type: "patch"; targetId: string; patch: Partial<Step> }
   | { type: "pendingCombine"; sourceId: string; targetId: string }
   | { type: "noop" };
 
@@ -120,7 +120,7 @@ export function getConnectionEffect(
   return { type: "pendingCombine", sourceId, targetId };
 }
 
-export function edgeToInputPatch(edge: Edge): Partial<StrategyStep> | null {
+export function edgeToInputPatch(edge: Edge): Partial<Step> | null {
   if (edge.targetHandle === "left") return { primaryInputStepId: undefined };
   if (edge.targetHandle === "left-secondary")
     return { secondaryInputStepId: undefined };

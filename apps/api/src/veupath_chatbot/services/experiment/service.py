@@ -18,7 +18,7 @@ from veupath_chatbot.services.experiment.cross_validation import (
     run_cross_validation,
     run_cross_validation_tree,
 )
-from veupath_chatbot.services.experiment.enrichment import run_enrichment_analysis
+from veupath_chatbot.services.experiment.enrichment import upsert_enrichment_result
 from veupath_chatbot.services.experiment.helpers import (
     ProgressCallback,
     extract_and_enrich_genes,
@@ -475,41 +475,24 @@ async def run_experiment(
             store.save(experiment)
 
         # --- Phase 3: Enrichment analysis (optional) ---
-        enrich_search = config.search_name
-        enrich_params = config.parameters
-        for enrich_type in config.enrichment_types:
-            await _emit(
-                "enriching",
-                message=f"Running {enrich_type} enrichment...",
-                enrichmentType=enrich_type,
+        if config.enrichment_types:
+            from veupath_chatbot.services.wdk.enrichment_service import (
+                EnrichmentService,
             )
-            try:
-                if is_tree_mode and experiment.wdk_step_id is not None:
-                    from veupath_chatbot.services.experiment.enrichment import (
-                        run_enrichment_on_step,
-                    )
 
-                    enrich_result = await run_enrichment_on_step(
-                        site_id=config.site_id,
-                        step_id=experiment.wdk_step_id,
-                        analysis_type=enrich_type,
-                    )
-                else:
-                    enrich_result = await run_enrichment_analysis(
-                        site_id=config.site_id,
-                        record_type=config.record_type,
-                        search_name=enrich_search,
-                        parameters=enrich_params,
-                        analysis_type=enrich_type,
-                    )
-                experiment.enrichment_results.append(enrich_result)
-                store.save(experiment)
-            except Exception as exc:
-                logger.warning(
-                    "Enrichment analysis failed",
-                    analysis_type=enrich_type,
-                    error=str(exc),
-                )
+            await _emit("enriching", message="Running enrichment analyses...")
+            svc = EnrichmentService()
+            enrich_results, _ = await svc.run_batch(
+                site_id=config.site_id,
+                analysis_types=config.enrichment_types,
+                step_id=experiment.wdk_step_id,
+                search_name=config.search_name,
+                record_type=config.record_type,
+                parameters=config.parameters,
+            )
+            for enrich_result in enrich_results:
+                upsert_enrichment_result(experiment.enrichment_results, enrich_result)
+            store.save(experiment)
 
         experiment.status = "completed"
         experiment.total_time_seconds = time.monotonic() - start

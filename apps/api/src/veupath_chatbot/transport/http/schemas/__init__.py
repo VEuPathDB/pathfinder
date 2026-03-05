@@ -40,7 +40,6 @@ from .strategies import (
     StepCountsRequest,
     StepCountsResponse,
     StrategyResponse,
-    StrategySummaryResponse,
     UpdateStrategyRequest,
     WdkStrategySummaryResponse,
 )
@@ -78,7 +77,6 @@ __all__ = [
     "StepReportResponse",
     "StepResponse",
     "StrategyResponse",
-    "StrategySummaryResponse",
     "WdkStrategySummaryResponse",
     "SubKaniActivityResponse",
     "ThinkingResponse",

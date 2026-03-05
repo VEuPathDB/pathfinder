@@ -18,11 +18,9 @@ import {
   startTransition,
 } from "react";
 import { openStrategy, syncWdkStrategies } from "@/lib/api/client";
-import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
+import { DEFAULT_STREAM_NAME, type Strategy } from "@pathfinder/shared";
 import { useSessionStore } from "@/state/useSessionStore";
-import { useStrategyListStore } from "@/state/useStrategyListStore";
 import { useStrategyStore } from "@/state/useStrategyStore";
-import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
 import type { ConversationItem } from "@/features/sidebar/components/conversationSidebarTypes";
 import { resolveActiveConversation } from "@/features/sidebar/utils/resolveActiveConversation";
 
@@ -42,8 +40,8 @@ export interface ConversationSidebarData {
   refreshStrategies: () => Promise<void>;
   handleManualRefresh: () => Promise<void>;
   /** Exposed for the actions hook to perform optimistic strategy-list updates. */
-  strategyItems: StrategyListItem[];
-  setStrategyItems: Dispatch<SetStateAction<StrategyListItem[]>>;
+  strategyItems: Strategy[];
+  setStrategyItems: Dispatch<SetStateAction<Strategy[]>>;
 }
 
 export function useConversationSidebarData({
@@ -58,7 +56,7 @@ export function useConversationSidebarData({
   const draftStrategy = useStrategyStore((s) => s.strategy);
 
   // --- Local state ---
-  const [strategyItems, setStrategyItems] = useState<StrategyListItem[]>([]);
+  const [strategyItems, setStrategyItems] = useState<Strategy[]>([]);
   const [query, setQuery] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -94,18 +92,8 @@ export function useConversationSidebarData({
         hasFetched.current = true;
         // Populate the global store so @-mentions and experiment import
         // can read the same data (single source of truth).
-        useStrategyListStore.getState().setStrategies(strategies);
-        const now = new Date().toISOString();
-        const items: StrategyListItem[] = strategies.map((s) => ({
-          id: s.id,
-          name: s.name,
-          updatedAt: s.updatedAt ?? now,
-          siteId: s.siteId,
-          stepCount: s.stepCount ?? 0,
-          wdkStrategyId: s.wdkStrategyId,
-          isSaved: s.isSaved ?? false,
-        }));
-        setStrategyItems(items);
+        useStrategyStore.getState().setStrategies(strategies);
+        setStrategyItems(strategies);
       })
       .catch((err) => {
         console.warn("[ConversationSidebar] Failed to sync strategies:", err);
@@ -156,7 +144,11 @@ export function useConversationSidebarData({
               id: res.strategyId,
               name: DEFAULT_STREAM_NAME,
               updatedAt: now,
+              createdAt: now,
               siteId,
+              recordType: null,
+              steps: [],
+              rootStepId: null,
               stepCount: 0,
               isSaved: false,
             },

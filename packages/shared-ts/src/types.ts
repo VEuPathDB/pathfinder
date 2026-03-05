@@ -356,6 +356,8 @@ export interface Step {
   filters?: StepFilter[];
   analyses?: StepAnalysis[];
   reports?: StepReport[];
+  /** Set during graph editing when step has a validation issue. */
+  validationError?: string;
 }
 
 export interface StepFilter {
@@ -382,6 +384,7 @@ export interface Strategy {
   description?: string | null;
   siteId: string;
   recordType: string | null;
+  /** Full step list. Empty `[]` in list responses, populated in detail views. */
   steps: Step[];
   rootStepId: string | null;
   wdkStrategyId?: number;
@@ -391,29 +394,14 @@ export interface Strategy {
   modelId?: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface StrategySummary {
-  id: string;
-  name: string;
-  title?: string | null;
-  siteId: string;
-  recordType: string | null;
-  stepCount: number;
+  /** Convenience count — always set, avoids needing steps loaded. */
+  stepCount?: number;
+  /** Result count from root step. Present in list views. */
   resultCount?: number | null;
-  wdkStrategyId?: number;
-  isSaved?: boolean;
-  createdAt: string;
-  updatedAt: string;
+  /** URL to the strategy on the WDK site. */
+  wdkUrl?: string | null;
 }
 
-export type StrategyStep = Step & {
-  validationError?: string;
-};
-
-export type StrategyWithMeta = Strategy & {
-  wdkUrl?: string | null;
-};
 
 // Chat Types
 
@@ -627,15 +615,6 @@ export interface PushResult {
   wdkUrl: string;
 }
 
-export interface WdkStrategySummary {
-  wdkStrategyId: number;
-  name: string;
-  siteId: string;
-  wdkUrl?: string | null;
-  rootStepId?: number | null;
-  isSaved?: boolean;
-  isInternal?: boolean;
-}
 
 // Parameter Optimisation
 
@@ -842,6 +821,28 @@ export interface EnrichmentResult {
   backgroundSize: number;
 }
 
+// Gene Set Types
+
+export type GeneSetSource = "strategy" | "paste" | "upload" | "derived" | "saved";
+
+export interface GeneSet {
+  id: string;
+  name: string;
+  siteId: string;
+  geneIds: string[];
+  geneCount: number;
+  source: GeneSetSource;
+  wdkStrategyId?: number;
+  wdkStepId?: number;
+  searchName?: string;
+  recordType?: string;
+  parameters?: Record<string, unknown>;
+  parentSetIds?: string[];
+  operation?: string;
+  stepCount?: number;
+  createdAt?: string;
+}
+
 export interface OptimizeSpec {
   name: string;
   type: "numeric" | "integer" | "categorical";
@@ -989,21 +990,12 @@ export interface ExperimentConfig {
   sortDirection?: "ASC" | "DESC";
 }
 
-export interface OptimizationTrialResult {
-  trialNumber: number;
-  parameters: Record<string, unknown>;
-  score: number;
-  recall: number | null;
-  falsePositiveRate: number | null;
-  resultCount: number | null;
-}
-
 export interface OptimizationResult {
   optimizationId: string;
   status: string;
-  bestTrial: OptimizationTrialResult | null;
-  allTrials: OptimizationTrialResult[];
-  paretoFrontier: OptimizationTrialResult[];
+  bestTrial: OptimizationTrial | null;
+  allTrials: OptimizationTrial[];
+  paretoFrontier: OptimizationTrial[];
   sensitivity: Record<string, number>;
   totalTimeSeconds: number;
   totalTrials: number;

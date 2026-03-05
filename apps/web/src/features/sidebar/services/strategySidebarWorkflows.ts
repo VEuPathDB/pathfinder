@@ -1,10 +1,10 @@
-import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
+import type { Strategy } from "@pathfinder/shared";
 import { toUserMessage } from "@/lib/api/errors";
 
 export async function runDeleteStrategyWorkflow(args: {
-  item: StrategyListItem;
+  item: Strategy;
   currentStrategyId: string | null;
-  setStrategyItems: (updater: (prev: StrategyListItem[]) => StrategyListItem[]) => void;
+  setStrategyItems: (updater: (prev: Strategy[]) => Strategy[]) => void;
   clearStrategy: () => void;
   removeStrategy: (id: string) => void;
   setStrategyId: (id: string | null) => void;

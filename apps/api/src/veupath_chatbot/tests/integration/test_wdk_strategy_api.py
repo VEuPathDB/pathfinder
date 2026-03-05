@@ -23,6 +23,8 @@ from veupath_chatbot.tests.fixtures.wdk_responses import (
     analysis_create_response,
     analysis_result_response,
     analysis_status_response,
+    column_distribution_response_number,
+    column_distribution_response_string,
     dataset_creation_response,
     search_details_response,
     searches_response,
@@ -289,6 +291,11 @@ class TestRunStepAnalysis:
         analysis_id = 300
         analysis_base = f"{BASE}/users/{uid}/steps/{step_id}/analyses"
 
+        # Warmup: zero-record standard report materializes the step answer
+        respx.post(f"{BASE}/users/{uid}/steps/{step_id}/reports/standard").respond(
+            200, json=standard_report_response(gene_ids=[], total_count=42)
+        )
+
         # Phase 1: create analysis instance
         respx.post(analysis_base).respond(
             200, json=analysis_create_response(analysis_id)
@@ -316,8 +323,8 @@ class TestRunStepAnalysis:
 
         result = await api.run_step_analysis(
             step_id=step_id,
-            analysis_type="gene-go-enrichment",
-            parameters={"goAssociations": "biological_process"},
+            analysis_type="go-enrichment",
+            parameters={"goAssociationsOntologies": "Biological Process"},
             poll_interval=0.0,  # no real waiting in tests
             max_wait=10.0,
         )
@@ -329,6 +336,235 @@ class TestRunStepAnalysis:
 
         # Status was polled exactly twice (RUNNING, then COMPLETE)
         assert status_route.call_count == 2
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_warmup_report_before_analysis(self, api: StrategyAPI) -> None:
+        """run_step_analysis triggers a zero-record standard report first.
+
+        Boolean/combined steps need their answer materialized before WDK will
+        accept step analysis requests.  Requesting a zero-record report forces
+        WDK to compute and cache the answer.
+        """
+        _mock_ensure_session(respx)
+
+        uid = str(USER_ID)
+        step_id = 100
+        analysis_id = 300
+        analysis_base = f"{BASE}/users/{uid}/steps/{step_id}/analyses"
+
+        # Warmup: zero-record standard report
+        warmup_route = respx.post(
+            f"{BASE}/users/{uid}/steps/{step_id}/reports/standard"
+        ).respond(200, json=standard_report_response(gene_ids=[], total_count=150))
+
+        respx.post(analysis_base).respond(
+            200, json=analysis_create_response(analysis_id)
+        )
+        respx.post(f"{analysis_base}/{analysis_id}/result").respond(
+            200, json={"status": "RUNNING"}
+        )
+        respx.get(f"{analysis_base}/{analysis_id}/result/status").respond(
+            200, json=analysis_status_response("COMPLETE")
+        )
+        respx.get(f"{analysis_base}/{analysis_id}/result").respond(
+            200, json=analysis_result_response()
+        )
+
+        result = await api.run_step_analysis(
+            step_id=step_id,
+            analysis_type="go-enrichment",
+            poll_interval=0.0,
+            max_wait=10.0,
+        )
+
+        assert result["resultSize"] == 42
+        # Warmup report was called before creating the analysis
+        assert warmup_route.called
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_error_status_reruns_same_instance(self, api: StrategyAPI) -> None:
+        """ERROR on boolean/combined steps → re-run same instance → succeeds.
+
+        WDK step analyses on boolean/combined steps can ERROR on first run
+        because sub-step answers haven't been computed yet.  The WDK backend
+        supports re-running the same instance (requiresRerun=true for ERROR).
+        We must NOT create a new instance — just POST to the run endpoint again.
+        """
+        _mock_ensure_session(respx)
+
+        uid = str(USER_ID)
+        step_id = 100
+        analysis_id = 300
+        analysis_base = f"{BASE}/users/{uid}/steps/{step_id}/analyses"
+
+        # Warmup report
+        respx.post(f"{BASE}/users/{uid}/steps/{step_id}/reports/standard").respond(
+            200, json=standard_report_response(gene_ids=[], total_count=150)
+        )
+
+        # Phase 1: create analysis instance (only once)
+        create_route = respx.post(analysis_base).respond(
+            200, json=analysis_create_response(analysis_id)
+        )
+
+        # Phase 2: run endpoint called twice (initial + retry)
+        run_route = respx.post(f"{analysis_base}/{analysis_id}/result").respond(
+            200, json={"status": "RUNNING"}
+        )
+
+        # Phase 3: poll returns ERROR first, then RUNNING after re-run, then COMPLETE
+        status_url = f"{analysis_base}/{analysis_id}/result/status"
+        status_route = respx.get(status_url).mock(
+            side_effect=[
+                httpx.Response(200, json=analysis_status_response("ERROR")),
+                httpx.Response(200, json=analysis_status_response("RUNNING")),
+                httpx.Response(200, json=analysis_status_response("COMPLETE")),
+            ]
+        )
+
+        # Phase 4: retrieve result
+        respx.get(f"{analysis_base}/{analysis_id}/result").respond(
+            200, json=analysis_result_response()
+        )
+
+        result = await api.run_step_analysis(
+            step_id=step_id,
+            analysis_type="go-enrichment",
+            parameters={"goAssociationsOntologies": "Biological Process"},
+            poll_interval=0.0,
+            max_wait=10.0,
+        )
+
+        assert result["resultSize"] == 42
+
+        # Instance created exactly once — no new instance on retry
+        assert create_route.call_count == 1
+
+        # Run endpoint called twice: initial run + retry after ERROR
+        assert run_route.call_count == 2
+
+        # Status polled 3 times: ERROR, RUNNING, COMPLETE
+        assert status_route.call_count == 3
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_out_of_date_reruns_same_instance(self, api: StrategyAPI) -> None:
+        """OUT_OF_DATE (cache cleared) → re-run same instance → succeeds."""
+        _mock_ensure_session(respx)
+
+        uid = str(USER_ID)
+        step_id = 100
+        analysis_id = 300
+        analysis_base = f"{BASE}/users/{uid}/steps/{step_id}/analyses"
+
+        respx.post(f"{BASE}/users/{uid}/steps/{step_id}/reports/standard").respond(
+            200, json=standard_report_response(gene_ids=[], total_count=0)
+        )
+
+        create_route = respx.post(analysis_base).respond(
+            200, json=analysis_create_response(analysis_id)
+        )
+        run_route = respx.post(f"{analysis_base}/{analysis_id}/result").respond(
+            200, json={"status": "RUNNING"}
+        )
+
+        status_url = f"{analysis_base}/{analysis_id}/result/status"
+        respx.get(status_url).mock(
+            side_effect=[
+                httpx.Response(200, json=analysis_status_response("OUT_OF_DATE")),
+                httpx.Response(200, json=analysis_status_response("COMPLETE")),
+            ]
+        )
+
+        respx.get(f"{analysis_base}/{analysis_id}/result").respond(
+            200, json=analysis_result_response()
+        )
+
+        result = await api.run_step_analysis(
+            step_id=step_id,
+            analysis_type="go-enrichment",
+            poll_interval=0.0,
+            max_wait=10.0,
+        )
+
+        assert result["resultSize"] == 42
+        assert create_route.call_count == 1
+        assert run_route.call_count == 2  # initial + retry
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_repeated_errors_raises_after_max_retries(
+        self, api: StrategyAPI
+    ) -> None:
+        """Repeated ERROR statuses give up after max retries."""
+        from veupath_chatbot.platform.errors import InternalError
+
+        _mock_ensure_session(respx)
+
+        uid = str(USER_ID)
+        step_id = 100
+        analysis_id = 300
+        analysis_base = f"{BASE}/users/{uid}/steps/{step_id}/analyses"
+
+        respx.post(f"{BASE}/users/{uid}/steps/{step_id}/reports/standard").respond(
+            200, json=standard_report_response(gene_ids=[], total_count=0)
+        )
+
+        respx.post(analysis_base).respond(
+            200, json=analysis_create_response(analysis_id)
+        )
+        respx.post(f"{analysis_base}/{analysis_id}/result").respond(
+            200, json={"status": "RUNNING"}
+        )
+
+        # Return ERROR every time — should eventually give up
+        status_url = f"{analysis_base}/{analysis_id}/result/status"
+        respx.get(status_url).respond(200, json=analysis_status_response("ERROR"))
+
+        with pytest.raises(InternalError, match="retries exhausted"):
+            await api.run_step_analysis(
+                step_id=step_id,
+                analysis_type="go-enrichment",
+                poll_interval=0.0,
+                max_wait=10.0,
+            )
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_expired_status_raises(self, api: StrategyAPI) -> None:
+        """EXPIRED status raises InternalError immediately (no retry)."""
+        from veupath_chatbot.platform.errors import InternalError
+
+        _mock_ensure_session(respx)
+
+        uid = str(USER_ID)
+        step_id = 100
+        analysis_id = 300
+        analysis_base = f"{BASE}/users/{uid}/steps/{step_id}/analyses"
+
+        respx.post(f"{BASE}/users/{uid}/steps/{step_id}/reports/standard").respond(
+            200, json=standard_report_response(gene_ids=[], total_count=0)
+        )
+
+        respx.post(analysis_base).respond(
+            200, json=analysis_create_response(analysis_id)
+        )
+        respx.post(f"{analysis_base}/{analysis_id}/result").respond(
+            200, json={"status": "RUNNING"}
+        )
+
+        status_url = f"{analysis_base}/{analysis_id}/result/status"
+        respx.get(status_url).respond(200, json=analysis_status_response("EXPIRED"))
+
+        with pytest.raises(InternalError, match="Step analysis failed"):
+            await api.run_step_analysis(
+                step_id=step_id,
+                analysis_type="go-enrichment",
+                poll_interval=0.0,
+                max_wait=10.0,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -354,3 +590,93 @@ class TestCreateDataset:
         sent_body = json.loads(dataset_route.calls.last.request.content)
         assert sent_body["sourceType"] == "idList"
         assert sent_body["sourceContent"]["ids"] == gene_ids
+
+
+# ---------------------------------------------------------------------------
+# 9. get_column_distribution uses column reporter (not filter-summary)
+# ---------------------------------------------------------------------------
+class TestGetColumnDistribution:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_string_column_distribution(self, api: StrategyAPI) -> None:
+        """POST .../columns/{col}/reports/byValue returns histogram + statistics."""
+        _mock_ensure_session(respx)
+
+        step_id = 100
+        column_name = "organism"
+        expected = column_distribution_response_string()
+
+        col_route = respx.post(
+            f"{BASE}/users/{USER_ID}/steps/{step_id}/columns/{column_name}/reports/byValue"
+        ).respond(200, json=expected)
+
+        result = await api.get_column_distribution(step_id, column_name)
+
+        assert col_route.called
+        assert "histogram" in result
+        assert "statistics" in result
+        assert len(result["histogram"]) == 3
+        assert result["histogram"][0]["value"] == 2890
+        assert result["statistics"]["subsetSize"] == 4429
+
+        sent_body = json.loads(col_route.calls.last.request.content)
+        assert sent_body == {"reportConfig": {}}
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_number_column_distribution(self, api: StrategyAPI) -> None:
+        """Number columns return binned histogram with ranges."""
+        _mock_ensure_session(respx)
+
+        step_id = 100
+        column_name = "exon_count"
+        expected = column_distribution_response_number()
+
+        col_route = respx.post(
+            f"{BASE}/users/{USER_ID}/steps/{step_id}/columns/{column_name}/reports/byValue"
+        ).respond(200, json=expected)
+
+        result = await api.get_column_distribution(step_id, column_name)
+
+        assert col_route.called
+        assert len(result["histogram"]) == 4
+        assert result["histogram"][1]["binLabel"] == "[5.0, 10.0)"
+        assert result["statistics"]["subsetMin"] == 0.5
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_unsupported_column_returns_empty(self, api: StrategyAPI) -> None:
+        """WDK 500 for unsupported columns returns empty histogram gracefully."""
+        _mock_ensure_session(respx)
+
+        step_id = 100
+        column_name = "snpoverview"
+
+        respx.post(
+            f"{BASE}/users/{USER_ID}/steps/{step_id}/columns/{column_name}/reports/byValue"
+        ).respond(500, text="Internal Error")
+
+        result = await api.get_column_distribution(step_id, column_name)
+
+        assert result["histogram"] == []
+        assert result["statistics"] == {}
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_timeout_returns_empty(self, api: StrategyAPI) -> None:
+        """WDK timeout for slow columns returns empty without retrying."""
+        _mock_ensure_session(respx)
+
+        step_id = 100
+        column_name = "pan_3586"
+
+        route = respx.post(
+            f"{BASE}/users/{USER_ID}/steps/{step_id}/columns/{column_name}/reports/byValue"
+        ).mock(side_effect=httpx.ReadTimeout("read timed out"))
+
+        result = await api.get_column_distribution(step_id, column_name)
+
+        assert result["histogram"] == []
+        assert result["statistics"] == {}
+        # Must NOT retry — should be called exactly once
+        assert route.call_count == 1

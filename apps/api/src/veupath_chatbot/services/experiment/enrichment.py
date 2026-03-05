@@ -2,9 +2,27 @@
 
 Wraps VEuPathDB's native GO, pathway, and word enrichment analyses
 that are available through the step analysis endpoint.
+
+Plugin names (from ``stepAnalysisPlugins.xml``):
+  - ``go-enrichment``  → GoEnrichmentPlugin
+  - ``pathway-enrichment``  → PathwaysEnrichmentPlugin
+  - ``word-enrichment``  → WordEnrichmentPlugin
+
+GO enrichment parameters (from ``GoEnrichmentPlugin.java``):
+  - ``goAssociationsOntologies``  — "Molecular Function" / etc.
+  - ``goEvidenceCodes``  — evidence code filter
+  - ``goSubset``  — GO slim subset
+  - ``pValueCutoff``  — p-value threshold
+  - ``organism``  — organism filter
+
+Parameters are fetched from the WDK analysis form defaults so required
+fields like ``organism`` and ``pValueCutoff`` are always populated.
 """
 
 from __future__ import annotations
+
+import json
+import re
 
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.integrations.veupathdb.strategy_api import (
@@ -13,8 +31,11 @@ from veupath_chatbot.integrations.veupathdb.strategy_api import (
 )
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.services.catalog.param_resolution import _unwrap_search_data
+from veupath_chatbot.services.control_helpers import delete_temp_strategy
 from veupath_chatbot.services.experiment.helpers import (
     coerce_step_id,
+    extract_wdk_id,
     safe_float,
     safe_int,
 )
@@ -27,11 +48,11 @@ from veupath_chatbot.services.experiment.types import (
 logger = get_logger(__name__)
 
 _ANALYSIS_TYPE_MAP: dict[EnrichmentAnalysisType, str] = {
-    "go_function": "gene-go-enrichment",
-    "go_component": "gene-go-enrichment",
-    "go_process": "gene-go-enrichment",
-    "pathway": "gene-pathway-enrichment",
-    "word": "gene-word-enrichment",
+    "go_function": "go-enrichment",
+    "go_component": "go-enrichment",
+    "go_process": "go-enrichment",
+    "pathway": "pathway-enrichment",
+    "word": "word-enrichment",
 }
 
 _GO_ONTOLOGY_MAP: dict[EnrichmentAnalysisType, str] = {
@@ -40,31 +61,195 @@ _GO_ONTOLOGY_MAP: dict[EnrichmentAnalysisType, str] = {
     "go_process": "Biological Process",
 }
 
+_REVERSE_GO_ONTOLOGY: dict[str, EnrichmentAnalysisType] = {
+    v: k for k, v in _GO_ONTOLOGY_MAP.items()
+}
+
+_WDK_TO_ANALYSIS_TYPE: dict[str, EnrichmentAnalysisType] = {
+    "pathway-enrichment": "pathway",
+    "word-enrichment": "word",
+}
+
+_ENRICHMENT_ANALYSIS_NAMES = frozenset(_ANALYSIS_TYPE_MAP.values())
+
+
+def infer_enrichment_type(
+    wdk_analysis_name: str,
+    params: JSONObject,
+    result: JSONValue,
+) -> EnrichmentAnalysisType:
+    """Infer the ``EnrichmentAnalysisType`` from a WDK analysis name.
+
+    For GO enrichment, uses the ``goAssociationsOntologies`` parameter or
+    the ``goOntologies`` field in the result to determine which GO branch.
+    """
+    if wdk_analysis_name in _WDK_TO_ANALYSIS_TYPE:
+        return _WDK_TO_ANALYSIS_TYPE[wdk_analysis_name]
+
+    # GO enrichment — determine which ontology
+    ontology = str(params.get("goAssociationsOntologies", ""))
+    if not ontology and isinstance(result, dict):
+        ontologies = result.get("goOntologies")
+        if isinstance(ontologies, list) and ontologies:
+            ontology = str(ontologies[0])
+    return _REVERSE_GO_ONTOLOGY.get(ontology, "go_process")
+
+
+def is_enrichment_analysis(wdk_analysis_name: str) -> bool:
+    """Return True if the WDK analysis name is an enrichment plugin."""
+    return wdk_analysis_name in _ENRICHMENT_ANALYSIS_NAMES
+
+
+def upsert_enrichment_result(
+    results: list[EnrichmentResult],
+    new: EnrichmentResult,
+) -> None:
+    """Replace an existing result of the same ``analysis_type``, or append.
+
+    Mutates *results* in-place so callers don't accumulate duplicate
+    tabs when the same enrichment analysis is re-run.
+    """
+    for i, existing in enumerate(results):
+        if existing.analysis_type == new.analysis_type:
+            results[i] = new
+            return
+    results.append(new)
+
+
+def parse_enrichment_from_raw(
+    wdk_analysis_name: str,
+    params: JSONObject,
+    result: JSONValue,
+) -> EnrichmentResult:
+    """Parse a raw WDK analysis result into an ``EnrichmentResult``.
+
+    Used by the generic ``analyses/run`` endpoint to return structured
+    enrichment data instead of raw JSON.
+    """
+    analysis_type = infer_enrichment_type(wdk_analysis_name, params, result)
+    rows = _extract_analysis_rows(result)
+    terms = _parse_enrichment_terms(rows)
+
+    total_analyzed = 0
+    bg_size = 0
+    if isinstance(result, dict):
+        total_analyzed = safe_int(
+            result.get("resultSize", result.get("totalResults", 0))
+        )
+        bg_size = safe_int(result.get("backgroundSize", result.get("bgdSize", 0)))
+
+    return EnrichmentResult(
+        analysis_type=analysis_type,
+        terms=terms,
+        total_genes_analyzed=total_analyzed,
+        background_size=bg_size,
+    )
+
+
+_LINK_COUNT_RE = re.compile(r">(\d+)<")
+_IDLIST_RE = re.compile(r"idList=([^&'\"]+)")
+
+
+def _parse_result_genes_html(html: str) -> tuple[int, list[str]]:
+    """Extract gene count and gene IDs from a WDK ``resultGenes`` HTML link.
+
+    WDK enrichment plugins render gene counts as hyperlinks::
+
+        <a href='...?param.ds_gene_ids.idList=GENE1,GENE2,...&autoRun=1'>32</a>
+
+    Returns ``(count, gene_ids)``.
+    """
+    count = 0
+    count_m = _LINK_COUNT_RE.search(html)
+    if count_m:
+        count = int(count_m.group(1))
+
+    genes: list[str] = []
+    id_m = _IDLIST_RE.search(html)
+    if id_m:
+        genes = [g.strip() for g in id_m.group(1).split(",") if g.strip()]
+    return count, genes
+
 
 def _parse_enrichment_terms(
     rows: list[JSONObject],
 ) -> list[EnrichmentTerm]:
-    """Parse WDK enrichment result rows into structured terms."""
+    """Parse WDK enrichment result rows into structured terms.
+
+    Handles both the "standard" field names used by some WDK analysis
+    plugins and the field names returned by the GO/pathway/word enrichment
+    plugins (``goId``, ``goTerm``, ``resultGenes`` as HTML, ``bgdGenes``,
+    ``foldEnrich``, etc.).
+    """
     terms: list[EnrichmentTerm] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
-        term_id = str(row.get("ID", row.get("id", "")))
-        term_name = str(row.get("Description", row.get("description", "")))
-        gene_count = _safe_int(row.get("ResultCount", row.get("resultCount", 0)))
-        bg_count = _safe_int(row.get("BgdCount", row.get("bgdCount", 0)))
-        fold = _safe_float(row.get("FoldEnrich", row.get("foldEnrichment", 0)))
-        odds = _safe_float(row.get("OddsRatio", row.get("oddsRatio", 0)))
-        pval = _safe_float(row.get("PValue", row.get("pValue", 1.0)))
-        fdr = _safe_float(row.get("BenjaminiHochberg", row.get("benjamini", 1.0)))
-        bonf = _safe_float(row.get("Bonferroni", row.get("bonferroni", 1.0)))
 
-        genes_raw = row.get("ResultIDList", row.get("genes", []))
+        # Term identifier — plugins use different keys:
+        #   GO: goId, Pathway: pathwayId, Word: word (no separate ID)
+        term_id = str(
+            row.get(
+                "ID",
+                row.get(
+                    "id",
+                    row.get(
+                        "goId",
+                        row.get("pathwayId", row.get("word", "")),
+                    ),
+                ),
+            )
+        )
+        # Term name / description — Word enrichment uses "descrip" (truncated).
+        term_name = str(
+            row.get(
+                "Description",
+                row.get(
+                    "description",
+                    row.get(
+                        "goTerm",
+                        row.get(
+                            "pathwayName",
+                            row.get("descrip", row.get("word", "")),
+                        ),
+                    ),
+                ),
+            )
+        )
+
+        # Gene count + gene list — WDK enrichment returns resultGenes as
+        # an HTML <a> tag embedding the count and gene IDs in the URL.
+        gene_count: int = 0
         genes: list[str] = []
-        if isinstance(genes_raw, str):
-            genes = [g.strip() for g in genes_raw.split(",") if g.strip()]
-        elif isinstance(genes_raw, list):
-            genes = [str(g) for g in genes_raw]
+
+        result_count_raw = row.get("ResultCount", row.get("resultCount"))
+        if result_count_raw is not None:
+            gene_count = safe_int(result_count_raw)
+        else:
+            result_genes_raw = row.get("resultGenes", "")
+            if isinstance(result_genes_raw, str) and "<" in result_genes_raw:
+                gene_count, genes = _parse_result_genes_html(result_genes_raw)
+            else:
+                gene_count = safe_int(result_genes_raw)
+
+        # If genes weren't extracted from HTML, try explicit gene list fields
+        if not genes:
+            genes_raw = row.get("ResultIDList", row.get("genes"))
+            if isinstance(genes_raw, str):
+                genes = [g.strip() for g in genes_raw.split(",") if g.strip()]
+            elif isinstance(genes_raw, list):
+                genes = [str(g) for g in genes_raw]
+
+        bg_count = safe_int(
+            row.get("BgdCount", row.get("bgdCount", row.get("bgdGenes", 0)))
+        )
+        fold = safe_float(
+            row.get("FoldEnrich", row.get("foldEnrichment", row.get("foldEnrich", 0)))
+        )
+        odds = safe_float(row.get("OddsRatio", row.get("oddsRatio", 0)))
+        pval = safe_float(row.get("PValue", row.get("pValue", 1.0)))
+        fdr = safe_float(row.get("BenjaminiHochberg", row.get("benjamini", 1.0)))
+        bonf = safe_float(row.get("Bonferroni", row.get("bonferroni", 1.0)))
 
         terms.append(
             EnrichmentTerm(
@@ -83,12 +268,134 @@ def _parse_enrichment_terms(
     return terms
 
 
+# WDK ``EnumParamFormatter.getParamType()`` emits these JSON type strings
+# for params extending ``AbstractEnumParam`` (``EnumParam``, ``FlatVocabParam``).
+# These are the only param types whose stable values must be JSON arrays
+# (via ``AbstractEnumParam.convertToTerms()`` → ``new JSONArray(stableValue)``).
+# See ``org.gusdb.wdk.core.api.JsonKeys``:
+#   SINGLE_VOCAB_PARAM_TYPE = "single-pick-vocabulary"
+#   MULTI_VOCAB_PARAM_TYPE  = "multi-pick-vocabulary"
+_WDK_VOCAB_PARAM_TYPES = frozenset({"single-pick-vocabulary", "multi-pick-vocabulary"})
+
+
+def _extract_param_specs(form_meta: JSONValue) -> list[JSONObject]:
+    """Extract the parameters list from WDK form metadata.
+
+    Handles the ``searchData`` wrapper that WDK uses for analysis-type
+    endpoints and unwraps it if present.
+    """
+    if not isinstance(form_meta, dict):
+        return []
+    container = _unwrap_search_data(form_meta) or form_meta
+    params_raw = container.get("parameters")
+    if not isinstance(params_raw, list):
+        return []
+    return [p for p in params_raw if isinstance(p, dict)]
+
+
+def _build_param_type_map(form_meta: JSONValue) -> dict[str, str]:
+    """Build a ``{param_name: wdk_type}`` map from form metadata.
+
+    Used by :func:`encode_vocab_params` to know which params need
+    JSON array encoding after a merge with user-supplied values.
+    """
+    type_map: dict[str, str] = {}
+    for p in _extract_param_specs(form_meta):
+        name = p.get("name")
+        ptype = p.get("type")
+        if isinstance(name, str) and name and isinstance(ptype, str):
+            type_map[name] = ptype
+    return type_map
+
+
+def _encode_vocab_value(value: str) -> str:
+    """Ensure a vocabulary param value is a JSON array string.
+
+    ``AbstractEnumParam.convertToTerms()`` calls
+    ``new JSONArray(stableValue)`` — plain strings cause a parse error.
+    Multi-pick values already arrive as JSON arrays from WDK; single-pick
+    values arrive as plain strings and must be wrapped.
+    """
+    if value.startswith("["):
+        return value
+    return json.dumps([value])
+
+
+def encode_vocab_params(
+    params: JSONObject,
+    form_meta: JSONValue,
+) -> JSONObject:
+    """Encode vocabulary param values as JSON arrays using form metadata.
+
+    WDK's ``AbstractEnumParam.convertToTerms()`` requires all
+    ``single-pick-vocabulary`` and ``multi-pick-vocabulary`` param values
+    to be JSON-encoded arrays.  This function ensures that encoding is
+    applied **after** merging defaults with user params, so user-supplied
+    plain strings don't bypass the encoding.
+
+    Params whose type is not in the form metadata, or whose type is not
+    a vocabulary type, are returned unchanged.
+    """
+    type_map = _build_param_type_map(form_meta)
+    if not type_map:
+        return params
+
+    encoded: JSONObject = {}
+    for name, value in params.items():
+        ptype = type_map.get(name, "") if isinstance(name, str) else ""
+        if ptype in _WDK_VOCAB_PARAM_TYPES and isinstance(value, str):
+            encoded[name] = _encode_vocab_value(value)
+        else:
+            encoded[name] = value
+    return encoded
+
+
+def _extract_default_params(form_meta: JSONValue) -> JSONObject:
+    """Extract parameter names and default values from WDK analysis form metadata.
+
+    WDK wraps data under ``searchData`` — the response from
+    ``GET /analysis-types/{name}`` has the structure::
+
+        { "searchData": { "parameters": [ {name, initialDisplayValue, ...}, ... ] } }
+
+    Uses :func:`_unwrap_search_data` to normalize the nesting, then
+    extracts ``name``/``initialDisplayValue`` from each parameter spec.
+
+    WDK's ``ParamFormatter.java`` emits ``initialDisplayValue`` (via
+    ``JsonKeys.INITIAL_DISPLAY_VALUE``) as the stable default value.
+
+    Vocabulary params (``single-pick-vocabulary``, ``multi-pick-vocabulary``)
+    are encoded as JSON arrays per ``AbstractEnumParam.convertToTerms()``.
+    """
+    defaults: JSONObject = {}
+    for p in _extract_param_specs(form_meta):
+        name = p.get("name")
+        default = p.get("initialDisplayValue")
+        if not isinstance(name, str) or not name or default is None:
+            continue
+
+        value = str(default)
+
+        # Vocab params must be JSON arrays for convertToTerms().
+        param_type = str(p.get("type", ""))
+        if param_type in _WDK_VOCAB_PARAM_TYPES and not value.startswith("["):
+            value = json.dumps([value])
+
+        defaults[name] = value
+    return defaults
+
+
 async def _execute_analysis(
     api: StrategyAPI,
     step_id: int,
     analysis_type: EnrichmentAnalysisType,
 ) -> EnrichmentResult:
-    """Shared logic: run analysis on a step, parse results, return EnrichmentResult."""
+    """Shared logic: run analysis on a step, parse results, return EnrichmentResult.
+
+    Fetches the analysis form metadata from WDK to discover correct
+    parameter names and defaults, then overrides only the GO ontology
+    parameter when applicable.
+    """
     wdk_analysis_type = _ANALYSIS_TYPE_MAP.get(analysis_type)
     if not wdk_analysis_type:
         return EnrichmentResult(
@@ -98,9 +405,39 @@ async def _execute_analysis(
             background_size=0,
         )
 
+    # Fetch form metadata so we use correct parameter names and defaults.
     analysis_params: JSONObject = {}
+    try:
+        form_meta = await api.get_analysis_type(step_id, wdk_analysis_type)
+        analysis_params = _extract_default_params(form_meta)
+        logger.debug(
+            "Fetched analysis form defaults",
+            analysis_type=wdk_analysis_type,
+            param_names=list(analysis_params.keys()),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Could not fetch analysis form metadata, using empty params",
+            analysis_type=wdk_analysis_type,
+            step_id=step_id,
+            error=str(exc),
+        )
+
+    # For GO enrichment, set the ontology parameter.
+    # WDK GoEnrichmentPlugin uses ``goAssociationsOntologies``
+    # (a single-pick-vocabulary param — must be a JSON array).
     if analysis_type in _GO_ONTOLOGY_MAP:
-        analysis_params["ontology"] = _GO_ONTOLOGY_MAP[analysis_type]
+        analysis_params["goAssociationsOntologies"] = json.dumps(
+            [_GO_ONTOLOGY_MAP[analysis_type]]
+        )
+
+    logger.info(
+        "Running enrichment analysis",
+        analysis_type=analysis_type,
+        wdk_type=wdk_analysis_type,
+        step_id=step_id,
+        params=analysis_params,
+    )
 
     result = await api.run_step_analysis(
         step_id=step_id,
@@ -114,10 +451,10 @@ async def _execute_analysis(
     total_analyzed = 0
     bg_size = 0
     if isinstance(result, dict):
-        total_analyzed = _safe_int(
+        total_analyzed = safe_int(
             result.get("resultSize", result.get("totalResults", 0))
         )
-        bg_size = _safe_int(result.get("backgroundSize", result.get("bgdSize", 0)))
+        bg_size = safe_int(result.get("backgroundSize", result.get("bgdSize", 0)))
 
     return EnrichmentResult(
         analysis_type=analysis_type,
@@ -160,23 +497,12 @@ async def run_enrichment_analysis(
             description=None,
             is_internal=True,
         )
-        if isinstance(created, dict):
-            raw_sid = created.get("id")
-            if isinstance(raw_sid, int):
-                strategy_id = raw_sid
+        strategy_id = extract_wdk_id(created)
 
         return await _execute_analysis(api, step_id, analysis_type)
 
     finally:
-        if strategy_id is not None:
-            try:
-                await api.delete_strategy(strategy_id)
-            except Exception as exc:
-                logger.warning(
-                    "Failed to cleanup enrichment strategy",
-                    strategy_id=strategy_id,
-                    error=str(exc),
-                )
+        await delete_temp_strategy(api, strategy_id)
 
 
 async def run_enrichment_on_step(
@@ -194,15 +520,18 @@ async def run_enrichment_on_step(
 
 
 def _extract_analysis_rows(result: JSONValue) -> list[JSONObject]:
-    """Extract tabular rows from a WDK analysis result."""
+    """Extract tabular rows from a WDK analysis result.
+
+    WDK enrichment plugins (GO, pathway, word) return rows under
+    ``resultData``; other plugins may use ``rows``, ``data``, or ``results``.
+    """
     if not isinstance(result, dict):
         return []
 
-    rows = result.get("rows", result.get("data", result.get("results", [])))
+    rows = result.get(
+        "resultData",
+        result.get("rows", result.get("data", result.get("results", []))),
+    )
     if isinstance(rows, list):
         return [r for r in rows if isinstance(r, dict)]
     return []
-
-
-_safe_int = safe_int
-_safe_float = safe_float

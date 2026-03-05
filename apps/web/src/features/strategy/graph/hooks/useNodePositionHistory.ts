@@ -1,11 +1,11 @@
 import { useCallback, useRef } from "react";
 import type { Node } from "reactflow";
-import type { StrategyStep } from "@pathfinder/shared";
+import type { Step } from "@pathfinder/shared";
 import { isRecord } from "@/lib/utils/isRecord";
 
 type NodeData = Record<string, unknown> & {
   isUnsaved?: boolean;
-  step?: StrategyStep;
+  step?: Step;
   message?: string;
 };
 

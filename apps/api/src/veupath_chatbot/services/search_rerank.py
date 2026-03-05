@@ -16,11 +16,17 @@ import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from rapidfuzz import fuzz
+
 from veupath_chatbot.platform.types import JSONObject
 
 
 def score_text_match(query: str, value: str) -> float:
-    """Score how well *query* matches *value* (0.0--1.0)."""
+    """Score how well *query* matches *value* (0.0--1.0).
+
+    Uses ``rapidfuzz`` for robust fuzzy matching, with bonuses for
+    exact and prefix matches that are critical for gene ID lookups.
+    """
     q = query.strip().lower()
     v = value.strip().lower()
 
@@ -29,23 +35,13 @@ def score_text_match(query: str, value: str) -> float:
     if q == v:
         return 1.0
     if v.startswith(q):
-        return 0.90
-    if q.startswith(v):
-        return 0.70
+        return 0.95
     if q in v:
-        return 0.75
+        return 0.80
 
-    q_tokens = set(re.split(r"[\s_\-]+", q))
-    v_tokens = set(re.split(r"[\s_\-]+", v))
-    if q_tokens and v_tokens:
-        overlap = len(q_tokens & v_tokens)
-        total = max(len(q_tokens), len(v_tokens))
-        ratio = overlap / total
-        if ratio >= 0.5:
-            return 0.60
-        if overlap > 0:
-            return 0.40
-    return 0.0
+    # rapidfuzz.fuzz.WRatio handles partial, token-sort, and token-set
+    # ratios internally and returns the best score (0–100).
+    return fuzz.WRatio(q, v) / 100.0
 
 
 PRIMARY_MATCH_FIELDS: frozenset[str] = frozenset(

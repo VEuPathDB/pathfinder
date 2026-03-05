@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
-import type { StrategyStep } from "@pathfinder/shared";
+import type { Step } from "@pathfinder/shared";
 import { computeNodeDeletionResult } from "@/features/strategy/graph/utils/nodeDeletionLogic";
 
-function step(partial: Partial<StrategyStep> & { id: string }): StrategyStep {
+function step(partial: Partial<Step> & { id: string }): Step {
   return {
     id: partial.id,
     kind: partial.kind ?? "search",
@@ -13,7 +13,7 @@ function step(partial: Partial<StrategyStep> & { id: string }): StrategyStep {
     searchName: partial.searchName,
     primaryInputStepId: partial.primaryInputStepId,
     secondaryInputStepId: partial.secondaryInputStepId,
-  } as StrategyStep;
+  } as Step;
 }
 
 describe("computeNodeDeletionResult", () => {

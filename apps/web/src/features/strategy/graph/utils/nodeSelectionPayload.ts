@@ -1,9 +1,9 @@
-import type { StrategyWithMeta } from "@pathfinder/shared";
+import type { Strategy } from "@pathfinder/shared";
 import type { NodeSelection } from "@/features/chat/node_selection";
 import { inferStepKind } from "@/lib/strategyGraph";
 
 export function buildNodeSelectionPayload(
-  strategy: StrategyWithMeta | null,
+  strategy: Strategy | null,
   nodeIds: string[],
 ): NodeSelection {
   const snapshotId = strategy?.id;

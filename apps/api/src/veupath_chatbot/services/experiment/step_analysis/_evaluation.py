@@ -8,7 +8,14 @@ from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.integrations.veupathdb.strategy_api import StepTreeNode
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
-from veupath_chatbot.services.control_tests import resolve_controls_param_type
+from veupath_chatbot.services.control_helpers import (
+    _extract_record_ids,
+    delete_temp_strategy,
+)
+from veupath_chatbot.services.control_tests import (
+    _extract_intersection_data,
+    resolve_controls_param_type,
+)
 from veupath_chatbot.services.experiment.types import ControlValueFormat
 
 logger = get_logger(__name__)
@@ -34,8 +41,11 @@ async def run_controls_against_tree(
     Returns the same shape as :func:`run_positive_negative_controls` so
     :func:`metrics_from_control_result` can consume it directly.
     """
+    from veupath_chatbot.services.experiment.helpers import (
+        coerce_step_id,
+        extract_wdk_id,
+    )
     from veupath_chatbot.services.experiment.materialization import (
-        _coerce_step_id,
         _materialize_step_tree,
     )
 
@@ -79,7 +89,7 @@ async def run_controls_against_tree(
             parameters=controls_params,
             custom_name=f"Controls ({label})",
         )
-        controls_step_id = _coerce_step_id(controls_step)
+        controls_step_id = coerce_step_id(controls_step)
 
         combined = await api.create_combined_step(
             primary_step_id=root_tree.step_id,
@@ -88,7 +98,7 @@ async def run_controls_against_tree(
             record_type=record_type,
             custom_name=f"Tree \u2229 {label}",
         )
-        combined_step_id = _coerce_step_id(combined)
+        combined_step_id = coerce_step_id(combined)
 
         full_tree = StepTreeNode(
             combined_step_id,
@@ -100,11 +110,7 @@ async def run_controls_against_tree(
             name="Pathfinder tree eval",
             is_internal=True,
         )
-        strategy_id: int | None = None
-        if isinstance(created, dict):
-            raw = created.get("id")
-            if isinstance(raw, int):
-                strategy_id = raw
+        strategy_id = extract_wdk_id(created)
 
         try:
             target_total = await api.get_step_count(root_tree.step_id)
@@ -117,16 +123,7 @@ async def run_controls_against_tree(
                     pagination={"offset": 0, "numRecords": min(len(control_ids), 500)},
                 )
                 if isinstance(answer, dict):
-                    records = answer.get("records")
-                    if isinstance(records, list):
-                        for rec in records:
-                            if not isinstance(rec, dict):
-                                continue
-                            pk = rec.get("id")
-                            if isinstance(pk, list) and pk:
-                                first = pk[0]
-                                if isinstance(first, dict):
-                                    intersection_ids.append(str(first.get("value", "")))
+                    intersection_ids = _extract_record_ids(answer.get("records"))
 
             return {
                 "controlsCount": len(control_ids),
@@ -137,25 +134,12 @@ async def run_controls_against_tree(
                 "targetResultCount": target_total,
             }
         finally:
-            if strategy_id is not None:
-                import contextlib
-
-                with contextlib.suppress(Exception):
-                    await api.delete_strategy(strategy_id)
+            await delete_temp_strategy(api, strategy_id)
 
     if pos:
         pos_payload = await _eval_control_set(pos, "positive")
-        raw_count = pos_payload.get("intersectionCount")
-        count = int(raw_count) if isinstance(raw_count, (int, float)) else 0
-        intersection_ids_val = pos_payload.get("intersectionIds")
-        found = (
-            set(intersection_ids_val)
-            if isinstance(intersection_ids_val, list)
-            else set()
-        )
-        # Only enumerate missing when we fetched intersection IDs (≤500 controls).
-        # For >500 controls we don't have per-ID data.
-        missing = [x for x in pos if x not in found] if len(pos) <= 500 else []
+        pos_count, found_ids, has_ids = _extract_intersection_data(pos_payload)
+        missing = [x for x in pos if x not in found_ids] if has_ids else []
 
         result["target"] = {
             "searchName": "__tree__",
@@ -164,19 +148,12 @@ async def run_controls_against_tree(
         result["positive"] = {
             **pos_payload,
             "missingIdsSample": list(missing[:50]),
-            "recall": count / len(pos) if pos else None,
+            "recall": pos_count / len(pos) if pos else None,
         }
 
     if neg:
         neg_payload = await _eval_control_set(neg, "negative")
-        raw_count = neg_payload.get("intersectionCount")
-        count = int(raw_count) if isinstance(raw_count, (int, float)) else 0
-        intersection_ids_val = neg_payload.get("intersectionIds")
-        hit_ids = (
-            set(intersection_ids_val)
-            if isinstance(intersection_ids_val, list)
-            else set()
-        )
+        neg_count, hit_ids, _ = _extract_intersection_data(neg_payload)
 
         if result["target"] is None or (
             isinstance(result["target"], dict)
@@ -188,8 +165,8 @@ async def run_controls_against_tree(
             }
         result["negative"] = {
             **neg_payload,
-            "unexpectedHitsSample": list(list(hit_ids)[:50]),
-            "falsePositiveRate": count / len(neg) if neg else None,
+            "unexpectedHitsSample": list(hit_ids)[:50] if hit_ids else [],
+            "falsePositiveRate": neg_count / len(neg) if neg else None,
         }
 
     return result
@@ -268,16 +245,11 @@ def _extract_eval_counts(result: JSONObject) -> _EvalCounts:
     neg = result.get("negative") or {}
     tgt = result.get("target") or {}
 
+    from veupath_chatbot.services.experiment.helpers import safe_int
+
     pos_data = pos if isinstance(pos, dict) else {}
     neg_data = neg if isinstance(neg, dict) else {}
     tgt_data = tgt if isinstance(tgt, dict) else {}
-
-    def _int(v: object) -> int:
-        if isinstance(v, int):
-            return v
-        if isinstance(v, float):
-            return int(v)
-        return 0
 
     def _str_list(v: object) -> list[str]:
         if isinstance(v, list):
@@ -285,11 +257,11 @@ def _extract_eval_counts(result: JSONObject) -> _EvalCounts:
         return []
 
     return _EvalCounts(
-        pos_hits=_int(pos_data.get("intersectionCount")),
-        pos_total=_int(pos_data.get("controlsCount")),
-        neg_hits=_int(neg_data.get("intersectionCount")),
-        neg_total=_int(neg_data.get("controlsCount")),
-        total_results=_int(tgt_data.get("resultCount")),
+        pos_hits=safe_int(pos_data.get("intersectionCount")),
+        pos_total=safe_int(pos_data.get("controlsCount")),
+        neg_hits=safe_int(neg_data.get("intersectionCount")),
+        neg_total=safe_int(neg_data.get("controlsCount")),
+        total_results=safe_int(tgt_data.get("resultCount")),
         pos_ids=_str_list(pos_data.get("intersectionIds")),
         neg_ids=_str_list(neg_data.get("intersectionIds")),
     )

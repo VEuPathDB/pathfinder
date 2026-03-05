@@ -5,7 +5,7 @@ import type {
   OptimizationTrial,
   PlanningArtifact,
   ToolCall,
-  StrategyWithMeta,
+  Strategy,
 } from "@pathfinder/shared";
 import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import type { ChatEventContext } from "./handleChatEvent.types";
@@ -77,7 +77,7 @@ export function handleUserMessageEvent(ctx: ChatEventContext, data: unknown) {
 export function handleMessageStartEvent(ctx: ChatEventContext, data: unknown) {
   const { strategyId, strategy } = data as {
     strategyId?: string;
-    strategy?: StrategyWithMeta;
+    strategy?: Strategy;
   };
 
   if (strategyId) {
@@ -88,8 +88,9 @@ export function handleMessageStartEvent(ctx: ChatEventContext, data: unknown) {
       title: strategy?.title || strategy?.name || DEFAULT_STREAM_NAME,
       siteId: ctx.siteId,
       recordType: strategy?.recordType ?? null,
+      steps: strategy?.steps ?? [],
+      rootStepId: strategy?.rootStepId ?? null,
       stepCount: strategy?.steps?.length ?? 0,
-      resultCount: undefined,
       wdkStrategyId: strategy?.wdkStrategyId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

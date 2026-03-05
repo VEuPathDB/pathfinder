@@ -18,9 +18,8 @@ import {
 } from "@/lib/api/client";
 import { toUserMessage } from "@/lib/api/errors";
 import { useSessionStore } from "@/state/useSessionStore";
-import { useStrategyListStore } from "@/state/useStrategyListStore";
 import { useStrategyStore } from "@/state/useStrategyStore";
-import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
+import type { Strategy } from "@pathfinder/shared";
 import { buildDuplicatePlan } from "@/features/sidebar/utils/duplicatePlan";
 import {
   type DuplicateModalState,
@@ -36,7 +35,7 @@ export interface UseConversationSidebarActionsArgs {
   siteId: string;
   reportError: (message: string) => void;
   refreshStrategies: () => Promise<void>;
-  setStrategyItems: Dispatch<SetStateAction<StrategyListItem[]>>;
+  setStrategyItems: Dispatch<SetStateAction<Strategy[]>>;
 }
 
 export interface ConversationSidebarActions {
@@ -65,10 +64,10 @@ export interface ConversationSidebarActions {
   duplicateModal: DuplicateModalState | null;
   setDuplicateModal: Dispatch<SetStateAction<DuplicateModalState | null>>;
   handleDuplicate: (id: string, name: string, desc: string) => Promise<void>;
-  startDuplicate: (strategy: StrategyListItem) => void;
+  startDuplicate: (strategy: Strategy) => void;
 
   // Saved toggle
-  handleToggleSaved: (si: StrategyListItem) => Promise<void>;
+  handleToggleSaved: (si: Strategy) => Promise<void>;
 }
 
 export function useConversationSidebarActions({
@@ -81,7 +80,7 @@ export function useConversationSidebarActions({
   const strategyId = useSessionStore((s) => s.strategyId);
   const setStrategyId = useSessionStore((s) => s.setStrategyId);
 
-  const removeStrategy = useStrategyListStore((s) => s.removeStrategy);
+  const removeStrategy = useStrategyStore((s) => s.removeStrategyFromList);
 
   const setStrategyMeta = useStrategyStore((s) => s.setStrategyMeta);
   const setStrategy = useStrategyStore((s) => s.setStrategy);
@@ -144,7 +143,11 @@ export function useConversationSidebarActions({
           id: res.strategyId,
           name: DEFAULT_STREAM_NAME,
           updatedAt: now,
+          createdAt: now,
           siteId,
+          recordType: null,
+          steps: [],
+          rootStepId: null,
           stepCount: 0,
           isSaved: false,
         },
@@ -241,7 +244,7 @@ export function useConversationSidebarActions({
     [refreshStrategies],
   );
 
-  const startDuplicate = useCallback((strategy: StrategyListItem) => {
+  const startDuplicate = useCallback((strategy: Strategy) => {
     setDuplicateModal(initDuplicateModal(strategy));
     getStrategy(strategy.id)
       .then((loadedStrategy) => {
@@ -257,7 +260,7 @@ export function useConversationSidebarActions({
 
   // --- Saved toggle ---
   const handleToggleSaved = useCallback(
-    async (si: StrategyListItem) => {
+    async (si: Strategy) => {
       const nextSaved = !si.isSaved;
       try {
         await updateStrategyApi(si.id, { isSaved: nextSaved });

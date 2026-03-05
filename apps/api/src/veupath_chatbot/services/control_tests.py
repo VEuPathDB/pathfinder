@@ -14,24 +14,21 @@ from veupath_chatbot.integrations.veupathdb.strategy_api import (
     StepTreeNode,
     StrategyAPI,
 )
-from veupath_chatbot.platform.errors import InternalError
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject, JSONValue, as_json_object
 from veupath_chatbot.services.control_helpers import (
-    _coerce_step_id,
     _encode_id_list,
     _extract_record_ids,
     _get_total_count_for_step,
     cleanup_internal_control_test_strategies,
+    delete_temp_strategy,
 )
+from veupath_chatbot.services.experiment.helpers import coerce_step_id, extract_wdk_id
 from veupath_chatbot.services.experiment.types import ControlValueFormat
 
 __all__ = [
-    "_coerce_step_id",
-    "_encode_id_list",
-    "_extract_record_ids",
-    "_get_total_count_for_step",
     "resolve_controls_param_type",
+    "_extract_intersection_data",
     "_run_intersection_control",
     "_cleanup_internal_control_test_strategies",
     "run_positive_negative_controls",
@@ -120,12 +117,7 @@ async def _run_intersection_control(
         parameters=target_parameters or {},
         custom_name="Target",
     )
-    target_step_id = _coerce_step_id(target_step)
-    if target_step_id is None:
-        raise InternalError(
-            title="Control test failed",
-            detail="Failed to create target step (missing id).",
-        )
+    target_step_id = coerce_step_id(target_step)
 
     # Determine whether the controls parameter is an input-dataset type.
     # If so, upload the IDs as a WDK dataset and pass the dataset ID.
@@ -148,12 +140,7 @@ async def _run_intersection_control(
         parameters=controls_params,
         custom_name="Controls",
     )
-    controls_step_id = _coerce_step_id(controls_step)
-    if controls_step_id is None:
-        raise InternalError(
-            title="Control test failed",
-            detail="Failed to create controls step (missing id).",
-        )
+    controls_step_id = coerce_step_id(controls_step)
 
     combined_step = await api.create_combined_step(
         primary_step_id=target_step_id,
@@ -162,12 +149,7 @@ async def _run_intersection_control(
         record_type=record_type,
         custom_name=f"{boolean_operator} controls",
     )
-    combined_step_id = _coerce_step_id(combined_step)
-    if combined_step_id is None:
-        raise InternalError(
-            title="Control test failed",
-            detail="Failed to create combined step (missing id).",
-        )
+    combined_step_id = coerce_step_id(combined_step)
 
     # WDK requires steps to be part of a strategy before they can be
     # queried for results (StepService enforces this).
@@ -184,11 +166,7 @@ async def _run_intersection_control(
             description=None,
             is_internal=True,
         )
-        # WDK StrategyService.createStrategy returns { "id": <strategyId> }.
-        if isinstance(created, dict):
-            raw_sid = created.get("id")
-            if isinstance(raw_sid, int):
-                temp_strategy_id = raw_sid
+        temp_strategy_id = extract_wdk_id(created)
 
         # Now the steps ARE part of a strategy → we can query them.
         target_total = await _get_total_count_for_step(api, target_step_id)
@@ -220,17 +198,7 @@ async def _run_intersection_control(
             "targetResultCount": target_total,
         }
     finally:
-        # Strategy deletion cascade-deletes all steps inside it, which is
-        # why each call creates its own target step.
-        if temp_strategy_id is not None:
-            try:
-                await api.delete_strategy(temp_strategy_id)
-            except Exception as e:
-                logger.warning(
-                    "Failed to delete temp WDK strategy during cleanup",
-                    temp_strategy_id=temp_strategy_id,
-                    error=str(e),
-                )
+        await delete_temp_strategy(api, temp_strategy_id)
 
 
 async def _cleanup_internal_control_test_strategies(api: StrategyAPI) -> None:

@@ -1,4 +1,4 @@
-import type { StrategyWithMeta } from "@pathfinder/shared";
+import type { Strategy } from "@pathfinder/shared";
 
 /**
  * Mutable state scoped to a single chat streaming session.
@@ -11,15 +11,15 @@ import type { StrategyWithMeta } from "@pathfinder/shared";
  */
 export class StreamingSession {
   /** Undo snapshot captured before the first strategy mutation. */
-  undoSnapshot: StrategyWithMeta | null = null;
+  undoSnapshot: Strategy | null = null;
 
   /** Whether at least one graph snapshot was applied during this session. */
   snapshotApplied = false;
 
   /** Latest strategy value, seeded at stream start and kept in sync via effect. */
-  latestStrategy: StrategyWithMeta | null;
+  latestStrategy: Strategy | null;
 
-  constructor(initialStrategy: StrategyWithMeta | null) {
+  constructor(initialStrategy: Strategy | null) {
     this.latestStrategy = initialStrategy;
   }
 
@@ -40,7 +40,7 @@ export class StreamingSession {
   }
 
   /** Consume and clear the undo snapshot (returns ``null`` if already consumed). */
-  consumeUndoSnapshot(): StrategyWithMeta | null {
+  consumeUndoSnapshot(): Strategy | null {
     const snapshot = this.undoSnapshot;
     this.undoSnapshot = null;
     return snapshot;

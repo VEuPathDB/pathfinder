@@ -6,7 +6,12 @@ name tagging utilities, and shared constants.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from veupath_chatbot.platform.types import JSONObject
+
+if TYPE_CHECKING:
+    from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 
 # Internal (Pathfinder-created) WDK strategies.
 #
@@ -48,6 +53,23 @@ def strip_internal_wdk_strategy_name(name: str) -> str:
     if name.startswith(PATHFINDER_INTERNAL_STRATEGY_NAME_PREFIX):
         return name[len(PATHFINDER_INTERNAL_STRATEGY_NAME_PREFIX) :]
     return name
+
+
+async def resolve_wdk_user_id(client: VEuPathDBClient) -> str | None:
+    """Resolve the concrete WDK user ID from a ``/users/current`` call.
+
+    Some WDK deployments reject mutations on ``/users/current/...``.
+    This helper resolves the actual numeric user ID once so callers
+    can use ``/users/{userId}/...`` for all subsequent requests.
+
+    :returns: Resolved user ID string, or ``None`` if resolution failed.
+    """
+    me = await client.get("/users/current")
+    if isinstance(me, dict):
+        candidate = me.get("id")
+        if candidate is not None:
+            return str(candidate)
+    return None
 
 
 class StepTreeNode:

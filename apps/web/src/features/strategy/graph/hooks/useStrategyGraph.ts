@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEventListener } from "usehooks-ts";
 import { CombineOperator, DEFAULT_STREAM_NAME } from "@pathfinder/shared";
-import type { StrategyWithMeta } from "@pathfinder/shared";
+import type { Strategy } from "@pathfinder/shared";
+import { usePrevious } from "@/lib/hooks/usePrevious";
 import { useStrategyStore } from "@/state/useStrategyStore";
 import { computeStepCounts, listSites } from "@/lib/api/client";
 import { useStepCounts } from "@/features/strategy/services/useStepCounts";
@@ -10,9 +12,6 @@ import { useWdkUrlFallback } from "@/features/strategy/services/useWdkUrlFallbac
 import { useGraphConnections } from "@/features/strategy/graph/hooks/useGraphConnections";
 import { useGraphSelection } from "@/features/strategy/graph/hooks/useGraphSelection";
 import { useGraphSave } from "@/features/strategy/graph/hooks/useGraphSave";
-import { useBeforeUnloadUnsaved } from "@/features/strategy/graph/hooks/useBeforeUnloadUnsaved";
-import { useDraftDetailsInputs } from "@/features/strategy/graph/hooks/useDraftDetailsInputs";
-import { useSavedSnapshotSync } from "@/features/strategy/graph/hooks/useSavedSnapshotSync";
 import { useSessionStore } from "@/state/useSessionStore";
 import { useStrategyGraphNodes } from "@/features/strategy/graph/hooks/useStrategyGraphNodes";
 import { useStrategyGraphHandlers } from "@/features/strategy/graph/hooks/useStrategyGraphHandlers";
@@ -22,7 +21,7 @@ const COMBINE_MISMATCH_ERROR = "Cannot combine steps with different record types
 export const COMBINE_OPERATORS = Object.values(CombineOperator);
 
 interface UseStrategyGraphOptions {
-  strategy: StrategyWithMeta | null;
+  strategy: Strategy | null;
   siteId: string;
   onToast?: (toast: {
     type: "success" | "error" | "warning" | "info";
@@ -172,24 +171,47 @@ export function useStrategyGraph(options: UseStrategyGraphOptions) {
   ]);
 
   // --- Before-unload guard ---
-  useBeforeUnloadUnsaved(graphNodes.isUnsaved);
+  const handleBeforeUnload = useCallback(
+    (event: BeforeUnloadEvent) => {
+      if (!graphNodes.isUnsaved) return;
+      event.preventDefault();
+      event.returnValue = "";
+    },
+    [graphNodes.isUnsaved],
+  );
+  useEventListener("beforeunload", handleBeforeUnload);
 
-  // --- Draft details sync ---
-  useDraftDetailsInputs({
-    isDraftView: graphNodes.isDraftView,
-    draftName: draftStrategy?.name,
-    draftDescription: draftStrategy?.description,
+  // --- Draft details sync (defer setState to avoid synchronous setState in effect) ---
+  useEffect(() => {
+    if (!graphNodes.isDraftView) return;
+    const name = draftStrategy?.name || DEFAULT_STREAM_NAME;
+    const description = draftStrategy?.description || "";
+    queueMicrotask(() => {
+      setNameValue(name);
+      setDescriptionValue(description);
+    });
+  }, [
+    graphNodes.isDraftView,
+    draftStrategy?.name,
+    draftStrategy?.description,
     setNameValue,
     setDescriptionValue,
-  });
+  ]);
 
   // --- Saved snapshot sync ---
-  useSavedSnapshotSync({
-    strategy,
-    setLastSavedSteps: graphNodes.setLastSavedSteps,
-    buildStepSignature: graphNodes.buildStepSignature,
-    bumpLastSavedStepsVersion: () => graphNodes.setLastSavedStepsVersion((v) => v + 1),
-  });
+  const snapshotId = strategy?.id || null;
+  const prevSnapshotId = usePrevious(snapshotId);
+  useEffect(() => {
+    if (!snapshotId || snapshotId === prevSnapshotId) return;
+    if (strategy?.steps) {
+      graphNodes.setLastSavedSteps(
+        new Map(
+          strategy.steps.map((step) => [step.id, graphNodes.buildStepSignature(step)]),
+        ),
+      );
+      graphNodes.setLastSavedStepsVersion((v) => v + 1);
+    }
+  }, [snapshotId, prevSnapshotId, strategy?.steps, graphNodes]);
 
   // --- Name/description commit ---
   const handleNameCommit = useCallback(async () => {

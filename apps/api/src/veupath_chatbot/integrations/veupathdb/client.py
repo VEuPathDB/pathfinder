@@ -20,7 +20,7 @@ from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
 logger = get_logger(__name__)
 
 
-def _encode_context_param_values_for_wdk(context: JSONObject) -> JSONObject:
+def encode_context_param_values_for_wdk(context: JSONObject) -> JSONObject:
     """Encode contextParamValues in the format WDK expects.
 
     Many WDK endpoints expect multi-pick values as JSON-encoded *strings*
@@ -40,15 +40,6 @@ def _encode_context_param_values_for_wdk(context: JSONObject) -> JSONObject:
         else:
             encoded[k] = str(v)
     return encoded
-
-
-def encode_context_param_values_for_wdk(context: JSONObject) -> JSONObject:
-    """Public helper: encode contextParamValues for WDK wire format.
-
-    :param context: Context dict.
-    :returns: Encoded context suitable for WDK wire format.
-    """
-    return _encode_context_param_values_for_wdk(context)
 
 
 def _convert_params_for_httpx(
@@ -258,7 +249,7 @@ class VEuPathDBClient:
     ) -> JSONObject:
         """Get detailed search configuration using provided parameters."""
         params: JSONObject | None = {"expandParams": "true"} if expand_params else None
-        encoded_context = _encode_context_param_values_for_wdk(context or {})
+        encoded_context = encode_context_param_values_for_wdk(context or {})
         return cast(
             JSONObject,
             await self.post(
@@ -276,7 +267,7 @@ class VEuPathDBClient:
         context: JSONObject,
     ) -> JSONObject:
         """Refresh dependent params using WDK's refreshed-dependent-params endpoint."""
-        encoded_context = _encode_context_param_values_for_wdk(context or {})
+        encoded_context = encode_context_param_values_for_wdk(context or {})
         return cast(
             JSONObject,
             await self.post(
@@ -408,15 +399,4 @@ class VEuPathDBClient:
         return await self.post(
             f"/users/{user_id}/steps/{step_id}/reports/{report_name}",
             json=payload or {},
-        )
-
-    async def get_step_filter_summary(
-        self, user_id: str, step_id: int, filter_name: str
-    ) -> JSONObject:
-        """Get filter summary data for a step."""
-        return cast(
-            JSONObject,
-            await self.get(
-                f"/users/{user_id}/steps/{step_id}/filter-summary/{filter_name}"
-            ),
         )

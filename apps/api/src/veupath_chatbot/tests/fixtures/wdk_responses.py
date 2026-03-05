@@ -581,6 +581,208 @@ def analysis_result_response() -> dict:
 # ---------------------------------------------------------------------------
 # Error responses
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# POST .../columns/{col}/reports/byValue  -- column distribution
+# ---------------------------------------------------------------------------
+def column_distribution_response_string() -> dict:
+    """POST .../columns/{col}/reports/byValue -- string column distribution.
+
+    Returns discrete histogram bins with one entry per distinct value.
+    """
+    return {
+        "histogram": [
+            {
+                "value": 2890,
+                "binStart": "Plasmodium falciparum 3D7",
+                "binEnd": "Plasmodium falciparum 3D7",
+                "binLabel": "Plasmodium falciparum 3D7",
+            },
+            {
+                "value": 1452,
+                "binStart": "Plasmodium vivax P01",
+                "binEnd": "Plasmodium vivax P01",
+                "binLabel": "Plasmodium vivax P01",
+            },
+            {
+                "value": 87,
+                "binStart": "Plasmodium knowlesi H",
+                "binEnd": "Plasmodium knowlesi H",
+                "binLabel": "Plasmodium knowlesi H",
+            },
+        ],
+        "statistics": {
+            "subsetSize": 4429,
+            "numVarValues": 4429,
+            "numDistinctValues": 3,
+            "numDistinctEntityRecords": 4429,
+            "numMissingCases": 0,
+        },
+    }
+
+
+def column_distribution_response_number() -> dict:
+    """POST .../columns/{col}/reports/byValue -- number column distribution.
+
+    Returns binned histogram with ranges.
+    """
+    return {
+        "histogram": [
+            {
+                "value": 350,
+                "binStart": "0.0",
+                "binEnd": "5.0",
+                "binLabel": "[0.0, 5.0)",
+            },
+            {
+                "value": 1200,
+                "binStart": "5.0",
+                "binEnd": "10.0",
+                "binLabel": "[5.0, 10.0)",
+            },
+            {
+                "value": 800,
+                "binStart": "10.0",
+                "binEnd": "15.0",
+                "binLabel": "[10.0, 15.0)",
+            },
+            {
+                "value": 120,
+                "binStart": "15.0",
+                "binEnd": "20.0",
+                "binLabel": "[15.0, 20.0)",
+            },
+        ],
+        "statistics": {
+            "subsetSize": 2470,
+            "subsetMin": 0.5,
+            "subsetMax": 18.7,
+            "subsetMean": 7.3,
+            "numVarValues": 2470,
+            "numDistinctValues": 185,
+            "numDistinctEntityRecords": 2470,
+            "numMissingCases": 15,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /users/{userId}/steps/{stepId}/analysis-types/{name}  -- form metadata
+# ---------------------------------------------------------------------------
+def pathway_enrichment_form_response() -> dict:
+    """GET .../analysis-types/pathway-enrichment -- form metadata.
+
+    Matches the real WDK response from PlasmoDB (curled 2026-03-04).
+    WDK ``EnumParamFormatter.getParamType()`` emits JSON type strings:
+    - ``"single-pick-vocabulary"`` for single-pick enum/vocab params
+    - ``"multi-pick-vocabulary"`` for multi-pick enum/vocab params
+    - ``"number"`` for NumberParam
+    These are the only types that need JSON array encoding (they extend
+    ``AbstractEnumParam`` and use ``convertToTerms()``).
+    """
+    return {
+        "searchData": {
+            "name": "pathway-enrichment",
+            "displayName": "Metabolic Pathway Enrichment",
+            "parameters": [
+                {
+                    "name": "organism",
+                    "displayName": "Organism",
+                    "type": "single-pick-vocabulary",
+                    "initialDisplayValue": "Plasmodium falciparum 3D7",
+                    "isVisible": True,
+                    "minSelectedCount": 1,
+                    "maxSelectedCount": 1,
+                },
+                {
+                    "name": "pathwaysSources",
+                    "displayName": "Pathway Sources",
+                    "type": "multi-pick-vocabulary",
+                    "initialDisplayValue": '["KEGG","MetaCyc"]',
+                    "isVisible": True,
+                    "minSelectedCount": 1,
+                    "maxSelectedCount": -1,
+                },
+                {
+                    "name": "pValueCutoff",
+                    "displayName": "P-Value cutoff",
+                    "type": "number",
+                    "initialDisplayValue": "0.05",
+                    "isVisible": True,
+                },
+                {
+                    "name": "exact_match_only",
+                    "displayName": "EC Exact Match Only",
+                    "type": "single-pick-vocabulary",
+                    "initialDisplayValue": "Yes",
+                    "isVisible": True,
+                    "minSelectedCount": 1,
+                    "maxSelectedCount": 1,
+                },
+                {
+                    "name": "exclude_incomplete_ec",
+                    "displayName": "Exclude Incomplete EC Numbers",
+                    "type": "single-pick-vocabulary",
+                    "initialDisplayValue": "No",
+                    "isVisible": True,
+                    "minSelectedCount": 1,
+                    "maxSelectedCount": 1,
+                },
+            ],
+        },
+    }
+
+
+def go_enrichment_form_response() -> dict:
+    """GET .../analysis-types/go-enrichment -- form metadata.
+
+    WDK type strings (from ``EnumParamFormatter.getParamType()``):
+    - ``"single-pick-vocabulary"`` / ``"multi-pick-vocabulary"`` for enum/vocab
+    - ``"number"`` for NumberParam
+    """
+    return {
+        "searchData": {
+            "name": "go-enrichment",
+            "displayName": "Gene Ontology Enrichment",
+            "parameters": [
+                {
+                    "name": "goAssociationsOntologies",
+                    "displayName": "Ontology",
+                    "type": "single-pick-vocabulary",
+                    "initialDisplayValue": "Biological Process",
+                    "isVisible": True,
+                    "minSelectedCount": 1,
+                    "maxSelectedCount": 1,
+                },
+                {
+                    "name": "goEvidenceCodes",
+                    "displayName": "Evidence Codes",
+                    "type": "multi-pick-vocabulary",
+                    "initialDisplayValue": '["Computed","Curated"]',
+                    "isVisible": True,
+                    "minSelectedCount": 1,
+                    "maxSelectedCount": -1,
+                },
+                {
+                    "name": "pValueCutoff",
+                    "displayName": "P-value cutoff",
+                    "type": "number",
+                    "initialDisplayValue": "0.05",
+                    "isVisible": True,
+                },
+                {
+                    "name": "organism",
+                    "displayName": "Organism",
+                    "type": "single-pick-vocabulary",
+                    "initialDisplayValue": "Plasmodium falciparum 3D7",
+                    "isVisible": True,
+                    "minSelectedCount": 1,
+                    "maxSelectedCount": 1,
+                },
+            ],
+        },
+    }
+
+
 def error_response_422() -> dict:
     """WDK 422 Unprocessable Entity -- validation error."""
     return {

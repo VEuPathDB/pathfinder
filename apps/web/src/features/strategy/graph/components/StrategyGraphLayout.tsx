@@ -1,204 +1,90 @@
+"use client";
+
 import React from "react";
 import ReactFlow, {
   Background,
   ConnectionMode,
   Controls,
-  Edge,
-  EdgeChange,
-  type Connection,
-  Node,
-  NodeChange,
-  type ReactFlowInstance,
   SelectionMode,
   type NodeTypes,
 } from "reactflow";
-import type { StrategyStep } from "@pathfinder/shared";
+import type { Step } from "@pathfinder/shared";
+import { StepNode } from "@/features/strategy/graph/components/StepNode";
+import {
+  WarningGroupNode,
+  WarningIconNode,
+} from "@/features/strategy/graph/components/WarningNodes";
 import { GraphToolbar } from "@/features/strategy/graph/components/GraphToolbar";
 import { GraphWdkBadge } from "@/features/strategy/graph/components/GraphWdkBadge";
 import { StrategyGraphActionButtons } from "@/features/strategy/graph/components/StrategyGraphActionButtons";
 import { StrategyGraphDetailsHeader } from "@/features/strategy/graph/components/StrategyGraphDetailsHeader";
+import { useStrategyGraphCtx } from "@/features/strategy/graph/StrategyGraphContext";
 
-interface StrategyGraphLayoutProps {
-  isCompact: boolean;
-  detailsCollapsed: boolean;
-  onToggleCollapsed: () => void;
-  nameValue: string;
-  onNameChange: (value: string) => void;
-  onNameCommit: () => void;
-  descriptionValue: string;
-  onDescriptionChange: (value: string) => void;
-  onDescriptionCommit: () => void;
-  wdkStrategyId?: number;
-  wdkUrl?: string | null;
-  wdkUrlFallback?: string | null;
-  interactionMode: "select" | "pan";
-  onSetInteractionMode: (mode: "select" | "pan") => void;
-  onRelayout: () => void;
-  onAddSelectionToChat: () => void;
-  canAddSelectionToChat: boolean;
-  selectedCount: number;
-  onStartCombine?: () => void;
-  onStartOrthologTransform?: () => void;
-  canSave: boolean;
-  onSave: () => void;
-  onSaveDisabled?: () => void;
-  saveDisabledReason?: string;
-  isSaving: boolean;
-  isUnsaved: boolean;
-  nodes: Node[];
-  edges: Edge[];
-  onNodesChange: (changes: NodeChange[]) => void;
-  onEdgesChange: (changes: EdgeChange[]) => void;
-  onNodesDelete: (nodes: Node[]) => void;
-  onNodeDragStop: () => void;
-  onConnect: (connection: Connection) => void;
-  isValidConnection: (connection: Connection) => boolean;
-  nodeTypes: NodeTypes;
-  onInit: (instance: ReactFlowInstance) => void;
-  onMoveStart: () => void;
-  onPaneClick?: (event: React.MouseEvent) => void;
-  onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
-  selectionOnDrag: boolean;
-  onSelectionChange: (nodes: Node[]) => void;
-  panOnDrag: boolean;
-  onNodeClick?: (node: StrategyStep) => void;
-  fitViewOptions: { padding: number };
-  snapGrid: [number, number];
-}
+const NODE_TYPES: NodeTypes = {
+  step: StepNode,
+  warningGroup: WarningGroupNode,
+  warningIcon: WarningIconNode,
+};
+const FIT_VIEW_OPTIONS = { padding: 0.3 } as const;
+const SNAP_GRID: [number, number] = [28, 28];
 
-export function StrategyGraphLayout(props: StrategyGraphLayoutProps) {
-  const {
-    isCompact,
-    detailsCollapsed,
-    onToggleCollapsed,
-    nameValue,
-    onNameChange,
-    onNameCommit,
-    descriptionValue,
-    onDescriptionChange,
-    onDescriptionCommit,
-    wdkStrategyId,
-    wdkUrl,
-    wdkUrlFallback,
-    interactionMode,
-    onSetInteractionMode,
-    onRelayout,
-    onAddSelectionToChat,
-    canAddSelectionToChat,
-    selectedCount,
-    onStartCombine,
-    onStartOrthologTransform,
-    canSave,
-    onSave,
-    onSaveDisabled,
-    saveDisabledReason,
-    isSaving,
-    isUnsaved,
-    nodes,
-    edges,
-    onNodesChange,
-    onEdgesChange,
-    onNodesDelete,
-    onNodeDragStop,
-    onConnect,
-    isValidConnection,
-    nodeTypes,
-    onInit,
-    onMoveStart,
-    onPaneClick,
-    onEdgeClick,
-    selectionOnDrag,
-    onSelectionChange,
-    panOnDrag,
-    onNodeClick,
-    fitViewOptions,
-    snapGrid,
-  } = props;
+export function StrategyGraphLayout() {
+  const g = useStrategyGraphCtx();
 
   return (
     <div className="flex h-full w-full flex-col">
-      {!isCompact && (
-        <StrategyGraphDetailsHeader
-          detailsCollapsed={detailsCollapsed}
-          onToggleCollapsed={onToggleCollapsed}
-          nameValue={nameValue}
-          onNameChange={onNameChange}
-          onNameCommit={onNameCommit}
-          descriptionValue={descriptionValue}
-          onDescriptionChange={onDescriptionChange}
-          onDescriptionCommit={onDescriptionCommit}
-        />
-      )}
+      {!g.isCompact && <StrategyGraphDetailsHeader />}
       <div className="relative flex-1">
-        <GraphWdkBadge
-          isCompact={isCompact}
-          wdkStrategyId={wdkStrategyId}
-          wdkUrl={wdkUrl}
-          wdkUrlFallback={wdkUrlFallback}
-        />
-        <GraphToolbar
-          isCompact={isCompact}
-          interactionMode={interactionMode}
-          onRelayout={onRelayout}
-          onSetInteractionMode={onSetInteractionMode}
-          onAddSelectionToChat={onAddSelectionToChat}
-          canAddSelectionToChat={canAddSelectionToChat}
-          selectedCount={selectedCount}
-          onStartCombine={onStartCombine}
-          onStartOrthologTransform={onStartOrthologTransform}
-        />
-        {!isCompact && (
-          <StrategyGraphActionButtons
-            canSave={canSave}
-            onSave={onSave}
-            onSaveDisabled={onSaveDisabled}
-            saveDisabledReason={saveDisabledReason}
-            isSaving={isSaving}
-            isUnsaved={isUnsaved}
-          />
-        )}
+        <GraphWdkBadge />
+        <GraphToolbar />
+        {!g.isCompact && <StrategyGraphActionButtons />}
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodesDelete={onNodesDelete}
-          onNodeDragStop={onNodeDragStop}
-          onConnect={onConnect}
-          isValidConnection={isValidConnection}
-          nodeTypes={nodeTypes}
+          nodes={g.nodes}
+          edges={g.edges}
+          onNodesChange={g.onNodesChange}
+          onEdgesChange={g.onEdgesChange}
+          onNodesDelete={g.handleNodesDelete}
+          onNodeDragStop={g.handleNodeDragStop}
+          onConnect={g.handleConnect}
+          isValidConnection={g.isValidConnection}
+          nodeTypes={NODE_TYPES}
           defaultEdgeOptions={{ type: "step" }}
-          onInit={onInit}
-          onMoveStart={onMoveStart}
-          onPaneClick={onPaneClick}
-          onEdgeClick={onEdgeClick}
-          selectionOnDrag={selectionOnDrag}
+          onInit={g.handleInit}
+          onMoveStart={g.handleMoveStart}
+          onPaneClick={() => g.setEdgeMenu(null)}
+          onEdgeClick={
+            g.isCompact
+              ? undefined
+              : (event, edge) => {
+                  event.stopPropagation();
+                  g.setEdgeMenu({ edge, x: event.clientX, y: event.clientY });
+                }
+          }
+          selectionOnDrag={!g.isCompact && g.interactionMode === "select"}
           selectionMode={SelectionMode.Partial}
           onSelectionChange={({ nodes: selectedNodes }) =>
-            onSelectionChange(selectedNodes)
+            g.handleSelectionChange(selectedNodes)
           }
-          panOnDrag={panOnDrag}
+          panOnDrag={g.interactionMode === "pan"}
           connectionMode={ConnectionMode.Loose}
           onNodeClick={
-            isCompact || !onNodeClick
+            g.isCompact
               ? undefined
               : (_, node) => {
-                  const step = node.data?.step as StrategyStep | undefined;
-                  if (step) {
-                    onNodeClick(step);
-                  }
+                  const step = node.data?.step as Step | undefined;
+                  if (step) g.setSelectedStep(step);
                 }
           }
           fitView
-          fitViewOptions={fitViewOptions}
+          fitViewOptions={FIT_VIEW_OPTIONS}
           snapToGrid
-          snapGrid={snapGrid}
+          snapGrid={SNAP_GRID}
           minZoom={0.1}
           maxZoom={2}
           className="bg-muted"
         >
           <Background color="#e2e8f0" gap={28} size={1} />
-          {!isCompact && (
+          {!g.isCompact && (
             <Controls className="bg-card border-border text-muted-foreground" />
           )}
         </ReactFlow>

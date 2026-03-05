@@ -1,4 +1,4 @@
-import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
+import type { Strategy } from "@pathfinder/shared";
 
 export type ConversationKind = "strategy";
 
@@ -9,5 +9,5 @@ export interface ConversationItem {
   updatedAt: string;
   siteId?: string;
   stepCount?: number;
-  strategyItem?: StrategyListItem;
+  strategyItem?: Strategy;
 }

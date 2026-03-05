@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { Connection, Edge } from "reactflow";
-import { CombineOperator, type StrategyStep } from "@pathfinder/shared";
+import { CombineOperator, type Step } from "@pathfinder/shared";
 import {
   buildGraphIndices,
   edgeToInputPatch,
@@ -15,9 +15,9 @@ interface PendingCombine {
 }
 
 interface UseGraphConnectionsArgs {
-  steps: StrategyStep[];
-  addStep: (step: StrategyStep) => void;
-  updateStep: (stepId: string, updates: Partial<StrategyStep>) => void;
+  steps: Step[];
+  addStep: (step: Step) => void;
+  updateStep: (stepId: string, updates: Partial<Step>) => void;
   failCombineMismatch: () => void;
 }
 
@@ -73,7 +73,7 @@ export function useGraphConnections({
         setPendingCombine(null);
         return;
       }
-      const nextStep: StrategyStep = {
+      const nextStep: Step = {
         id: generateStepId(),
         kind: "combine",
         displayName: `${operator} combine`,

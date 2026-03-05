@@ -153,12 +153,16 @@ class RunEnrichmentRequest(BaseModel):
 
 
 class ThresholdSweepRequest(BaseModel):
-    """Request to sweep a numeric parameter across a range."""
+    """Request to sweep a parameter across a range (numeric) or set of values (categorical)."""
 
     parameter_name: str = Field(alias="parameterName")
-    min_value: float = Field(alias="minValue")
-    max_value: float = Field(alias="maxValue")
+    sweep_type: Literal["numeric", "categorical"] = Field(
+        default="numeric", alias="sweepType"
+    )
+    min_value: float | None = Field(default=None, alias="minValue")
+    max_value: float | None = Field(default=None, alias="maxValue")
     steps: int = Field(default=10, ge=3, le=50)
+    values: list[str] | None = Field(default=None)
 
     model_config = {"populate_by_name": True}
 

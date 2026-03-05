@@ -4,6 +4,9 @@ import asyncio
 from typing import cast
 
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
+from veupath_chatbot.integrations.veupathdb.strategy_api.helpers import (
+    resolve_wdk_user_id,
+)
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONObject
 
@@ -19,22 +22,16 @@ class TemporaryResultsAPI:
         self._session_initialized = False
 
     async def _ensure_session(self) -> None:
-        """Initialize session and resolve user id for mutation endpoints.
-
-        Some WDK deployments reject POST/PUT/DELETE on ``/users/current/...``.
-        Resolve the concrete user id once and then use ``/users/{userId}/...``.
-        """
+        """Resolve the concrete WDK user id once."""
         if self._session_initialized:
             return
-        me = await self.client.get("/users/current")
-        if isinstance(me, dict):
-            candidate = me.get("id")
-            if candidate is not None:
-                self.user_id = str(candidate)
-                logger.info(
-                    "Resolved WDK user id for temporary results",
-                    resolved_user_id=self.user_id,
-                )
+        resolved = await resolve_wdk_user_id(self.client)
+        if resolved:
+            self.user_id = resolved
+            logger.info(
+                "Resolved WDK user id for temporary results",
+                resolved_user_id=self.user_id,
+            )
         self._session_initialized = True
 
     async def create_temporary_result(

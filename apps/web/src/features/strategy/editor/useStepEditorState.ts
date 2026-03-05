@@ -6,7 +6,7 @@ import type {
   RecordType,
   Search,
   SearchValidationResponse,
-  StrategyStep,
+  Step,
 } from "@pathfinder/shared";
 import { getRecordTypes, getSearches, validateSearchParams } from "@/lib/api/client";
 import { useParamSpecs } from "./components/useParamSpecs";
@@ -22,10 +22,10 @@ import { toUserMessage } from "@/lib/api/errors";
 import { inferStepKind } from "@/lib/strategyGraph";
 
 interface UseStepEditorStateArgs {
-  step: StrategyStep;
+  step: Step;
   siteId: string;
   recordType: string | null;
-  onUpdate: (updates: Partial<StrategyStep>) => void;
+  onUpdate: (updates: Partial<Step>) => void;
   onClose: () => void;
 }
 
@@ -329,7 +329,7 @@ export function useStepEditorState({
         { allowStringParsing: false },
       );
       // Do not enforce business-required checks here (backend is authoritative).
-      const updates: Partial<StrategyStep> = {
+      const updates: Partial<Step> = {
         displayName: nextName,
         parameters: parsedParams as Record<string, unknown>,
       };
@@ -344,7 +344,7 @@ export function useStepEditorState({
       if (kind === "combine") {
         const nextOperator = operatorValue || step.operator;
         if (nextOperator) {
-          updates.operator = nextOperator as StrategyStep["operator"];
+          updates.operator = nextOperator as Step["operator"];
         }
         if (nextOperator === "COLOCATE") {
           updates.colocationParams = colocationParams ?? {

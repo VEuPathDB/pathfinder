@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { StrategyWithMeta } from "@pathfinder/shared";
+import type { Strategy } from "@pathfinder/shared";
 import { openAndHydrateDraftStrategy } from "@/features/strategy/services/openAndHydrateDraftStrategy";
 
 describe("openAndHydrateDraftStrategy", () => {
@@ -11,7 +11,7 @@ describe("openAndHydrateDraftStrategy", () => {
       name: "X",
       siteId: "plasmodb",
       recordType: "gene",
-    } as any as StrategyWithMeta;
+    } as any as Strategy;
     const getStrategy = vi.fn().mockResolvedValue(full);
 
     const setStrategyId = vi.fn();

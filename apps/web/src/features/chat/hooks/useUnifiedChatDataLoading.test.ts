@@ -3,12 +3,12 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import type { Message, StrategyWithMeta } from "@pathfinder/shared";
+import type { Message, Strategy } from "@pathfinder/shared";
 import { useUnifiedChatDataLoading } from "./useUnifiedChatDataLoading";
 
 // --- Mocks ---
 
-const mockStrategy: StrategyWithMeta = {
+const mockStrategy: Strategy = {
   id: "strategy-1",
   name: "Test Strategy",
   siteId: "plasmodb",

@@ -1,3 +1,5 @@
+"use client";
+
 import {
   GitFork,
   GitMerge,
@@ -6,41 +8,33 @@ import {
   MessageSquarePlus,
   MousePointer2,
 } from "lucide-react";
+import { useStrategyGraphCtx } from "@/features/strategy/graph/StrategyGraphContext";
 
-export function GraphToolbar(props: {
-  isCompact: boolean;
-  interactionMode: "select" | "pan";
-  onRelayout: () => void;
-  onSetInteractionMode: (mode: "select" | "pan") => void;
-  onAddSelectionToChat: () => void;
-  canAddSelectionToChat: boolean;
-  selectedCount: number;
-  onStartCombine?: () => void;
-  onStartOrthologTransform?: () => void;
-}) {
+export function GraphToolbar() {
   const {
     isCompact,
     interactionMode,
-    onRelayout,
-    onSetInteractionMode,
-    onAddSelectionToChat,
-    canAddSelectionToChat,
-    selectedCount,
-    onStartCombine,
-    onStartOrthologTransform,
-  } = props;
+    setInteractionMode,
+    handleRelayout,
+    handleAddSelectionToChat,
+    selectedNodeIds,
+    handleStartCombineFromSelection,
+    handleStartOrthologTransformFromSelection,
+  } = useStrategyGraphCtx();
 
   if (isCompact) return null;
 
-  const canCombine = selectedCount === 2 && !!onStartCombine;
-  const canOrtholog = selectedCount === 1 && !!onStartOrthologTransform;
+  const selectedCount = selectedNodeIds.length;
+  const canAddSelectionToChat = selectedCount > 0;
+  const canCombine = selectedCount === 2;
+  const canOrtholog = selectedCount === 1;
 
   return (
     <div className="pointer-events-auto absolute right-4 top-4 z-10 flex flex-col gap-2">
       <div className="flex items-center justify-end gap-2 rounded-xl border border-border bg-card/90 p-2 shadow-sm backdrop-blur">
         <button
           type="button"
-          onClick={onRelayout}
+          onClick={handleRelayout}
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors duration-150 hover:border-input hover:text-foreground"
           title="Rearrange"
           aria-label="Rearrange graph layout"
@@ -49,7 +43,7 @@ export function GraphToolbar(props: {
         </button>
         <button
           type="button"
-          onClick={() => onSetInteractionMode("select")}
+          onClick={() => setInteractionMode("select")}
           className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-colors duration-150 ${
             interactionMode === "select"
               ? "border-primary bg-primary text-primary-foreground"
@@ -63,7 +57,7 @@ export function GraphToolbar(props: {
         </button>
         <button
           type="button"
-          onClick={() => onSetInteractionMode("pan")}
+          onClick={() => setInteractionMode("pan")}
           className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-colors duration-150 ${
             interactionMode === "pan"
               ? "border-primary bg-primary text-primary-foreground"
@@ -80,7 +74,7 @@ export function GraphToolbar(props: {
 
         <button
           type="button"
-          onClick={onAddSelectionToChat}
+          onClick={handleAddSelectionToChat}
           disabled={!canAddSelectionToChat}
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors duration-150 hover:border-input hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           title={
@@ -94,7 +88,7 @@ export function GraphToolbar(props: {
         </button>
         <button
           type="button"
-          onClick={canOrtholog ? onStartOrthologTransform : undefined}
+          onClick={canOrtholog ? handleStartOrthologTransformFromSelection : undefined}
           disabled={!canOrtholog}
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors duration-150 hover:border-input hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           title={
@@ -108,7 +102,7 @@ export function GraphToolbar(props: {
         </button>
         <button
           type="button"
-          onClick={canCombine ? onStartCombine : undefined}
+          onClick={canCombine ? handleStartCombineFromSelection : undefined}
           disabled={!canCombine}
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors duration-150 hover:border-input hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           title={

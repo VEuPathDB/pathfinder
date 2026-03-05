@@ -27,26 +27,8 @@ class StepCountsResponse(BaseModel):
     counts: dict[str, int | None]
 
 
-class StrategySummaryResponse(BaseModel):
-    """Strategy summary for list views."""
-
-    id: UUID
-    name: str
-    title: str | None = None
-    site_id: str = Field(alias="siteId")
-    record_type: str | None = Field(alias="recordType")
-    step_count: int = Field(alias="stepCount")
-    result_count: int | None = Field(default=None, alias="resultCount")
-    wdk_strategy_id: int | None = Field(default=None, alias="wdkStrategyId")
-    is_saved: bool = Field(default=False, alias="isSaved")
-    created_at: datetime = Field(alias="createdAt")
-    updated_at: datetime = Field(alias="updatedAt")
-
-    model_config = {"populate_by_name": True}
-
-
 class WdkStrategySummaryResponse(BaseModel):
-    """WDK strategy summary for list views."""
+    """WDK strategy summary for list views (backend-only)."""
 
     wdk_strategy_id: int = Field(alias="wdkStrategyId")
     name: str
@@ -78,7 +60,11 @@ class OpenStrategyResponse(BaseModel):
 
 
 class StrategyResponse(BaseModel):
-    """Full strategy with steps."""
+    """Unified strategy response — used for both list and detail views.
+
+    List views: ``steps`` is ``[]``, ``stepCount``/``resultCount`` are populated.
+    Detail views: ``steps`` is populated, summary fields may also be set.
+    """
 
     id: UUID
     name: str
@@ -86,8 +72,8 @@ class StrategyResponse(BaseModel):
     description: str | None = None
     site_id: str = Field(alias="siteId")
     record_type: str | None = Field(alias="recordType")
-    steps: list[StepResponse]
-    root_step_id: str | None = Field(alias="rootStepId")
+    steps: list[StepResponse] = Field(default_factory=list)
+    root_step_id: str | None = Field(default=None, alias="rootStepId")
     wdk_strategy_id: int | None = Field(default=None, alias="wdkStrategyId")
     is_saved: bool = Field(default=False, alias="isSaved")
     messages: list[MessageResponse] | None = None
@@ -95,6 +81,10 @@ class StrategyResponse(BaseModel):
     model_id: str | None = Field(default=None, alias="modelId")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
+    # Summary fields — always set, avoids needing steps loaded.
+    step_count: int | None = Field(default=None, alias="stepCount")
+    result_count: int | None = Field(default=None, alias="resultCount")
+    wdk_url: str | None = Field(default=None, alias="wdkUrl")
 
     model_config = {"populate_by_name": True}
 

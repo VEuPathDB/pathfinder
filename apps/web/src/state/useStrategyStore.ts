@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
-import type { StrategyPlan, StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
+import type { StrategyPlan, Step, Strategy } from "@pathfinder/shared";
 import {
   getRootSteps,
   getRootStepId,
@@ -14,15 +14,22 @@ import {
 
 const MAX_HISTORY = 50;
 
-function buildStepsById(steps: StrategyStep[]): Record<string, StrategyStep> {
-  const result: Record<string, StrategyStep> = {};
+function normalizeStrategyId(strategy: Strategy): string {
+  if (strategy.id) {
+    return String(strategy.id);
+  }
+  return `executed-${Date.now()}`;
+}
+
+function buildStepsById(steps: Step[]): Record<string, Step> {
+  const result: Record<string, Step> = {};
   for (const step of steps) {
     result[step.id] = step;
   }
   return result;
 }
 
-const pushHistory = (state: StrategyState, strategy: StrategyWithMeta | null) => {
+const pushHistory = (state: StrategyState, strategy: Strategy | null) => {
   if (!strategy) {
     return { history: state.history, historyIndex: state.historyIndex };
   }
@@ -36,27 +43,32 @@ const pushHistory = (state: StrategyState, strategy: StrategyWithMeta | null) =>
 
 interface StrategyState {
   // Current strategy (for visualization)
-  strategy: StrategyWithMeta | null;
+  strategy: Strategy | null;
 
   // Individual steps (keyed by stepId)
-  stepsById: Record<string, StrategyStep>;
+  stepsById: Record<string, Step>;
 
   // History for undo/redo
-  history: StrategyWithMeta[];
+  history: Strategy[];
   historyIndex: number;
 
-  // Actions
-  addStep: (step: StrategyStep) => void;
-  updateStep: (stepId: string, updates: Partial<StrategyStep>) => void;
+  // Strategy list (sidebar/global)
+  strategies: Strategy[];
+  executedStrategies: Strategy[];
+  graphValidationStatus: Record<string, boolean>;
+
+  // Draft actions
+  addStep: (step: Step) => void;
+  updateStep: (stepId: string, updates: Partial<Step>) => void;
   removeStep: (stepId: string) => void;
-  setStrategy: (strategy: StrategyWithMeta | null) => void;
+  setStrategy: (strategy: Strategy | null) => void;
   setWdkInfo: (
     wdkStrategyId: number,
     wdkUrl?: string | null,
     name?: string | null,
     description?: string | null,
   ) => void;
-  setStrategyMeta: (updates: Partial<StrategyWithMeta>) => void;
+  setStrategyMeta: (updates: Partial<Strategy>) => void;
   buildPlan: () => {
     plan: StrategyPlan;
     name: string;
@@ -65,6 +77,13 @@ interface StrategyState {
   setStepValidationErrors: (errors: Record<string, string | undefined>) => void;
   setStepCounts: (counts: Record<string, number | null | undefined>) => void;
   clear: () => void;
+
+  // List actions
+  setStrategies: (items: Strategy[]) => void;
+  addStrategyToList: (item: Strategy) => void;
+  removeStrategyFromList: (id: string) => void;
+  addExecutedStrategy: (strategy: Strategy) => void;
+  setGraphValidationStatus: (id: string, hasErrors: boolean) => void;
 
   // Undo/redo
   undo: () => void;
@@ -75,9 +94,9 @@ interface StrategyState {
 
 // Build a Strategy object from individual steps
 function buildStrategy(
-  stepsById: Record<string, StrategyStep>,
-  existing: StrategyWithMeta | null,
-): StrategyWithMeta | null {
+  stepsById: Record<string, Step>,
+  existing: Strategy | null,
+): Strategy | null {
   const steps = Object.values(stepsById);
   if (steps.length === 0) return null;
 
@@ -107,6 +126,9 @@ export const useStrategyStore = create<StrategyState>((set, get) => ({
   stepsById: {},
   history: [],
   historyIndex: -1,
+  strategies: [],
+  executedStrategies: [],
+  graphValidationStatus: {},
 
   addStep: (step) => {
     set((state) => {
@@ -116,8 +138,8 @@ export const useStrategyStore = create<StrategyState>((set, get) => ({
       // (not `undefined`), otherwise keep the existing values.
       const updates = Object.fromEntries(
         Object.entries(step).filter(([, value]) => value !== undefined),
-      ) as Partial<StrategyStep>;
-      const nextStepRecord: StrategyStep = {
+      ) as Partial<Step>;
+      const nextStepRecord: Step = {
         ...(existing ?? step),
         ...updates,
       };
@@ -134,7 +156,7 @@ export const useStrategyStore = create<StrategyState>((set, get) => ({
         const keepExisting =
           !incomingName ||
           !isFallbackDisplayName(existingName, existing) ||
-          isFallbackDisplayName(incomingName, step as StrategyStep);
+          isFallbackDisplayName(incomingName, step as Step);
         if (keepExisting) {
           nextStepRecord.displayName = existingName;
         }
@@ -149,7 +171,7 @@ export const useStrategyStore = create<StrategyState>((set, get) => ({
           step.searchName ||
           "Untitled step";
       }
-      const nextStep = nextStepRecord as StrategyStep;
+      const nextStep = nextStepRecord as Step;
       const newStepsById = { ...state.stepsById, [step.id]: nextStep };
       const strategy = buildStrategy(newStepsById, state.strategy);
 
@@ -202,7 +224,7 @@ export const useStrategyStore = create<StrategyState>((set, get) => ({
       return;
     }
     const existingSteps = get().stepsById;
-    const stepsById: Record<string, StrategyStep> = {};
+    const stepsById: Record<string, Step> = {};
     const incomingSteps = strategy.steps ?? [];
     const mergedSteps = incomingSteps.map((step) => {
       let nextStep = step;
@@ -329,6 +351,54 @@ export const useStrategyStore = create<StrategyState>((set, get) => ({
       historyIndex: -1,
     });
   },
+
+  // List actions
+  setStrategies: (items) => set({ strategies: items }),
+
+  addStrategyToList: (item) =>
+    set((state) => {
+      const existing = state.strategies.find((c) => c.id === item.id);
+      if (existing) {
+        return {
+          strategies: state.strategies.map((c) =>
+            c.id === item.id ? { ...c, ...item } : c,
+          ),
+        };
+      }
+      return { strategies: [item, ...state.strategies] };
+    }),
+
+  removeStrategyFromList: (id) =>
+    set((state) => ({
+      strategies: state.strategies.filter((c) => c.id !== id),
+    })),
+
+  addExecutedStrategy: (strategy) =>
+    set((state) => {
+      const id = normalizeStrategyId(strategy);
+      const existingIndex = state.executedStrategies.findIndex((s) => s.id === id);
+      const nextStrategy = {
+        ...strategy,
+        id,
+        updatedAt: new Date().toISOString(),
+      };
+      if (existingIndex >= 0) {
+        const updated = [...state.executedStrategies];
+        updated[existingIndex] = nextStrategy;
+        return { executedStrategies: updated };
+      }
+      return {
+        executedStrategies: [nextStrategy, ...state.executedStrategies],
+      };
+    }),
+
+  setGraphValidationStatus: (id, hasErrors) =>
+    set((state) => ({
+      graphValidationStatus: {
+        ...state.graphValidationStatus,
+        [id]: hasErrors,
+      },
+    })),
 
   undo: () => {
     const { history, historyIndex } = get();

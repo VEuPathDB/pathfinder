@@ -7,8 +7,8 @@
  * are received via props from the parent sidebar.
  */
 
-import { useStrategyListStore } from "@/state/useStrategyListStore";
-import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
+import { useStrategyStore } from "@/state/useStrategyStore";
+import type { Strategy } from "@pathfinder/shared";
 import type { ConversationItem } from "@/features/sidebar/components/conversationSidebarTypes";
 import { ConversationListItem } from "@/features/sidebar/components/ConversationListItem";
 
@@ -24,8 +24,8 @@ interface ConversationListProps {
   onSelect: (item: ConversationItem) => void;
   onStartRename: (item: ConversationItem) => void;
   onStartDelete: (item: ConversationItem) => void;
-  onStartDuplicate: (strategy: StrategyListItem) => void;
-  onToggleSaved: (strategy: StrategyListItem) => void;
+  onStartDuplicate: (strategy: Strategy) => void;
+  onToggleSaved: (strategy: Strategy) => void;
 }
 
 export function ConversationList({
@@ -43,7 +43,7 @@ export function ConversationList({
   onStartDuplicate,
   onToggleSaved,
 }: ConversationListProps) {
-  const graphValidationStatus = useStrategyListStore((s) => s.graphValidationStatus);
+  const graphValidationStatus = useStrategyStore((s) => s.graphValidationStatus);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pr-1">

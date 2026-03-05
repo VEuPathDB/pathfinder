@@ -8,7 +8,7 @@ from veupath_chatbot.integrations.veupathdb.strategy_api import (
     strip_internal_wdk_strategy_name,
 )
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.platform.types import JSONArray, JSONValue
 from veupath_chatbot.services.experiment.types import ControlValueFormat
 
 logger = get_logger(__name__)
@@ -26,21 +26,22 @@ def _encode_id_list(ids: list[str], fmt: ControlValueFormat) -> str:
     return json.dumps(cleaned)
 
 
-def _coerce_step_id(payload: JSONObject | None) -> int | None:
-    """Extract the step ID from a WDK step-creation response.
+async def delete_temp_strategy(api: StrategyAPI, strategy_id: int | None) -> None:
+    """Best-effort deletion of a temporary WDK strategy.
 
-    WDK ``StepFormatter`` emits the step ID under ``JsonKeys.ID = "id"``
-    as a Java long (always int in JSON).
-
-    :param payload: WDK step-creation response.
-    :returns: Step ID or None.
+    Silently logs and swallows errors — callers should use this in
+    ``finally`` blocks to avoid masking the original exception.
     """
-    if not isinstance(payload, dict):
-        return None
-    raw = payload.get("id")
-    if isinstance(raw, int):
-        return raw
-    return None
+    if strategy_id is None:
+        return
+    try:
+        await api.delete_strategy(strategy_id)
+    except Exception as exc:
+        logger.warning(
+            "Failed to delete temp WDK strategy during cleanup",
+            temp_strategy_id=strategy_id,
+            error=str(exc),
+        )
 
 
 def _extract_record_ids(

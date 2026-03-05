@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Connection, Edge } from "reactflow";
-import type { StrategyStep } from "@pathfinder/shared";
+import type { Step } from "@pathfinder/shared";
 import {
   buildGraphIndices,
   edgeToInputPatch,
@@ -10,7 +10,7 @@ import {
   isValidGraphConnection,
 } from "@/features/strategy/graph/utils/graphConnectionsLogic";
 
-function step(partial: Partial<StrategyStep> & { id: string }): StrategyStep {
+function step(partial: Partial<Step> & { id: string }): Step {
   return {
     id: partial.id,
     kind: partial.kind ?? "search",
@@ -25,7 +25,7 @@ function step(partial: Partial<StrategyStep> & { id: string }): StrategyStep {
     validationError: partial.validationError,
     wdkStepId: partial.wdkStepId,
     colocationParams: partial.colocationParams,
-  } as StrategyStep;
+  } as Step;
 }
 
 describe("graphConnectionsLogic", () => {

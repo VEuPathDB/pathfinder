@@ -36,6 +36,7 @@ from veupath_chatbot.transport.http.routers import (
     strategies,
     veupathdb_auth,
 )
+from veupath_chatbot.transport.http.routers.gene_sets import router as gene_sets_router
 
 logger = get_logger(__name__)
 
@@ -162,6 +163,7 @@ def create_app() -> FastAPI:
     app.include_router(control_sets.router)
     app.include_router(veupathdb_auth.router)
     app.include_router(operations.router)
+    app.include_router(gene_sets_router)
 
     # Dev-only routes (e2e / local dev with mock chat provider).
     if settings.chat_provider.strip().lower() == "mock":

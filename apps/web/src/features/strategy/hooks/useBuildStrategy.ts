@@ -6,16 +6,16 @@ import {
   updateStrategy,
 } from "@/lib/api/client";
 import { toUserMessage } from "@/lib/api/errors";
-import type { StrategyPlan, StrategyWithMeta } from "@pathfinder/shared";
+import type { StrategyPlan, Strategy } from "@pathfinder/shared";
 
 interface UseBuildStrategyArgs {
   selectedSite: string;
   selectedSiteDisplayName: string;
-  strategy: StrategyWithMeta | null;
+  strategy: Strategy | null;
   planResult: { plan: StrategyPlan; name: string; recordType: string | null } | null;
   veupathdbSignedIn: boolean;
-  addExecutedStrategy: (strategy: StrategyWithMeta) => void;
-  setStrategyMeta: (meta: Partial<StrategyWithMeta>) => void;
+  addExecutedStrategy: (strategy: Strategy) => void;
+  setStrategyMeta: (meta: Partial<Strategy>) => void;
   setWdkInfo: (
     wdkStrategyId: number,
     wdkUrl?: string | null,

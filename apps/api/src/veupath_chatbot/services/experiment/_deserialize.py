@@ -384,9 +384,14 @@ def experiment_from_json(d: dict[str, Any]) -> Experiment:
     if d.get("crossValidation"):
         exp.cross_validation = _cv_from_json(d["crossValidation"])
 
-    exp.enrichment_results = [
-        _enrichment_from_json(er) for er in d.get("enrichmentResults", [])
-    ]
+    # Deduplicate enrichment results by analysis_type, keeping the last
+    # (most recent) entry.  This cleans up data persisted before the
+    # upsert_enrichment_result helper was introduced.
+    _seen_types: dict[str, int] = {}
+    _all_er = [_enrichment_from_json(er) for er in d.get("enrichmentResults", [])]
+    for i, er in enumerate(_all_er):
+        _seen_types[er.analysis_type] = i
+    exp.enrichment_results = [_all_er[i] for i in sorted(_seen_types.values())]
     exp.true_positive_genes = [
         _gene_from_json(g) for g in d.get("truePositiveGenes", [])
     ]

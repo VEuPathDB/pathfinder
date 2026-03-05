@@ -1,11 +1,11 @@
 import { useCallback, useState } from "react";
 import type { Node } from "reactflow";
-import type { StrategyWithMeta } from "@pathfinder/shared";
+import type { Strategy } from "@pathfinder/shared";
 import { buildNodeSelectionPayload } from "@/features/strategy/graph/utils/nodeSelectionPayload";
 import { useSessionStore } from "@/state/useSessionStore";
 
 interface UseGraphSelectionArgs {
-  strategy: StrategyWithMeta | null;
+  strategy: Strategy | null;
   isCompact: boolean;
 }
 

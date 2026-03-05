@@ -15,12 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePrevious } from "@/lib/hooks/usePrevious";
-import type {
-  Message,
-  StrategyPlan,
-  ToolCall,
-  StrategyWithMeta,
-} from "@pathfinder/shared";
+import type { Message, StrategyPlan, ToolCall, Strategy } from "@pathfinder/shared";
 import {
   APIError,
   getStrategy,
@@ -29,7 +24,6 @@ import {
 import { toUserMessage } from "@/lib/api/errors";
 import { useSessionStore } from "@/state/useSessionStore";
 import { useStrategyStore } from "@/state/useStrategyStore";
-import { useStrategyListStore } from "@/state/useStrategyListStore";
 import { useThinkingState } from "@/features/chat/hooks/useThinkingState";
 import { useChatStreaming } from "@/features/chat/hooks/useChatStreaming";
 import { useUnifiedChatModels } from "@/features/chat/hooks/useUnifiedChatModels";
@@ -81,9 +75,7 @@ export function UnifiedChatPanel({
   const [draftSelection, setDraftSelection] = useState<Record<string, unknown> | null>(
     null,
   );
-  const [undoSnapshots, setUndoSnapshots] = useState<Record<number, StrategyWithMeta>>(
-    {},
-  );
+  const [undoSnapshots, setUndoSnapshots] = useState<Record<number, Strategy>>({});
 
   const thinking = useThinkingState();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -109,8 +101,8 @@ export function UnifiedChatPanel({
   const setStrategyMeta = useStrategyStore((s) => s.setStrategyMeta);
   const clearStrategy = useStrategyStore((s) => s.clear);
   const stepsById = useStrategyStore((s) => s.stepsById);
-  const addStrategy = useStrategyListStore((s) => s.addStrategy);
-  const addExecutedStrategy = useStrategyListStore((s) => s.addExecutedStrategy);
+  const addStrategy = useStrategyStore((s) => s.addStrategyToList);
+  const addExecutedStrategy = useStrategyStore((s) => s.addExecutedStrategy);
 
   // --- Error handling ---
   const handleError = useCallback(

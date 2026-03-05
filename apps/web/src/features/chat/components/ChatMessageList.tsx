@@ -6,7 +6,7 @@ import type {
   ToolCall,
   PlanningArtifact,
   OptimizationProgressData,
-  StrategyWithMeta,
+  Strategy,
 } from "@pathfinder/shared";
 import { decodeNodeSelection } from "@/features/chat/node_selection";
 import { ChatEmptyState } from "@/features/chat/components/ChatEmptyState";
@@ -28,9 +28,9 @@ interface ChatMessageListProps {
   firstName?: string;
   isStreaming: boolean;
   messages: Message[];
-  undoSnapshots: Record<number, StrategyWithMeta>;
+  undoSnapshots: Record<number, Strategy>;
   onSend: (content: string) => void;
-  onUndoSnapshot: (snapshot: StrategyWithMeta) => void;
+  onUndoSnapshot: (snapshot: Strategy) => void;
   onApplyPlanningArtifact?: (artifact: PlanningArtifact) => void;
   thinking: {
     activeToolCalls: ToolCall[];

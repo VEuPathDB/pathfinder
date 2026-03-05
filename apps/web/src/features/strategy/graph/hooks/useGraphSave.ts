@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { normalizePlan, updateStrategy } from "@/lib/api/client";
 import { APIError } from "@/lib/api/http";
 import { toUserMessage } from "@/lib/api/errors";
-import type { StrategyPlan, StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
+import type { StrategyPlan, Step, Strategy } from "@pathfinder/shared";
 import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import type { CombineMismatchGroup } from "@/lib/strategyGraph";
 import type { MutableRef } from "@/lib/types/refs";
@@ -13,8 +13,8 @@ const isUuid = (value: string) =>
   );
 
 interface UseGraphSaveArgs {
-  strategy: StrategyWithMeta | null;
-  draftStrategy: StrategyWithMeta | null;
+  strategy: Strategy | null;
+  draftStrategy: Strategy | null;
   buildPlan: () => {
     plan: StrategyPlan;
     name: string;
@@ -25,8 +25,8 @@ interface UseGraphSaveArgs {
     type: "success" | "error" | "warning" | "info";
     message: string;
   }) => void;
-  setStrategyMeta: (meta: Partial<StrategyWithMeta>) => void;
-  buildStepSignature: (step: StrategyStep) => string;
+  setStrategyMeta: (meta: Partial<Strategy>) => void;
+  buildStepSignature: (step: Step) => string;
   setLastSavedSteps: React.Dispatch<React.SetStateAction<Map<string, string>>>;
   setLastSavedStepsVersion: React.Dispatch<React.SetStateAction<number>>;
   validateSearchSteps: () => Promise<boolean>;

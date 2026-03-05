@@ -10,7 +10,7 @@
 
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import type { StrategyWithMeta } from "@pathfinder/shared";
+import type { Strategy } from "@pathfinder/shared";
 import { useOperationRecovery } from "./useOperationRecovery";
 
 // ---------------------------------------------------------------------------
@@ -90,9 +90,7 @@ function makeArgs(overrides: Partial<Parameters<typeof useOperationRecovery>[0]>
     parseToolArguments: vi.fn(),
     parseToolResult: vi.fn(),
     applyGraphSnapshot: vi.fn(),
-    getStrategy: vi.fn(
-      async (): Promise<StrategyWithMeta> => null as unknown as StrategyWithMeta,
-    ),
+    getStrategy: vi.fn(async (): Promise<Strategy> => null as unknown as Strategy),
     attachThinkingToLastAssistant: vi.fn(),
     onApiError: vi.fn(),
     setOptimizationProgress: vi.fn(),

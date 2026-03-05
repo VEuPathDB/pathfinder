@@ -1,8 +1,8 @@
-import type { StrategyStep } from "@pathfinder/shared";
+import type { Step } from "@pathfinder/shared";
 
 export type NodeDeletionResult = {
   removeIds: string[];
-  patches: Array<{ stepId: string; patch: Partial<StrategyStep> }>;
+  patches: Array<{ stepId: string; patch: Partial<Step> }>;
 };
 
 /**
@@ -11,7 +11,7 @@ export type NodeDeletionResult = {
  * - detach any remaining step inputs that referenced deleted steps
  */
 export function computeNodeDeletionResult(args: {
-  steps: StrategyStep[];
+  steps: Step[];
   deletedNodeIds: string[];
 }): NodeDeletionResult {
   const { steps, deletedNodeIds } = args;
@@ -26,7 +26,7 @@ export function computeNodeDeletionResult(args: {
   const patches: NodeDeletionResult["patches"] = [];
   for (const step of steps) {
     if (toRemove.has(step.id)) continue;
-    const patch: Partial<StrategyStep> = {};
+    const patch: Partial<Step> = {};
     if (step.primaryInputStepId && toRemove.has(step.primaryInputStepId)) {
       patch.primaryInputStepId = undefined;
     }

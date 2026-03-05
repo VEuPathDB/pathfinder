@@ -22,10 +22,6 @@ from veupath_chatbot.persistence.session import async_session_factory
 from veupath_chatbot.platform.errors import WDKError
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.services.strategies.plan_validation import validate_plan_or_raise
-from veupath_chatbot.services.strategies.serialization import (
-    build_steps_data_from_plan,
-    count_steps_in_plan,
-)
 
 logger = get_logger(__name__)
 
@@ -123,11 +119,8 @@ async def try_auto_push_to_wdk(
             await repo.update_projection(
                 strategy_id,
                 plan=updated_plan,
-                steps=list(build_steps_data_from_plan(updated_plan)),
                 record_type=strategy_ast.record_type,
-                root_step_id=strategy_ast.root.id,
-                root_step_id_set=True,
-                step_count=count_steps_in_plan(updated_plan),
+                step_count=len(strategy_ast.get_all_steps()),
             )
             await session.commit()
 

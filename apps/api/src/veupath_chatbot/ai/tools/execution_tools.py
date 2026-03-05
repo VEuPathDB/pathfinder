@@ -18,6 +18,7 @@ from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
 from veupath_chatbot.platform.errors import ErrorCode
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.services.experiment.helpers import extract_wdk_id
 from veupath_chatbot.services.strategies.engine.validation import ValidationMixin
 
 logger = get_logger(__name__)
@@ -165,10 +166,7 @@ class ExecutionTools(ValidationMixin):
                     name=strategy.name or "Untitled Strategy",
                     description=strategy.description,
                 )
-                if isinstance(wdk_result, dict):
-                    raw_id = wdk_result.get("id")
-                    if isinstance(raw_id, int):
-                        wdk_strategy_id = raw_id
+                wdk_strategy_id = extract_wdk_id(wdk_result)
 
             compiled_map = {s.local_id: s.wdk_step_id for s in compilation_result.steps}
 

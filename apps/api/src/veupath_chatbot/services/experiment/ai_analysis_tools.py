@@ -178,7 +178,7 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
 
         api = get_strategy_api(self.site_id)
         try:
-            return await api.get_filter_summary(exp.wdk_step_id, attribute_name)
+            return await api.get_column_distribution(exp.wdk_step_id, attribute_name)
         except Exception as exc:
             return {"error": str(exc), "attribute": attribute_name}
 

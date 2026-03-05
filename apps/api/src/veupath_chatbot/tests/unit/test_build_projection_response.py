@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from veupath_chatbot.transport.http.routers.strategies._shared import (
     build_projection_response,
+    derive_steps_from_plan,
 )
 
 
@@ -84,10 +85,10 @@ class TestBuildProjectionResponseMessages:
 
     def test_skips_non_dict_entries(self):
         proj = _make_projection()
-        messages = [
+        messages: list = [
             _make_msg("user", "hello"),
-            "not a dict",  # type: ignore[list-item]
-            42,  # type: ignore[list-item]
+            "not a dict",
+            42,
             _make_msg("assistant", "response"),
         ]
         resp = build_projection_response(proj, messages=messages)
@@ -118,3 +119,85 @@ class TestBuildProjectionResponseMessages:
         resp = build_projection_response(proj, messages=messages)
         # All messages failed validation → msg_responses is empty → None
         assert resp.messages is None
+
+
+# -- Plan for a single search step (reused across tests) --
+_SINGLE_STEP_PLAN = {
+    "recordType": "GeneRecordClasses.GeneRecordClass",
+    "root": {
+        "id": "step_1",
+        "searchName": "GenesByTaxon",
+        "parameters": {"organism": "Plasmodium falciparum 3D7"},
+    },
+}
+
+_TWO_STEP_PLAN = {
+    "recordType": "GeneRecordClasses.GeneRecordClass",
+    "root": {
+        "id": "step_2",
+        "searchName": "boolean_question",
+        "operator": "INTERSECT",
+        "primaryInput": {
+            "id": "step_1",
+            "searchName": "GenesByTaxon",
+            "parameters": {"organism": "Plasmodium falciparum 3D7"},
+        },
+        "secondaryInput": {
+            "id": "step_3",
+            "searchName": "GenesByGoTerm",
+            "parameters": {"GoTerm": "GO:0006096"},
+        },
+    },
+}
+
+
+class TestDeriveStepsFromPlan:
+    """Tests for derive_steps_from_plan (read-time derivation)."""
+
+    def test_empty_plan_returns_empty(self):
+        assert derive_steps_from_plan({}) == []
+
+    def test_none_plan_returns_empty(self):
+        assert derive_steps_from_plan(None) == []  # type: ignore[arg-type]
+
+    def test_invalid_plan_returns_empty(self):
+        assert derive_steps_from_plan({"root": "not_a_dict"}) == []
+
+    def test_single_step_plan_returns_one_step(self):
+        steps = derive_steps_from_plan(_SINGLE_STEP_PLAN)
+        assert len(steps) == 1
+        assert steps[0].id == "step_1"
+        assert steps[0].search_name == "GenesByTaxon"
+        assert steps[0].kind == "search"
+
+    def test_two_step_plan_returns_three_steps(self):
+        steps = derive_steps_from_plan(_TWO_STEP_PLAN)
+        assert len(steps) == 3
+        ids = {s.id for s in steps}
+        assert ids == {"step_1", "step_2", "step_3"}
+
+    def test_derived_steps_have_record_type(self):
+        steps = derive_steps_from_plan(_SINGLE_STEP_PLAN)
+        assert steps[0].record_type == "GeneRecordClasses.GeneRecordClass"
+
+
+class TestBuildProjectionResponseDerivedSteps:
+    """Tests that build_projection_response derives steps from plan (not projection.steps)."""
+
+    def test_steps_derived_from_plan_not_stored(self):
+        """Even if projection.steps is empty, steps come from plan."""
+        proj = _make_projection(plan=_SINGLE_STEP_PLAN, steps=[])
+        resp = build_projection_response(proj)
+        assert len(resp.steps) == 1
+        assert resp.steps[0].id == "step_1"
+
+    def test_root_step_id_derived_from_plan(self):
+        proj = _make_projection(plan=_SINGLE_STEP_PLAN, root_step_id=None)
+        resp = build_projection_response(proj)
+        assert resp.root_step_id == "step_1"
+
+    def test_empty_plan_gives_empty_steps(self):
+        proj = _make_projection(plan={})
+        resp = build_projection_response(proj)
+        assert resp.steps == []
+        assert resp.root_step_id is None

@@ -4,7 +4,7 @@ import type {
   OptimizationProgressData,
   PlanningArtifact,
   ToolCall,
-  StrategyWithMeta,
+  Strategy,
 } from "@pathfinder/shared";
 import { ChatMarkdown } from "@/features/chat/components/message/ChatMarkdown";
 import { ChatThinkingDetails } from "@/features/chat/components/thinking/ChatThinkingDetails";
@@ -40,8 +40,8 @@ interface AssistantMessagePartsProps {
   setExpandedSources: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   showCitationTags: boolean;
   setShowCitationTags: React.Dispatch<React.SetStateAction<boolean>>;
-  undoSnapshot?: StrategyWithMeta;
-  onUndoSnapshot: (snapshot: StrategyWithMeta) => void;
+  undoSnapshot?: Strategy;
+  onUndoSnapshot: (snapshot: Strategy) => void;
 }
 
 function buildAssistantParts(

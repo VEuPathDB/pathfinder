@@ -24,38 +24,64 @@ def safe_int(val: object, default: int = 0) -> int:
     if isinstance(val, (float, str)):
         try:
             return int(float(val))
-        except ValueError, TypeError:
+        except ValueError, TypeError, OverflowError:
             pass
     return default
 
 
 def safe_float(val: object, default: float = 0.0) -> float:
-    """Safely convert a value to float, returning *default* on failure."""
+    """Safely convert a value to float, returning *default* on failure.
+
+    Non-finite values (``inf``, ``-inf``, ``nan``) are replaced with
+    *default* because they are not JSON-serializable and PostgreSQL
+    rejects them in JSON columns.
+    """
+    import math
+
+    result: float
     if isinstance(val, (int, float)):
-        return float(val)
-    if isinstance(val, str):
+        result = float(val)
+    elif isinstance(val, str):
         try:
-            return float(val)
+            result = float(val)
         except ValueError:
-            pass
-    return default
+            return default
+    else:
+        return default
+    if not math.isfinite(result):
+        return default
+    return result
+
+
+def extract_wdk_id(payload: JSONObject | None, key: str = "id") -> int | None:
+    """Extract an integer ID from a WDK JSON response.
+
+    WDK formatters (``StepFormatter``, ``StrategyService``, etc.) emit
+    entity IDs as Java longs (always ``int`` in JSON) under a known key
+    (typically ``"id"`` or ``"strategyId"``).
+
+    :param payload: WDK response dict.
+    :param key: JSON key containing the integer ID.
+    :returns: The integer ID, or ``None`` if not found.
+    """
+    if isinstance(payload, dict):
+        raw = payload.get(key)
+        if isinstance(raw, int):
+            return raw
+    return None
 
 
 def coerce_step_id(payload: JSONObject | None) -> int:
     """Extract step ID from a WDK step-creation response.
 
-    WDK ``StepFormatter`` emits the step ID under ``JsonKeys.ID = "id"``
-    as a Java long (always int in JSON).
-
     :param payload: WDK step-creation response.
     :returns: Step ID.
     :raises ValueError: If step ID not found.
     """
-    if isinstance(payload, dict):
-        raw = payload.get("id")
-        if isinstance(raw, int):
-            return raw
-    raise ValueError("Failed to extract step ID from WDK response")
+    step_id = extract_wdk_id(payload)
+    if step_id is None:
+        raise ValueError("Failed to extract step ID from WDK response")
+    return step_id
 
 
 def _extract_gene_list(

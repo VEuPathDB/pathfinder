@@ -5,13 +5,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
+from veupath_chatbot.domain.strategy.ast import from_dict as parse_plan
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.types import JSONArray, JSONObject
+from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.strategies.step_builders import build_steps_data_from_ast
 from veupath_chatbot.transport.http.schemas import (
     MessageResponse,
     StepResponse,
     StrategyResponse,
-    StrategySummaryResponse,
     ThinkingResponse,
 )
 
@@ -24,6 +25,18 @@ logger = get_logger(__name__)
 def build_step_response(step: JSONObject) -> StepResponse:
     """Build a StepResponse from a step dict."""
     return StepResponse.model_validate(cast(dict[str, object], step))
+
+
+def derive_steps_from_plan(plan: JSONObject) -> list[StepResponse]:
+    """Derive step responses from a plan dict. Returns [] if plan is empty/invalid."""
+    if not plan or not isinstance(plan, dict) or "root" not in plan:
+        return []
+    try:
+        ast = parse_plan(plan)
+        steps_data = build_steps_data_from_ast(ast)
+        return [build_step_response(s) for s in steps_data if isinstance(s, dict)]
+    except ValueError, KeyError, TypeError:
+        return []
 
 
 def extract_plan_description(plan: JSONObject) -> str | None:
@@ -67,12 +80,12 @@ def build_projection_response(
     messages: list[JSONObject] | None = None,
     thinking: JSONObject | None = None,
 ) -> StrategyResponse:
-    """Build a ``StrategyResponse`` from a StreamProjection + Redis data."""
+    """Build a ``StrategyResponse`` from a StreamProjection + Redis data.
+
+    Steps and rootStepId are derived from the plan at read time.
+    """
     plan: JSONObject = projection.plan if isinstance(projection.plan, dict) else {}
-    steps_data: JSONArray = (
-        projection.steps if isinstance(projection.steps, list) else []
-    )
-    root_step_id = extract_root_step_id(plan, projection.root_step_id)
+    root_step_id = extract_root_step_id(plan, None)
 
     msg_responses: list[MessageResponse] | None = None
     if messages:
@@ -100,7 +113,7 @@ def build_projection_response(
         description=extract_plan_description(plan),
         siteId=projection.site_id,
         recordType=projection.record_type,
-        steps=[build_step_response(s) for s in steps_data if isinstance(s, dict)],
+        steps=derive_steps_from_plan(plan),
         rootStepId=root_step_id,
         wdkStrategyId=projection.wdk_strategy_id,
         isSaved=projection.is_saved,
@@ -118,18 +131,21 @@ def build_projection_summary(
     projection: StreamProjection,
     *,
     site_id: str = "",
-) -> StrategySummaryResponse:
-    """Build a ``StrategySummaryResponse`` from a StreamProjection."""
-    return StrategySummaryResponse(
+) -> StrategyResponse:
+    """Build a ``StrategyResponse`` (list view) from a StreamProjection.
+
+    Returns a StrategyResponse with ``steps=[]`` and summary fields populated.
+    """
+    return StrategyResponse(
         id=projection.stream_id,
         name=projection.name,
         title=projection.name,
         siteId=site_id or projection.site_id,
         recordType=projection.record_type,
-        stepCount=projection.step_count,
-        resultCount=projection.result_count,
         wdkStrategyId=projection.wdk_strategy_id,
         isSaved=projection.is_saved,
+        stepCount=projection.step_count,
+        resultCount=projection.result_count,
         createdAt=projection.stream.created_at
         if projection.stream
         else datetime.now(UTC),

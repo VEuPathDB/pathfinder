@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { buildNodeSelectionPayload } from "@/features/strategy/graph/utils/nodeSelectionPayload";
-import type { StrategyWithMeta } from "@pathfinder/shared";
+import type { Strategy } from "@pathfinder/shared";
 
 describe("buildNodeSelectionPayload", () => {
   test("includes selected node(s) plus one-hop context (inputs + parents of selected inputs)", () => {
@@ -18,7 +18,7 @@ describe("buildNodeSelectionPayload", () => {
           operator: "UNION",
         },
       ],
-    } as unknown as StrategyWithMeta;
+    } as unknown as Strategy;
 
     const payload = buildNodeSelectionPayload(strategy, ["b"]);
     expect(payload.graphId).toBe("s1");

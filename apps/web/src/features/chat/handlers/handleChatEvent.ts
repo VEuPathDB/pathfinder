@@ -26,6 +26,7 @@ import {
   handleToolCallEndEvent,
   handleToolCallStartEvent,
 } from "./handleChatEvent.toolEvents";
+import { handleWorkbenchGeneSetEvent } from "./handleChatEvent.workbenchEvents";
 export type { ChatEventContext } from "./handleChatEvent.types";
 
 export function handleChatEvent(ctx: ChatEventContext, event: ChatSSEEvent) {
@@ -108,6 +109,10 @@ export function handleChatEvent(ctx: ChatEventContext, event: ChatSSEEvent) {
     }
     case "error": {
       handleErrorEvent(ctx, event.data);
+      break;
+    }
+    case "workbench_gene_set": {
+      handleWorkbenchGeneSetEvent(ctx, event.data);
       break;
     }
     case "unknown":

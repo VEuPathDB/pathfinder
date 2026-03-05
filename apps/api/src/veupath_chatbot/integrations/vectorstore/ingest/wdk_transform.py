@@ -12,6 +12,9 @@ from veupath_chatbot.integrations.vectorstore.qdrant_store import (
     stable_json_dumps,
 )
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.services.catalog.param_resolution import (
+    _unwrap_search_data as _unwrap_search_data_or_none,
+)
 
 
 def _coerce_str(value: object | None) -> str:
@@ -45,12 +48,7 @@ def _preview_vocab(vocab: JSONValue, *, limit: int = 50) -> tuple[list[str], boo
 
 
 def _unwrap_search_data(details: JSONObject | None) -> JSONObject:
-    if not isinstance(details, dict):
-        return {}
-    search_data = details.get("searchData")
-    if isinstance(search_data, dict):
-        return search_data
-    return details
+    return _unwrap_search_data_or_none(details) or {}
 
 
 def build_record_type_doc(site_id: str, rt: JSONValue) -> JSONObject | None:

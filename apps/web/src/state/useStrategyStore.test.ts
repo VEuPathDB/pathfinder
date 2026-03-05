@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useStrategyStore } from "./useStrategyStore";
 
 describe("state/useStrategyStore", () => {
@@ -242,5 +242,130 @@ describe("state/useStrategyStore", () => {
     });
     const state = useStrategyStore.getState();
     expect(state.stepsById["s1"]?.displayName).toBe("geneById");
+  });
+});
+
+describe("state/useStrategyStore (list management)", () => {
+  beforeEach(() => {
+    useStrategyStore.setState({
+      strategies: [],
+      executedStrategies: [],
+      graphValidationStatus: {},
+    });
+  });
+
+  it("adds and updates strategies by id", () => {
+    const { addStrategyToList } = useStrategyStore.getState();
+    addStrategyToList({
+      id: "s1",
+      name: "A",
+      title: "A",
+      siteId: "plasmodb",
+      recordType: "gene",
+      stepCount: 0,
+      steps: [],
+      rootStepId: null,
+      createdAt: "t1",
+      updatedAt: "t1",
+    });
+    addStrategyToList({
+      id: "s1",
+      name: "A2",
+      title: "A2",
+      siteId: "plasmodb",
+      recordType: "gene",
+      stepCount: 1,
+      steps: [],
+      rootStepId: null,
+      createdAt: "t1",
+      updatedAt: "t2",
+    });
+
+    const { strategies } = useStrategyStore.getState();
+    expect(strategies).toHaveLength(1);
+    expect(strategies[0]).toMatchObject({ id: "s1", name: "A2", stepCount: 1 });
+  });
+
+  it("normalizes executed strategy id when missing", () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1234);
+    const { addExecutedStrategy } = useStrategyStore.getState();
+    addExecutedStrategy({
+      id: "",
+      name: "Exec",
+      siteId: "plasmodb",
+      recordType: "gene",
+      steps: [],
+      rootStepId: null,
+      createdAt: "t1",
+      updatedAt: "t1",
+    });
+
+    const { executedStrategies } = useStrategyStore.getState();
+    expect(executedStrategies).toHaveLength(1);
+    expect(executedStrategies[0]?.id).toBe("executed-1234");
+    nowSpy.mockRestore();
+  });
+
+  it("tracks graph validation status per id", () => {
+    const { setGraphValidationStatus } = useStrategyStore.getState();
+    setGraphValidationStatus("s1", true);
+    expect(useStrategyStore.getState().graphValidationStatus).toEqual({
+      s1: true,
+    });
+  });
+
+  it("removes strategy by id", () => {
+    const { addStrategyToList, removeStrategyFromList } = useStrategyStore.getState();
+    addStrategyToList({
+      id: "s1",
+      name: "A",
+      title: "A",
+      siteId: "plasmodb",
+      recordType: "gene",
+      stepCount: 0,
+      steps: [],
+      rootStepId: null,
+      createdAt: "t1",
+      updatedAt: "t1",
+    });
+    addStrategyToList({
+      id: "s2",
+      name: "B",
+      title: "B",
+      siteId: "plasmodb",
+      recordType: "gene",
+      stepCount: 0,
+      steps: [],
+      rootStepId: null,
+      createdAt: "t1",
+      updatedAt: "t1",
+    });
+    removeStrategyFromList("s1");
+    const { strategies } = useStrategyStore.getState();
+    expect(strategies).toHaveLength(1);
+    expect(strategies[0]?.id).toBe("s2");
+  });
+
+  it("updates existing executed strategy when id matches", () => {
+    const { addExecutedStrategy } = useStrategyStore.getState();
+    const strategy1 = {
+      id: "exec1",
+      name: "Exec 1",
+      siteId: "plasmodb",
+      recordType: "gene",
+      steps: [],
+      rootStepId: null,
+      createdAt: "t1",
+      updatedAt: "t1",
+    };
+    addExecutedStrategy(strategy1);
+    const strategy2 = {
+      ...strategy1,
+      name: "Exec 1 Updated",
+    };
+    addExecutedStrategy(strategy2);
+    const { executedStrategies } = useStrategyStore.getState();
+    expect(executedStrategies).toHaveLength(1);
+    expect(executedStrategies[0]?.name).toBe("Exec 1 Updated");
   });
 });

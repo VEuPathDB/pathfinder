@@ -2,17 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Node, ReactFlowInstance } from "reactflow";
+import { useEventListener } from "usehooks-ts";
 import { usePrevious } from "@/lib/hooks/usePrevious";
-import type { StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
+import type { Step, Strategy } from "@pathfinder/shared";
 import { useStrategyStore } from "@/state/useStrategyStore";
-import { useAutoFitView } from "@/features/strategy/graph/hooks/useAutoFitView";
 import { useNodePositionHistory } from "@/features/strategy/graph/hooks/useNodePositionHistory";
-import { useUndoRedoHotkeys } from "@/features/strategy/graph/hooks/useUndoRedoHotkeys";
-import { useResetGraphUiOnStrategyChange } from "@/features/strategy/graph/hooks/useResetGraphUiOnStrategyChange";
 import { deserializeStrategyToGraph } from "@/lib/strategyGraph";
 
 interface UseStrategyGraphLayoutOptions {
-  strategy: StrategyWithMeta | null;
+  strategy: Strategy | null;
   isCompact: boolean;
   nodes: Node[];
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
@@ -57,14 +55,28 @@ export function useStrategyGraphLayout(options: UseStrategyGraphLayoutOptions) {
   const canRedo = useStrategyStore((state) => state.canRedo);
   const draftStrategy = useStrategyStore((state) => state.strategy);
 
-  const autoFit = useAutoFitView({
-    enabled: !isCompact,
-    nodeCount: nodes.length,
-    userHasMoved,
-    fitView: () =>
-      reactFlowInstanceRef.current?.fitView({ padding: 0.3, duration: 300 }),
-  });
+  // --- Auto-fit viewport when nodes are added ---
+  const prevNodeCount = usePrevious(nodes.length);
+  const autoFitResetRef = useRef(false);
+  const [autoFitTrigger, setAutoFitTrigger] = useState(0);
 
+  useEffect(() => {
+    if (isCompact) return;
+    const prev = autoFitResetRef.current ? 0 : (prevNodeCount ?? 0);
+    if (autoFitResetRef.current) autoFitResetRef.current = false;
+    if (nodes.length > prev && !userHasMoved) {
+      requestAnimationFrame(() =>
+        reactFlowInstanceRef.current?.fitView({ padding: 0.3, duration: 300 }),
+      );
+    }
+  }, [isCompact, nodes.length, prevNodeCount, userHasMoved, autoFitTrigger]);
+
+  const resetAutoFit = useCallback(() => {
+    autoFitResetRef.current = true;
+    setAutoFitTrigger((t) => t + 1);
+  }, []);
+
+  // --- Node position undo/redo ---
   const {
     pushSnapshot,
     reset: resetNodeHistory,
@@ -72,22 +84,45 @@ export function useStrategyGraphLayout(options: UseStrategyGraphLayoutOptions) {
     tryRedo,
   } = useNodePositionHistory({ setNodes });
 
-  useResetGraphUiOnStrategyChange({
-    strategyId: strategy?.id,
-    setUserHasMoved,
-    autoFitReset: autoFit.reset,
-    setSelectedNodeIds,
-  });
+  // --- Reset UI on strategy change (defer setState to avoid synchronous setState in effect) ---
+  useEffect(() => {
+    if (prevStrategyId === undefined) return;
+    if (prevStrategyId === (strategy?.id ?? null)) return;
+    queueMicrotask(() => {
+      setUserHasMoved(false);
+      resetAutoFit();
+      setSelectedNodeIds([]);
+    });
+  }, [strategy?.id, prevStrategyId, resetAutoFit, setSelectedNodeIds]);
 
-  useUndoRedoHotkeys({
-    enabled: true,
-    tryUndoLocal: tryUndo,
-    tryRedoLocal: tryRedo,
-    canUndoGlobal: canUndo,
-    canRedoGlobal: canRedo,
-    undoGlobal: undo,
-    redoGlobal: redo,
-  });
+  // --- Undo/redo hotkeys ---
+  const handleUndoRedoKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLowerCase();
+      if (key !== "z" && key !== "y") return;
+      event.preventDefault();
+      if (key === "y" || event.shiftKey) {
+        if (tryRedo()) return;
+        if (canRedo()) redo();
+        return;
+      }
+      if (tryUndo()) return;
+      if (canUndo()) undo();
+    },
+    [tryUndo, tryRedo, canUndo, canRedo, undo, redo],
+  );
+  useEventListener("keydown", handleUndoRedoKeyDown);
 
   // Deserialize strategy to graph nodes/edges
   useEffect(() => {
@@ -97,7 +132,7 @@ export function useStrategyGraphLayout(options: UseStrategyGraphLayoutOptions) {
     const { nodes: newNodes, edges: newEdges } = deserializeStrategyToGraph(
       strategy,
       (stepId, operator) => {
-        updateStep(stepId, { operator: operator as StrategyStep["operator"] });
+        updateStep(stepId, { operator: operator as Step["operator"] });
       },
       handleAddToChat,
       handleOpenDetails,

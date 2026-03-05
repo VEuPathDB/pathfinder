@@ -7,7 +7,6 @@ import { StrategyGraph } from "@/features/strategy/graph/components/StrategyGrap
 import { ConversationSidebar } from "@/features/sidebar/components/ConversationSidebar";
 import { useSessionStore } from "@/state/useSessionStore";
 import { useStrategyStore } from "@/state/useStrategyStore";
-import { useStrategyListStore } from "@/state/useStrategyListStore";
 import { refreshAuth } from "@/lib/api/client";
 import { ToastContainer } from "@/app/components/ToastContainer";
 import { LoginModal } from "@/app/components/LoginModal";
@@ -19,7 +18,7 @@ import { useSidebarResize } from "@/app/hooks/useSidebarResize";
 import { useBuildStrategy } from "@/features/strategy/hooks/useBuildStrategy";
 import {
   AlertTriangle,
-  FlaskConical,
+  Layers,
   Loader2,
   MessageCircle,
   RefreshCw,
@@ -48,9 +47,7 @@ export default function HomePage() {
   const clearStrategy = useStrategyStore((state) => state.clear);
   const setStrategyMeta = useStrategyStore((state) => state.setStrategyMeta);
   const setWdkInfo = useStrategyStore((state) => state.setWdkInfo);
-  const addExecutedStrategy = useStrategyListStore(
-    (state) => state.addExecutedStrategy,
-  );
+  const addExecutedStrategy = useStrategyStore((state) => state.addExecutedStrategy);
 
   const { toasts, addToast, removeToast, durationMs } = useToasts();
   const { layoutRef, sidebarWidth, startDragging } = useSidebarResize();
@@ -167,12 +164,12 @@ export default function HomePage() {
               Chat
             </span>
             <Link
-              href="/experiments"
-              aria-label="Go to Experiments"
+              href="/workbench"
+              aria-label="Go to Workbench"
               className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground"
             >
-              <FlaskConical className="h-3.5 w-3.5" aria-hidden />
-              Experiments
+              <Layers className="h-3.5 w-3.5" aria-hidden />
+              Workbench
             </Link>
             <div className="mx-1 h-5 w-px bg-border" />
             <Button

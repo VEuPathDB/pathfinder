@@ -27,16 +27,12 @@ from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.services.control_helpers import (
     cleanup_internal_control_test_strategies,
 )
-from veupath_chatbot.services.strategies.serialization import count_steps_in_plan
-from veupath_chatbot.services.strategies.wdk_snapshot import (
-    _build_snapshot_from_wdk,
-    _normalize_synced_parameters,
+from veupath_chatbot.services.strategies.wdk_bridge import (
     extract_wdk_is_saved,
-)
-from veupath_chatbot.services.strategies.wdk_sync import (
+    fetch_and_convert,
     parse_wdk_strategy_id,
-    sync_single_wdk_strategy,
-    upsert_wdk_projection,
+    sync_to_projection,
+    upsert_projection,
     wdk_error_boundary,
 )
 from veupath_chatbot.transport.http.deps import (
@@ -47,7 +43,6 @@ from veupath_chatbot.transport.http.schemas import (
     OpenStrategyRequest,
     OpenStrategyResponse,
     StrategyResponse,
-    StrategySummaryResponse,
     WdkStrategySummaryResponse,
 )
 
@@ -125,7 +120,7 @@ async def open_strategy(
             )
         try:
             api = get_strategy_api(request.site_id)
-            projection = await sync_single_wdk_strategy(
+            projection = await sync_to_projection(
                 wdk_id=request.wdk_strategy_id,
                 site_id=request.site_id,
                 api=api,
@@ -193,12 +188,12 @@ async def list_wdk_strategies(
     return results
 
 
-@router.post("/sync-wdk", response_model=list[StrategySummaryResponse])
+@router.post("/sync-wdk", response_model=list[StrategyResponse])
 async def sync_all_wdk_strategies(
     site_id: Annotated[str, Query(alias="siteId")],
     stream_repo: StreamRepo,
     user_id: CurrentUser,
-) -> list[StrategySummaryResponse]:
+) -> list[StrategyResponse]:
     """Batch-sync all WDK strategies into the CQRS layer and return the full list."""
     site = get_site(site_id)
     try:
@@ -222,7 +217,7 @@ async def sync_all_wdk_strategies(
             continue
         synced_wdk_ids.add(wdk_id)
         try:
-            await sync_single_wdk_strategy(
+            await sync_to_projection(
                 wdk_id=wdk_id,
                 site_id=site.id,
                 api=api,
@@ -291,32 +286,20 @@ async def import_wdk_strategy(
     """
     async with wdk_error_boundary("import strategy from WDK"):
         api = get_strategy_api(siteId)
-        wdk_strategy = await api.get_strategy(wdkStrategyId)
-
-        ast, steps_data = _build_snapshot_from_wdk(wdk_strategy)
-        try:
-            await _normalize_synced_parameters(ast, steps_data, api)
-        except Exception as exc:
-            logger.warning(
-                "Parameter normalization failed during import, storing raw values",
-                wdk_id=wdkStrategyId,
-                error=str(exc),
-            )
-        is_saved = extract_wdk_is_saved(wdk_strategy)
+        ast, is_saved = await fetch_and_convert(api, wdkStrategyId)
         plan = ast.to_dict()
         name = ast.name or f"WDK Strategy {wdkStrategyId}"
 
-        projection = await upsert_wdk_projection(
+        projection = await upsert_projection(
             stream_repo=stream_repo,
             user_id=user_id,
             site_id=siteId,
             wdk_id=wdkStrategyId,
             name=name,
             plan=plan,
-            steps_data=list(steps_data),
             record_type=ast.record_type,
-            root_step_id=ast.root.id,
             is_saved=is_saved,
+            step_count=len(ast.get_all_steps()),
         )
 
         return build_projection_response(projection)
@@ -359,26 +342,18 @@ async def sync_strategy_from_wdk(
 
     async with wdk_error_boundary("sync strategy from WDK"):
         api = get_strategy_api(site_id)
-        wdk_strategy = await api.get_strategy(projection.wdk_strategy_id)
-
-        ast, steps_data = _build_snapshot_from_wdk(wdk_strategy)
-        await _normalize_synced_parameters(ast, steps_data, api)
+        ast, is_saved = await fetch_and_convert(api, projection.wdk_strategy_id)
         ast.name = ast.name or projection.name
-
-        is_saved = extract_wdk_is_saved(wdk_strategy)
         plan = ast.to_dict()
 
         await stream_repo.update_projection(
             strategyId,
             name=ast.name,
             plan=plan,
-            steps=list(steps_data),
             record_type=ast.record_type,
-            root_step_id=ast.root.id,
-            root_step_id_set=True,
             is_saved=is_saved,
             is_saved_set=True,
-            step_count=count_steps_in_plan(plan),
+            step_count=len(ast.get_all_steps()),
         )
 
         updated = await stream_repo.get_projection(strategyId)

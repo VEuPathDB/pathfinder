@@ -1,4 +1,4 @@
-import type { StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
+import type { Step, Strategy } from "@pathfinder/shared";
 import { validateSearchParams } from "@/lib/api/client";
 import { toUserMessage } from "@/lib/api/errors";
 import { formatSearchValidationResponse } from "./format";
@@ -8,8 +8,8 @@ import { inferStepKind } from "@/lib/strategyGraph";
 
 export async function validateStepsForSave(args: {
   siteId: string;
-  steps: StrategyStep[];
-  strategy: StrategyWithMeta | null;
+  steps: Step[];
+  strategy: Strategy | null;
 }): Promise<{
   errorsByStepId: Record<string, string | undefined>;
   hasErrors: boolean;

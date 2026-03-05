@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 from veupath_chatbot.integrations.veupathdb.param_utils import normalize_param_value
-from veupath_chatbot.integrations.veupathdb.strategy_api.helpers import CURRENT_USER
+from veupath_chatbot.integrations.veupathdb.strategy_api.helpers import (
+    CURRENT_USER,
+    resolve_wdk_user_id,
+)
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
 
@@ -67,19 +70,9 @@ class StrategyAPIBase:
         """
         if self._session_initialized:
             return
-        me = await self.client.get("/users/current")
-        resolved_user_id: str | None = None
-        if isinstance(me, dict):
-            # WDK UserFormatter emits the user ID under JsonKeys.ID = "id".
-            candidate = me.get("id")
-            if candidate is not None:
-                resolved_user_id = str(candidate)
-
-        # Only override when we were using the placeholder "current".
-        if self.user_id == CURRENT_USER and resolved_user_id:
-            logger.info(
-                "Resolved WDK user id for mutations",
-                resolved_user_id=resolved_user_id,
-            )
-            self.user_id = resolved_user_id
+        if self.user_id == CURRENT_USER:
+            resolved = await resolve_wdk_user_id(self.client)
+            if resolved:
+                logger.info("Resolved WDK user id", resolved_user_id=resolved)
+                self.user_id = resolved
         self._session_initialized = True

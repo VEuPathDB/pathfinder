@@ -9,13 +9,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileText, FlaskConical, Loader2 } from "lucide-react";
-import type {
-  ChatMention,
-  ExperimentSummary,
-  StrategySummary,
-} from "@pathfinder/shared";
-import { useStrategyListStore } from "@/state/useStrategyListStore";
-import { listExperiments } from "@/features/experiments/api/crud";
+import type { ChatMention, ExperimentSummary, Strategy } from "@pathfinder/shared";
+import { useStrategyStore } from "@/state/useStrategyStore";
+import { listExperiments } from "@/features/workbench/api";
 
 interface MentionAutocompleteProps {
   siteId: string;
@@ -41,14 +37,14 @@ export function MentionAutocomplete({
   onSelect,
   onDismiss,
 }: MentionAutocompleteProps) {
-  const storeStrategies = useStrategyListStore((s) => s.strategies);
+  const storeStrategies = useStrategyStore((s) => s.strategies);
   const [experiments, setExperiments] = useState<ExperimentSummary[]>([]);
   const [loadingExperiments, setLoadingExperiments] = useState(false);
   const [focusIndex, setFocusIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const strategies = useMemo(
-    () => storeStrategies.filter((s) => s.stepCount > 0),
+    () => storeStrategies.filter((s) => (s.stepCount ?? 0) > 0),
     [storeStrategies],
   );
 
@@ -85,7 +81,7 @@ export function MentionAutocomplete({
       if (q && !s.name.toLowerCase().includes(q)) continue;
       result.push({
         mention: { type: "strategy", id: s.id, displayName: s.name },
-        subtitle: `${s.stepCount} step${s.stepCount !== 1 ? "s" : ""}${s.recordType ? ` · ${s.recordType}` : ""}`,
+        subtitle: `${s.stepCount ?? 0} step${(s.stepCount ?? 0) !== 1 ? "s" : ""}${s.recordType ? ` · ${s.recordType}` : ""}`,
         icon: FileText,
       });
     }

@@ -6,7 +6,7 @@ from fastapi import APIRouter
 
 from veupath_chatbot.platform.errors import WDKError
 from veupath_chatbot.services.strategies.plan_validation import validate_plan_or_raise
-from veupath_chatbot.services.strategies.wdk_counts import compute_step_counts_for_plan
+from veupath_chatbot.services.strategies.wdk_bridge import compute_step_counts_for_plan
 from veupath_chatbot.transport.http.deps import CurrentUser
 from veupath_chatbot.transport.http.schemas import StepCountsRequest, StepCountsResponse
 

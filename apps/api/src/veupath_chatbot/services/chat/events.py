@@ -17,6 +17,7 @@ PLANNING_ARTIFACT = "planning_artifact"
 CITATIONS = "citations"
 REASONING = "reasoning"
 EXECUTOR_BUILD_REQUEST = "executor_build_request"
+WORKBENCH_GENE_SET = "workbench_gene_set"
 
 
 def tool_result_to_events(
@@ -135,6 +136,15 @@ def tool_result_to_events(
     if result.get("cleared"):
         events.append(
             {"type": GRAPH_CLEARED, "data": {"graphId": result.get("graphId")}}
+        )
+
+    gene_set_created = result.get("geneSetCreated")
+    if isinstance(gene_set_created, dict):
+        events.append(
+            {
+                "type": WORKBENCH_GENE_SET,
+                "data": {"geneSet": gene_set_created},
+            }
         )
 
     wdk_strategy_id = result.get("wdkStrategyId")

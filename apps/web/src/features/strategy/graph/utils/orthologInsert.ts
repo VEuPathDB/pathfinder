@@ -1,15 +1,15 @@
-import type { Search, StrategyStep } from "@pathfinder/shared";
+import type { Search, Step } from "@pathfinder/shared";
 import { resolveRecordType } from "@/lib/strategyGraph";
 
 export type OrthologInsertResult = {
-  newStep: StrategyStep;
-  downstreamPatch?: { stepId: string; patch: Partial<StrategyStep> };
+  newStep: Step;
+  downstreamPatch?: { stepId: string; patch: Partial<Step> };
 };
 
 function findFirstDownstream(
-  steps: StrategyStep[],
+  steps: Step[],
   selectedId: string,
-): { step: StrategyStep; uses: "primary" | "secondary" } | null {
+): { step: Step; uses: "primary" | "secondary" } | null {
   for (const s of steps) {
     if (s.primaryInputStepId === selectedId) return { step: s, uses: "primary" };
     if (s.secondaryInputStepId === selectedId) return { step: s, uses: "secondary" };
@@ -19,7 +19,7 @@ function findFirstDownstream(
 
 export function computeOrthologInsert(args: {
   selectedId: string;
-  steps: StrategyStep[];
+  steps: Step[];
   strategyRecordType?: string | null;
   search: Search;
   options: { insertBetween: boolean };
@@ -35,7 +35,7 @@ export function computeOrthologInsert(args: {
     null;
 
   const newId = generateId();
-  const newStep: StrategyStep = {
+  const newStep: Step = {
     id: newId,
     kind: "transform",
     displayName: search.displayName || "Find orthologs",

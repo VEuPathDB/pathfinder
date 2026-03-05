@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { Edge } from "reactflow";
-import { CombineOperator, type StrategyStep } from "@pathfinder/shared";
+import { CombineOperator, type Step } from "@pathfinder/shared";
 import { inferStepKind } from "@/lib/strategyGraph";
 
 /** Boolean combine operators only (excludes COLOCATE). */
@@ -14,7 +14,7 @@ interface EdgeContextMenuProps {
   edge: Edge;
   x: number;
   y: number;
-  steps: StrategyStep[];
+  steps: Step[];
   onDeleteEdge: (edge: Edge) => void;
   onChangeOperator: (stepId: string, operator: CombineOperator) => void;
   onClose: () => void;

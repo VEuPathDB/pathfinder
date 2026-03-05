@@ -1,11 +1,15 @@
-export function GraphWdkBadge(props: {
-  isCompact: boolean;
-  wdkStrategyId?: number;
-  wdkUrl?: string | null;
-  wdkUrlFallback?: string | null;
-}) {
-  const { isCompact, wdkStrategyId, wdkUrl, wdkUrlFallback } = props;
+"use client";
+
+import { useStrategyGraphCtx } from "@/features/strategy/graph/StrategyGraphContext";
+
+export function GraphWdkBadge() {
+  const { isCompact, strategy, wdkUrlFallback } = useStrategyGraphCtx();
+
   if (isCompact) return null;
+
+  const wdkStrategyId = strategy?.wdkStrategyId;
+  const wdkUrl = strategy?.wdkUrl;
+
   if (!wdkStrategyId && !wdkUrl && !wdkUrlFallback) return null;
 
   const href = wdkUrl || wdkUrlFallback || undefined;

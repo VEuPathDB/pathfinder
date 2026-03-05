@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
+import type { Strategy } from "@pathfinder/shared";
 import { runDeleteStrategyWorkflow } from "@/features/sidebar/services/strategySidebarWorkflows";
 
 describe("strategySidebarWorkflows", () => {
@@ -9,7 +9,7 @@ describe("strategySidebarWorkflows", () => {
       name: "A",
       updatedAt: "",
       isSaved: false,
-    } as StrategyListItem;
+    } as Strategy;
     const setStrategyItems = vi.fn((updater) => {
       const prev = [item];
       const next = updater(prev);

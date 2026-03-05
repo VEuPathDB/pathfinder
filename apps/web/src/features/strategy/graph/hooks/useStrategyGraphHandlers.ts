@@ -2,17 +2,17 @@
 
 import { useCallback, useState } from "react";
 import type { Edge, Node } from "reactflow";
-import type { StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
+import type { Step, Strategy } from "@pathfinder/shared";
 import { useStrategyStore } from "@/state/useStrategyStore";
 import { computeNodeDeletionResult } from "@/features/strategy/graph/utils/nodeDeletionLogic";
 import { computeOrthologInsert } from "@/features/strategy/graph/utils/orthologInsert";
 
 interface UseStrategyGraphHandlersOptions {
-  strategy: StrategyWithMeta | null;
+  strategy: Strategy | null;
   isCompact: boolean;
-  editableSteps: StrategyStep[];
-  selectedStep: StrategyStep | null;
-  setSelectedStep: (step: StrategyStep | null) => void;
+  editableSteps: Step[];
+  selectedStep: Step | null;
+  setSelectedStep: (step: Step | null) => void;
   selectedNodeIds: string[];
   startCombine: (sourceId: string, targetId: string) => void;
 }

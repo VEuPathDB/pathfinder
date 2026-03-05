@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { StrategyStep } from "@pathfinder/shared";
+import type { Step } from "@pathfinder/shared";
 import { computeOrthologInsert } from "@/features/strategy/graph/utils/orthologInsert";
 
-function step(partial: Partial<StrategyStep> & { id: string }): StrategyStep {
+function step(partial: Partial<Step> & { id: string }): Step {
   return {
     id: partial.id,
     kind: partial.kind ?? "search",
@@ -13,7 +13,7 @@ function step(partial: Partial<StrategyStep> & { id: string }): StrategyStep {
     primaryInputStepId: partial.primaryInputStepId,
     secondaryInputStepId: partial.secondaryInputStepId,
     operator: partial.operator,
-  } as StrategyStep;
+  } as Step;
 }
 
 describe("computeOrthologInsert", () => {

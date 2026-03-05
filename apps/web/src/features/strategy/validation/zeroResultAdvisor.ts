@@ -1,8 +1,8 @@
-import type { StrategyStep } from "@pathfinder/shared";
+import type { Step } from "@pathfinder/shared";
 import { inferStepKind } from "@/lib/strategyGraph";
 import { CombineOperator } from "@pathfinder/shared";
 
-export function getZeroResultSuggestions(step: StrategyStep): string[] {
+export function getZeroResultSuggestions(step: Step): string[] {
   const suggestions: string[] = [];
 
   // Broad, always-relevant suggestions

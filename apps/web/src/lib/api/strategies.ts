@@ -1,27 +1,39 @@
-import type {
-  StrategyPlan,
-  StrategySummary,
-  StrategyWithMeta,
-} from "@pathfinder/shared";
+import type { StrategyPlan, Strategy } from "@pathfinder/shared";
 import { APIError, requestJson } from "./http";
 
-export async function listStrategies(
-  siteId?: string | null,
-): Promise<StrategySummary[]> {
-  return await requestJson<StrategySummary[]>("/api/v1/strategies", {
+/**
+ * The list endpoints return objects without `steps` / `rootStepId`.
+ * Fill in safe defaults so they conform to the full `Strategy` shape.
+ */
+function withDefaults(
+  s: Partial<Strategy> & {
+    id: string;
+    name: string;
+    siteId: string;
+    createdAt: string;
+    updatedAt: string;
+  },
+): Strategy {
+  return { steps: [], rootStepId: null, recordType: null, ...s };
+}
+
+export async function listStrategies(siteId?: string | null): Promise<Strategy[]> {
+  const raw = await requestJson<Partial<Strategy>[]>("/api/v1/strategies", {
     query: siteId ? { siteId } : undefined,
   });
+  return raw.map((s) => withDefaults(s as Parameters<typeof withDefaults>[0]));
 }
 
 /**
  * Batch-sync all WDK strategies into the local DB and return the
  * summary list for this site.
  */
-export async function syncWdkStrategies(siteId: string): Promise<StrategySummary[]> {
-  return await requestJson<StrategySummary[]>("/api/v1/strategies/sync-wdk", {
+export async function syncWdkStrategies(siteId: string): Promise<Strategy[]> {
+  const raw = await requestJson<Partial<Strategy>[]>("/api/v1/strategies/sync-wdk", {
     method: "POST",
     query: { siteId },
   });
+  return raw.map((s) => withDefaults(s as Parameters<typeof withDefaults>[0]));
 }
 
 export async function openStrategy(payload: {
@@ -41,7 +53,7 @@ function looksLikeUuid(value: string): boolean {
   );
 }
 
-export async function getStrategy(strategyId: string): Promise<StrategyWithMeta> {
+export async function getStrategy(strategyId: string): Promise<Strategy> {
   // Some UI lists include synthetic IDs like "wdk:123". Make this failure explicit.
   if (!looksLikeUuid(strategyId)) {
     throw new APIError("Invalid strategy id.", {
@@ -51,15 +63,15 @@ export async function getStrategy(strategyId: string): Promise<StrategyWithMeta>
       data: { detail: "strategyId must be a UUID" },
     });
   }
-  return await requestJson<StrategyWithMeta>(`/api/v1/strategies/${strategyId}`);
+  return await requestJson<Strategy>(`/api/v1/strategies/${strategyId}`);
 }
 
 export async function createStrategy(args: {
   name: string;
   siteId: string;
   plan: StrategyPlan;
-}): Promise<StrategyWithMeta> {
-  return await requestJson<StrategyWithMeta>("/api/v1/strategies", {
+}): Promise<Strategy> {
+  return await requestJson<Strategy>("/api/v1/strategies", {
     method: "POST",
     body: args,
   });
@@ -73,8 +85,8 @@ export async function updateStrategy(
     wdkStrategyId?: number | null;
     isSaved?: boolean;
   },
-): Promise<StrategyWithMeta> {
-  return await requestJson<StrategyWithMeta>(`/api/v1/strategies/${strategyId}`, {
+): Promise<Strategy> {
+  return await requestJson<Strategy>(`/api/v1/strategies/${strategyId}`, {
     method: "PATCH",
     body: args,
   });

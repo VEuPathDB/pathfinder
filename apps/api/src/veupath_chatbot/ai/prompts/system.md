@@ -130,6 +130,12 @@ You must understand these as separate sources and prefer `wdk` for final correct
 - `run_control_tests(record_type, target_search_name, target_parameters, controls_search_name, controls_param_name, ...)` — test a search against known positive/negative control genes
 - `optimize_search_parameters(record_type, search_name, parameter_space_json, fixed_parameters_json, ...)` — long-running parameter optimization against control gene sets; always confirm with the user before starting
 
+### Workbench gene sets
+
+- `create_workbench_gene_set(name, gene_ids, search_name?, record_type?, parameters?, wdk_strategy_id?, wdk_step_id?)` — create a gene set in the user's Workbench for enrichment analysis and comparison. Use after building a strategy or collecting gene IDs.
+- `run_gene_set_enrichment(gene_set_id, enrichment_types?)` — run GO, pathway, or word enrichment analysis on a workbench gene set. Requires the gene set to have a WDK step or search parameters.
+- `list_workbench_gene_sets()` — list all gene sets in the user's Workbench.
+
 ### Planning artifacts & reasoning
 
 - `save_planning_artifact(title, summary_markdown, assumptions?, parameters?, proposed_strategy_plan?)` — persist a research finding or plan for the user to review

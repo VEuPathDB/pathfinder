@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { StrategyListItem } from "@/features/sidebar/utils/strategyItems";
+import type { Strategy } from "@pathfinder/shared";
 import {
   applyDuplicateLoadFailure,
   applyDuplicateLoadSuccess,
@@ -16,7 +16,7 @@ describe("duplicateModalState", () => {
       name: "A",
       updatedAt: "t",
       isSaved: false,
-    } as StrategyListItem;
+    } as Strategy;
     const state = initDuplicateModal(item);
     expect(state.isLoading).toBe(true);
     expect(state.name).toBe("A");
@@ -28,7 +28,7 @@ describe("duplicateModalState", () => {
       name: "A",
       updatedAt: "t",
       isSaved: false,
-    } as StrategyListItem;
+    } as Strategy;
     const prev = initDuplicateModal(item);
     const next = applyDuplicateLoadSuccess(prev, {
       name: "New",
@@ -45,7 +45,7 @@ describe("duplicateModalState", () => {
       name: "A",
       updatedAt: "t",
       isSaved: false,
-    } as StrategyListItem;
+    } as Strategy;
     const prev = initDuplicateModal(item);
     const next = applyDuplicateLoadFailure(prev);
     expect(next.isLoading).toBe(false);
@@ -63,7 +63,7 @@ describe("duplicateModalState", () => {
       name: "A",
       updatedAt: "t",
       isSaved: false,
-    } as StrategyListItem;
+    } as Strategy;
     const prev = initDuplicateModal(item);
     const started = startDuplicateSubmit({ ...prev, isLoading: false });
     expect(started.isSubmitting).toBe(true);

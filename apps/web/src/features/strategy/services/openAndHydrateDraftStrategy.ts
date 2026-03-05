@@ -1,24 +1,24 @@
-import type { StrategyWithMeta } from "@pathfinder/shared";
+import type { Strategy } from "@pathfinder/shared";
 import { buildDraftStrategySummary } from "@/features/strategy/utils/draftSummary";
 
 export async function openAndHydrateDraftStrategy(args: {
   siteId: string;
   open: () => Promise<{ strategyId: string }>;
-  getStrategy: (strategyId: string) => Promise<StrategyWithMeta>;
+  getStrategy: (strategyId: string) => Promise<Strategy>;
   nowIso: () => string;
   setStrategyId: (strategyId: string | null) => void;
   addStrategy: (summary: ReturnType<typeof buildDraftStrategySummary>) => void;
   clearStrategy: () => void;
-  setStrategy: (strategy: StrategyWithMeta) => void;
+  setStrategy: (strategy: Strategy) => void;
   setStrategyMeta: (meta: {
     name: string;
     recordType?: string;
     siteId: string;
   }) => void;
-  onHydrateSuccess?: (full: StrategyWithMeta) => void;
+  onHydrateSuccess?: (full: Strategy) => void;
   onHydrateError?: (error: unknown, strategyId: string) => void;
   cleanupOnHydrateError?: (strategyId: string) => void;
-}): Promise<{ strategyId: string; full: StrategyWithMeta }> {
+}): Promise<{ strategyId: string; full: Strategy }> {
   const {
     siteId,
     open,

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { StrategyStep, StrategyWithMeta } from "@pathfinder/shared";
+import type { Step, Strategy } from "@pathfinder/shared";
 import type { GraphSnapshotInput } from "@/features/chat/utils/graphSnapshot";
 import { buildStrategyFromGraphSnapshot } from "@/features/chat/utils/graphSnapshot";
 import type { StreamingSession } from "@/features/chat/streaming/StreamingSession";
@@ -7,9 +7,9 @@ import type { StreamingSession } from "@/features/chat/streaming/StreamingSessio
 interface UseGraphSnapshotArgs {
   siteId: string;
   strategyId: string | null;
-  stepsById: Record<string, StrategyStep>;
+  stepsById: Record<string, Step>;
   sessionRef: { current: StreamingSession | null };
-  setStrategy: (strategy: StrategyWithMeta) => void;
+  setStrategy: (strategy: Strategy) => void;
   setStrategyMeta: (meta: {
     name?: string;
     description?: string | null;

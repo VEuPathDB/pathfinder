@@ -55,6 +55,8 @@ class ReportsMixin(StrategyAPIBase):
         await self._ensure_session()
         return await self.client.list_step_filters(self.user_id, step_id)
 
+    _RETRIABLE_STATUSES = frozenset({"ERROR", "OUT_OF_DATE", "STEP_REVISED"})
+
     async def run_step_analysis(
         self,
         step_id: int,
@@ -63,6 +65,7 @@ class ReportsMixin(StrategyAPIBase):
         custom_name: str | None = None,
         poll_interval: float = 2.0,
         max_wait: float = 300.0,
+        max_retries: int = 3,
     ) -> JSONObject:
         """Create, run, and wait for a WDK step analysis to complete.
 
@@ -73,16 +76,39 @@ class ReportsMixin(StrategyAPIBase):
         3. ``GET  .../analyses/{id}/result/status`` -- poll until COMPLETE
         4. ``GET  .../analyses/{id}/result`` -- retrieve results
 
+        Boolean/combined steps may return ``ERROR`` on the first run because
+        sub-step answers haven't been computed yet.  Per the WDK source
+        (``ExecutionStatus.requiresRerun``), the correct strategy is to
+        re-run the **same** instance — the WDK backend resets to ``PENDING``
+        and re-executes.
+
         :param step_id: WDK step ID (must be part of a strategy).
-        :param analysis_type: Analysis plugin name (e.g. ``gene-go-enrichment``).
+        :param analysis_type: Analysis plugin name (e.g. ``go-enrichment``).
         :param parameters: Analysis parameters.
         :param custom_name: Optional display name.
         :param poll_interval: Seconds between status polls.
         :param max_wait: Maximum seconds to wait before giving up.
+        :param max_retries: Maximum re-run attempts for retriable statuses.
         :returns: Analysis result JSON.
         :raises InternalError: If the analysis fails or times out.
         """
         await self._ensure_session()
+
+        # Phase 0: Warm up the step answer.
+        # Boolean/combined steps need their answer materialized before WDK
+        # will run analyses.  A zero-record standard report forces WDK to
+        # compute and cache the answer for the step (and all sub-steps).
+        logger.info("Warming up step answer", step_id=step_id)
+        warmup = await self.client.post(
+            f"/users/{self.user_id}/steps/{step_id}/reports/standard",
+            json={"reportConfig": {"pagination": {"offset": 0, "numRecords": 0}}},
+        )
+        warmup_count = None
+        if isinstance(warmup, dict):
+            meta = warmup.get("meta")
+            if isinstance(meta, dict):
+                warmup_count = meta.get("totalCount")
+        logger.info("Step answer warmed up", step_id=step_id, total_count=warmup_count)
 
         # Phase 1: Create the analysis instance
         payload: JSONObject = {
@@ -114,6 +140,7 @@ class ReportsMixin(StrategyAPIBase):
 
         # Phase 3: Poll for completion
         elapsed = 0.0
+        retries = 0
         while elapsed < max_wait:
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
@@ -135,10 +162,70 @@ class ReportsMixin(StrategyAPIBase):
 
             if status == "COMPLETE":
                 break
-            if status in ("ERROR", "EXPIRED", "INTERRUPTED", "OUT_OF_DATE"):
+            if status in ("EXPIRED", "INTERRUPTED"):
                 raise InternalError(
                     title="Step analysis failed",
                     detail=f"Analysis {analysis_id} ended with status: {status}",
+                )
+            if status in self._RETRIABLE_STATUSES:
+                retries += 1
+                # Log the full status response for debugging
+                logger.warning(
+                    "Analysis returned retriable status",
+                    analysis_id=analysis_id,
+                    status=status,
+                    status_response=status_resp,
+                    retry=retries,
+                )
+                if retries > max_retries:
+                    # Try to fetch the analysis instance and result for error details
+                    try:
+                        analyses = await self.client.list_step_analyses(
+                            self.user_id, step_id
+                        )
+                        logger.error(
+                            "Step analyses list on failure",
+                            step_id=step_id,
+                            analysis_id=analysis_id,
+                            analyses=analyses,
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            "Could not list step analyses",
+                            error=str(exc),
+                        )
+                    try:
+                        err_result = await self.client.get_analysis_result(
+                            self.user_id, step_id, analysis_id
+                        )
+                        logger.error(
+                            "Analysis error result",
+                            analysis_id=analysis_id,
+                            error_result=err_result,
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            "Could not fetch analysis result",
+                            analysis_id=analysis_id,
+                            error=str(exc),
+                        )
+                    raise InternalError(
+                        title="Step analysis retries exhausted",
+                        detail=(
+                            f"Analysis {analysis_id} returned {status} "
+                            f"{retries} times (max {max_retries})"
+                        ),
+                    )
+                # WDK's requiresRerun flag means re-running the same instance
+                # resets it to PENDING and re-executes automatically.
+                logger.warning(
+                    "Re-running same analysis instance",
+                    analysis_id=analysis_id,
+                    status=status,
+                    retry=retries,
+                )
+                await self.client.run_analysis_instance(
+                    self.user_id, step_id, analysis_id
                 )
 
         if elapsed >= max_wait:
@@ -279,17 +366,40 @@ class ReportsMixin(StrategyAPIBase):
             ),
         )
 
-    async def get_filter_summary(self, step_id: int, filter_name: str) -> JSONObject:
-        """Get filter summary distribution data for a step attribute.
+    async def get_column_distribution(
+        self, step_id: int, column_name: str
+    ) -> JSONObject:
+        """Get distribution data for a column using the byValue column reporter.
+
+        Uses ``POST .../columns/{col}/reports/byValue`` which returns a
+        ``histogram`` array and ``statistics`` object.  This replaces the
+        deprecated ``filter-summary`` endpoint.
+
+        Not all columns support the byValue reporter (e.g. overview or
+        composite columns).  When WDK returns an error, an empty result
+        is returned so the frontend can show a friendly message.
 
         :param step_id: WDK step ID (must be part of a strategy).
-        :param filter_name: Name of the filter to summarize.
-        :returns: Filter summary JSON with distribution data.
+        :param column_name: Attribute/column name.
+        :returns: ``{histogram: [...], statistics: {...}}``
         """
+        from veupath_chatbot.platform.errors import WDKError
+
         await self._ensure_session()
-        return await self.client.get_step_filter_summary(
-            self.user_id, step_id, filter_name
-        )
+        try:
+            result = await self.client.post(
+                f"/users/{self.user_id}/steps/{step_id}"
+                f"/columns/{column_name}/reports/byValue",
+                json={"reportConfig": {}},
+            )
+            return result if isinstance(result, dict) else {}
+        except WDKError:
+            logger.warning(
+                "Column reporter unavailable",
+                step_id=step_id,
+                column_name=column_name,
+            )
+            return {"histogram": [], "statistics": {}}
 
     async def get_step_count(self, step_id: int) -> int:
         """Get result count for a step.

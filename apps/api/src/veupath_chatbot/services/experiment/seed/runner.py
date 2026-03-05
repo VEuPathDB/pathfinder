@@ -28,17 +28,18 @@ async def run_seed(
 
     For each :class:`SeedDef`:
     1. Create a WDK strategy via ``_materialize_step_tree`` + ``create_strategy``
-    2. Sync the strategy to the user's sidebar via ``_sync_single_wdk_strategy``
+    2. Sync the strategy to the user's sidebar via ``_sync_to_projection``
     3. Create a control set via ``control_set_repo.create``
 
     Imports are deferred to avoid circular dependencies.
     """
     from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
+    from veupath_chatbot.services.experiment.helpers import extract_wdk_id
     from veupath_chatbot.services.experiment.materialization import (
         _materialize_step_tree,
     )
-    from veupath_chatbot.services.strategies.wdk_sync import (
-        sync_single_wdk_strategy,
+    from veupath_chatbot.services.strategies.wdk_bridge import (
+        sync_to_projection,
     )
 
     total = len(SEEDS)
@@ -82,17 +83,13 @@ async def run_seed(
                 description=seed.description,
                 is_saved=True,
             )
-            wdk_strategy_id: int | None = None
-            if isinstance(created, dict):
-                raw = created.get("id")
-                if isinstance(raw, int):
-                    wdk_strategy_id = raw
+            wdk_strategy_id = extract_wdk_id(created)
 
             if wdk_strategy_id is None:
                 raise ValueError(f"WDK did not return a strategy ID for '{seed.name}'")
 
             # 3. Sync to local DB (sidebar)
-            await sync_single_wdk_strategy(
+            await sync_to_projection(
                 wdk_id=wdk_strategy_id,
                 site_id=seed.site_id,
                 api=api,

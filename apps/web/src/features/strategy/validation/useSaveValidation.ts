@@ -1,10 +1,10 @@
 import { useEffect, useMemo } from "react";
 import { useDebouncedCallback } from "use-debounce";
-import type { StrategyStep } from "@pathfinder/shared";
+import type { Step } from "@pathfinder/shared";
 
 export function useSaveValidation(args: {
-  steps: StrategyStep[];
-  buildStepSignature: (step: StrategyStep) => string;
+  steps: Step[];
+  buildStepSignature: (step: Step) => string;
   debounceMs?: number;
   validate: () => Promise<boolean>;
 }) {

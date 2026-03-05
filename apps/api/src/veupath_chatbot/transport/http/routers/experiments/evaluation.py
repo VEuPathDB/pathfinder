@@ -114,9 +114,27 @@ async def threshold_sweep(
             detail=f"Parameter '{param_name}' is not in this experiment's config.",
         )
 
-    step_size = (request.max_value - request.min_value) / max(request.steps - 1, 1)
-    values = [request.min_value + i * step_size for i in range(request.steps)]
-    total_points = len(values)
+    is_categorical = request.sweep_type == "categorical"
+
+    if is_categorical:
+        if not request.values or len(request.values) == 0:
+            raise ValidationError(
+                title="Missing values",
+                detail="Categorical sweep requires a non-empty 'values' list.",
+            )
+        sweep_values: list[str] = request.values
+    else:
+        if request.min_value is None or request.max_value is None:
+            raise ValidationError(
+                title="Missing range",
+                detail="Numeric sweep requires 'minValue' and 'maxValue'.",
+            )
+        step_size = (request.max_value - request.min_value) / max(request.steps - 1, 1)
+        sweep_values = [
+            str(request.min_value + i * step_size) for i in range(request.steps)
+        ]
+
+    total_points = len(sweep_values)
 
     async def _generate_sweep():  # noqa: C901
         # Best-effort cleanup up-front.
@@ -131,9 +149,15 @@ async def threshold_sweep(
         completed_count = 0
         all_points: list[JSONObject] = []
 
-        async def _run_point(val: float) -> JSONObject:
+        async def _run_point(val: str) -> JSONObject:
             modified_params = dict(exp.config.parameters)
-            modified_params[param_name] = str(val)
+            modified_params[param_name] = val
+
+            # For response: keep numeric values as floats when possible.
+            try:
+                response_value: float | str = float(val) if not is_categorical else val
+            except ValueError:
+                response_value = val
 
             async with semaphore:
                 try:
@@ -154,7 +178,7 @@ async def threshold_sweep(
                     )
                     m = metrics_from_control_result(result)
                     return {
-                        "value": val,
+                        "value": response_value,
                         "metrics": {
                             "sensitivity": round(m.sensitivity, 4),
                             "specificity": round(m.specificity, 4),
@@ -173,10 +197,10 @@ async def threshold_sweep(
                         value=val,
                         error=str(exc),
                     )
-                    return {"value": val, "metrics": None, "error": str(exc)}
+                    return {"value": response_value, "metrics": None, "error": str(exc)}
 
         # Launch all points as tasks; yield events as each completes.
-        tasks = {asyncio.ensure_future(_run_point(v)): v for v in values}
+        tasks = {asyncio.ensure_future(_run_point(v)): v for v in sweep_values}
 
         try:
             async with asyncio.timeout(_SWEEP_TIMEOUT_S):
@@ -204,11 +228,16 @@ async def threshold_sweep(
             for task in tasks:
                 task.cancel()
 
-        # Sort by value for consistent ordering.
-        all_points.sort(key=lambda p: p.get("value", 0))
+        # Sort: numeric by value, categorical by original order.
+        if is_categorical:
+            order = {v: i for i, v in enumerate(sweep_values)}
+            all_points.sort(key=lambda p: order.get(str(p.get("value", "")), 0))
+        else:
+            all_points.sort(key=lambda p: float(p.get("value", 0)))
         final_data = json_mod.dumps(
             {
                 "parameter": param_name,
+                "sweepType": request.sweep_type,
                 "points": all_points,
             }
         )

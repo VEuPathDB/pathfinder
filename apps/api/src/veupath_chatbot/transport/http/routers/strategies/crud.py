@@ -16,15 +16,10 @@ from veupath_chatbot.platform.tasks import spawn
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.strategies.auto_push import try_auto_push_to_wdk
 from veupath_chatbot.services.strategies.plan_validation import validate_plan_or_raise
-from veupath_chatbot.services.strategies.serialization import (
-    build_steps_data_from_plan,
-    count_steps_in_plan,
-)
 from veupath_chatbot.transport.http.deps import CurrentUser, StreamRepo
 from veupath_chatbot.transport.http.schemas import (
     CreateStrategyRequest,
     StrategyResponse,
-    StrategySummaryResponse,
     UpdateStrategyRequest,
 )
 
@@ -38,12 +33,12 @@ router = APIRouter(prefix="/api/v1/strategies", tags=["strategies"])
 logger = get_logger(__name__)
 
 
-@router.get("", response_model=list[StrategySummaryResponse])
+@router.get("", response_model=list[StrategyResponse])
 async def list_strategies(
     stream_repo: StreamRepo,
     user_id: CurrentUser,
     site_id: Annotated[str | None, Query(alias="siteId")] = None,
-) -> list[StrategySummaryResponse]:
+) -> list[StrategyResponse]:
     """List user's conversation streams (projections)."""
     projections = await stream_repo.list_projections(user_id, site_id)
     return [build_projection_summary(p, site_id=site_id or "") for p in projections]
@@ -59,7 +54,6 @@ async def create_strategy(
     plan_in = request.plan.model_dump(exclude_none=True)
     strategy_ast = validate_plan_or_raise(plan_in)
     plan = strategy_ast.to_dict()
-    steps_data = build_steps_data_from_plan(plan)
 
     stream = await stream_repo.create(
         user_id=user_id,
@@ -69,11 +63,8 @@ async def create_strategy(
     await stream_repo.update_projection(
         stream.id,
         plan=plan,
-        steps=list(steps_data),
         record_type=strategy_ast.record_type,
-        root_step_id=strategy_ast.root.id,
-        root_step_id_set=True,
-        step_count=count_steps_in_plan(plan),
+        step_count=len(strategy_ast.get_all_steps()),
     )
 
     projection = await stream_repo.get_projection(stream.id)
@@ -109,17 +100,14 @@ async def update_strategy(
     """Update a strategy (CQRS only)."""
     await get_owned_projection_or_404(stream_repo, strategyId, user_id)
 
+    strategy_ast = None
     record_type = None
-    steps_data = None
-    root_step_id = None
     plan: JSONObject | None = None
     if request.plan:
         plan_in = request.plan.model_dump(exclude_none=True)
         strategy_ast = validate_plan_or_raise(plan_in)
         plan = strategy_ast.to_dict()
         record_type = strategy_ast.record_type
-        steps_data = build_steps_data_from_plan(plan)
-        root_step_id = strategy_ast.root.id
 
     fields_set: set[str] = getattr(request, "model_fields_set", set())
     wdk_strategy_id_set = "wdk_strategy_id" in fields_set
@@ -129,15 +117,12 @@ async def update_strategy(
         strategyId,
         name=request.name,
         plan=plan,
-        steps=list(steps_data) if steps_data is not None else None,
         record_type=record_type,
-        root_step_id=root_step_id,
-        root_step_id_set=plan is not None,
         wdk_strategy_id=request.wdk_strategy_id,
         wdk_strategy_id_set=wdk_strategy_id_set,
         is_saved=request.is_saved,
         is_saved_set=is_saved_set,
-        step_count=count_steps_in_plan(plan) if plan else None,
+        step_count=len(strategy_ast.get_all_steps()) if strategy_ast else None,
     )
 
     # Re-fetch updated projection.

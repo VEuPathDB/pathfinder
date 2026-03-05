@@ -1,6 +1,6 @@
 "use client";
 
-import type { StrategyStep } from "@pathfinder/shared";
+import type { Step } from "@pathfinder/shared";
 import { Modal } from "@/lib/components/Modal";
 import { StepEditorHeader } from "./components/StepEditorHeader";
 import { StepEditorFooter } from "./components/StepEditorFooter";
@@ -8,10 +8,10 @@ import { StepEditorForm } from "./StepEditorForm";
 import { useStepEditorState } from "./useStepEditorState";
 
 interface StepEditorProps {
-  step: StrategyStep;
+  step: Step;
   siteId: string;
   recordType: string | null;
-  onUpdate: (updates: Partial<StrategyStep>) => void;
+  onUpdate: (updates: Partial<Step>) => void;
   onClose: () => void;
 }
 

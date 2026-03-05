@@ -18,7 +18,7 @@ from httpx import Response
 
 from veupath_chatbot.integrations.veupathdb.client import (
     VEuPathDBClient,
-    _encode_context_param_values_for_wdk,
+    encode_context_param_values_for_wdk,
 )
 from veupath_chatbot.platform.errors import WDKError
 from veupath_chatbot.tests.fixtures.wdk_responses import (
@@ -210,7 +210,7 @@ def test_context_param_encoding() -> None:
         "empty": None,
     }
 
-    encoded = _encode_context_param_values_for_wdk(context)
+    encoded = encode_context_param_values_for_wdk(context)
 
     # Lists become JSON-encoded strings
     assert (
