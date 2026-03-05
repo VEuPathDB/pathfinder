@@ -1131,12 +1131,6 @@ export type paths = {
         /**
          * Get Experiment Record Detail
          * @description Get a single record's full details by primary key.
-         *
-         *     Expects ``{"primaryKey": [{"name": "...", "value": "..."}, ...]}``
-         *     (or ``primary_key``) matching the record type's primary key structure.
-         *     If the client sends fewer PK parts than the record type requires (e.g. only
-         *     ``source_id`` for gene), missing parts such as ``project_id`` are filled
-         *     from the site so WDK accepts the request.
          */
         post: operations["get_experiment_record_detail_api_v1_experiments__experiment_id__results_record_post"];
         delete?: never;
@@ -1174,7 +1168,7 @@ export type paths = {
         };
         /**
          * Get Experiment Distribution
-         * @description Get distribution data for an attribute using filter summary.
+         * @description Get distribution data for an attribute using the byValue column reporter.
          */
         get: operations["get_experiment_distribution_api_v1_experiments__experiment_id__results_distributions__attribute_name__get"];
         put?: never;
@@ -1217,6 +1211,9 @@ export type paths = {
         /**
          * Run Experiment Analysis
          * @description Create and run a WDK step analysis on the experiment's step.
+         *
+         *     Uses the shared service for defaults+merge+run, but adds
+         *     experiment-specific enrichment persistence.
          */
         post: operations["run_experiment_analysis_api_v1_experiments__experiment_id__analyses_run_post"];
         delete?: never;
@@ -1455,6 +1452,234 @@ export type paths = {
          * @description List active operations, optionally filtered by stream and/or type.
          */
         get: operations["list_active_api_v1_operations_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Gene Sets
+         * @description List all gene sets for the current user, optionally filtered by site.
+         */
+        get: operations["list_gene_sets_api_v1_gene_sets_get"];
+        put?: never;
+        /**
+         * Create Gene Set
+         * @description Create a new gene set.
+         */
+        post: operations["create_gene_set_api_v1_gene_sets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/{gene_set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gene Set
+         * @description Get a gene set by ID.
+         */
+        get: operations["get_gene_set_api_v1_gene_sets__gene_set_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Gene Set
+         * @description Delete a gene set.
+         */
+        delete: operations["delete_gene_set_api_v1_gene_sets__gene_set_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Operations
+         * @description Perform set operations (intersect, union, minus) between two gene sets.
+         */
+        post: operations["set_operations_api_v1_gene_sets_operations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/{gene_set_id}/enrich": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enrich Gene Set
+         * @description Run enrichment analysis on a gene set.
+         */
+        post: operations["enrich_gene_set_api_v1_gene_sets__gene_set_id__enrich_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/{gene_set_id}/results/attributes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gene Set Attributes
+         * @description Get available attributes for a gene set's record type.
+         */
+        get: operations["get_gene_set_attributes_api_v1_gene_sets__gene_set_id__results_attributes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/{gene_set_id}/results/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gene Set Records
+         * @description Get paginated result records for a gene set.
+         */
+        get: operations["get_gene_set_records_api_v1_gene_sets__gene_set_id__results_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/{gene_set_id}/results/record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Gene Set Record Detail
+         * @description Get a single record's full details by primary key.
+         */
+        post: operations["get_gene_set_record_detail_api_v1_gene_sets__gene_set_id__results_record_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/{gene_set_id}/results/distributions/{attribute_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gene Set Distribution
+         * @description Get distribution data for an attribute using the byValue column reporter.
+         */
+        get: operations["get_gene_set_distribution_api_v1_gene_sets__gene_set_id__results_distributions__attribute_name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/{gene_set_id}/analyses/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gene Set Analysis Types
+         * @description List available WDK step analysis types for a gene set.
+         */
+        get: operations["get_gene_set_analysis_types_api_v1_gene_sets__gene_set_id__analyses_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/{gene_set_id}/analyses/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Gene Set Analysis
+         * @description Run a WDK step analysis on a gene set.
+         */
+        post: operations["run_gene_set_analysis_api_v1_gene_sets__gene_set_id__analyses_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/{gene_set_id}/strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gene Set Strategy
+         * @description Get the WDK strategy tree for a gene set.
+         */
+        get: operations["get_gene_set_strategy_api_v1_gene_sets__gene_set_id__strategy_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1778,6 +2003,36 @@ export type components = {
             parentExperimentId?: string | null;
         };
         /**
+         * CreateGeneSetRequest
+         * @description Create a gene set from IDs, strategy, or upload.
+         */
+        CreateGeneSetRequest: {
+            /** Name */
+            name: string;
+            /** Siteid */
+            siteId: string;
+            /** Geneids */
+            geneIds: string[];
+            /**
+             * Source
+             * @default paste
+             * @enum {string}
+             */
+            source: "strategy" | "paste" | "upload" | "derived" | "saved";
+            /** Wdkstrategyid */
+            wdkStrategyId?: number | null;
+            /** Wdkstepid */
+            wdkStepId?: number | null;
+            /** Searchname */
+            searchName?: string | null;
+            /** Recordtype */
+            recordType?: string | null;
+            /** Parameters */
+            parameters?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
          * CustomEnrichRequest
          * @description Request to run a custom gene-set enrichment test.
          */
@@ -1886,6 +2141,58 @@ export type components = {
              * @default []
              */
             matchedFields: string[];
+        };
+        /**
+         * GeneSetEnrichRequest
+         * @description Run enrichment on a gene set.
+         */
+        GeneSetEnrichRequest: {
+            /** Enrichmenttypes */
+            enrichmentTypes: ("go_function" | "go_component" | "go_process" | "pathway" | "word")[];
+        };
+        /**
+         * GeneSetResponse
+         * @description Gene set response DTO.
+         */
+        GeneSetResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Siteid */
+            siteId: string;
+            /** Geneids */
+            geneIds: string[];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "strategy" | "paste" | "upload" | "derived" | "saved";
+            /** Genecount */
+            geneCount: number;
+            /** Wdkstrategyid */
+            wdkStrategyId?: number | null;
+            /** Wdkstepid */
+            wdkStepId?: number | null;
+            /** Searchname */
+            searchName?: string | null;
+            /** Recordtype */
+            recordType?: string | null;
+            /** Parameters */
+            parameters?: {
+                [key: string]: unknown;
+            } | null;
+            /** Parentsetids */
+            parentSetIds?: string[];
+            /** Operation */
+            operation?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /**
+             * Stepcount
+             * @default 1
+             */
+            stepCount: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2245,6 +2552,18 @@ export type components = {
             enrichmentTypes: ("go_function" | "go_component" | "go_process" | "pathway" | "word")[];
         };
         /**
+         * RunGeneSetAnalysisRequest
+         * @description Run a WDK step analysis on a gene set.
+         */
+        RunGeneSetAnalysisRequest: {
+            /** Analysisname */
+            analysisName: string;
+            /** Parameters */
+            parameters?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * SearchDetailsResponse
          * @description Search details payload (UI-facing).
          */
@@ -2301,6 +2620,20 @@ export type components = {
          */
         SearchValidationResponse: {
             validation: components["schemas"]["SearchValidationPayload"];
+        };
+        /**
+         * SetOperationRequest
+         * @description Perform set operations between two gene sets.
+         */
+        SetOperationRequest: {
+            /** Setaid */
+            setAId: string;
+            /** Setbid */
+            setBId: string;
+            /** Operation */
+            operation: string;
+            /** Name */
+            name: string;
         };
         /**
          * SiteResponse
@@ -2534,7 +2867,10 @@ export type components = {
         };
         /**
          * StrategyResponse
-         * @description Full strategy with steps.
+         * @description Unified strategy response — used for both list and detail views.
+         *
+         *     List views: ``steps`` is ``[]``, ``stepCount``/``resultCount`` are populated.
+         *     Detail views: ``steps`` is populated, summary fields may also be set.
          */
         StrategyResponse: {
             /**
@@ -2553,9 +2889,9 @@ export type components = {
             /** Recordtype */
             recordType: string | null;
             /** Steps */
-            steps: components["schemas"]["StepResponse"][];
+            steps?: components["schemas"]["StepResponse"][];
             /** Rootstepid */
-            rootStepId: string | null;
+            rootStepId?: string | null;
             /** Wdkstrategyid */
             wdkStrategyId?: number | null;
             /**
@@ -2578,46 +2914,12 @@ export type components = {
              * Format: date-time
              */
             updatedAt: string;
-        };
-        /**
-         * StrategySummaryResponse
-         * @description Strategy summary for list views.
-         */
-        StrategySummaryResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Title */
-            title?: string | null;
-            /** Siteid */
-            siteId: string;
-            /** Recordtype */
-            recordType: string | null;
             /** Stepcount */
-            stepCount: number;
+            stepCount?: number | null;
             /** Resultcount */
             resultCount?: number | null;
-            /** Wdkstrategyid */
-            wdkStrategyId?: number | null;
-            /**
-             * Issaved
-             * @default false
-             */
-            isSaved: boolean;
-            /**
-             * Createdat
-             * Format: date-time
-             */
-            createdAt: string;
-            /**
-             * Updatedat
-             * Format: date-time
-             */
-            updatedAt: string;
+            /** Wdkurl */
+            wdkUrl?: string | null;
         };
         /**
          * SubKaniActivityResponse
@@ -2679,20 +2981,28 @@ export type components = {
         };
         /**
          * ThresholdSweepRequest
-         * @description Request to sweep a numeric parameter across a range.
+         * @description Request to sweep a parameter across a range (numeric) or set of values (categorical).
          */
         ThresholdSweepRequest: {
             /** Parametername */
             parameterName: string;
+            /**
+             * Sweeptype
+             * @default numeric
+             * @enum {string}
+             */
+            sweepType: "numeric" | "categorical";
             /** Minvalue */
-            minValue: number;
+            minValue?: number | null;
             /** Maxvalue */
-            maxValue: number;
+            maxValue?: number | null;
             /**
              * Steps
              * @default 10
              */
             steps: number;
+            /** Values */
+            values?: string[] | null;
         };
         /** TokenPayload */
         TokenPayload: {
@@ -2740,7 +3050,7 @@ export type components = {
         };
         /**
          * WdkStrategySummaryResponse
-         * @description WDK strategy summary for list views.
+         * @description WDK strategy summary for list views (backend-only).
          */
         WdkStrategySummaryResponse: {
             /** Wdkstrategyid */
@@ -3282,7 +3592,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StrategySummaryResponse"][];
+                    "application/json": components["schemas"]["StrategyResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -3571,7 +3881,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StrategySummaryResponse"][];
+                    "application/json": components["schemas"]["StrategyResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -5311,6 +5621,438 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JSONObject"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_gene_sets_api_v1_gene_sets_get: {
+        parameters: {
+            query?: {
+                siteId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneSetResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_gene_set_api_v1_gene_sets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGeneSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneSetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gene_set_api_v1_gene_sets__gene_set_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gene_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneSetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_gene_set_api_v1_gene_sets__gene_set_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gene_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_operations_api_v1_gene_sets_operations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetOperationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneSetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enrich_gene_set_api_v1_gene_sets__gene_set_id__enrich_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gene_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneSetEnrichRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gene_set_attributes_api_v1_gene_sets__gene_set_id__results_attributes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gene_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gene_set_records_api_v1_gene_sets__gene_set_id__results_records_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+                sort?: string | null;
+                dir?: string;
+                attributes?: string | null;
+                filterAttribute?: string | null;
+                filterValue?: string | null;
+            };
+            header?: never;
+            path: {
+                gene_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gene_set_record_detail_api_v1_gene_sets__gene_set_id__results_record_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gene_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gene_set_distribution_api_v1_gene_sets__gene_set_id__results_distributions__attribute_name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gene_set_id: string;
+                attribute_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gene_set_analysis_types_api_v1_gene_sets__gene_set_id__analyses_types_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gene_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_gene_set_analysis_api_v1_gene_sets__gene_set_id__analyses_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gene_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunGeneSetAnalysisRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gene_set_strategy_api_v1_gene_sets__gene_set_id__strategy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gene_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"];
                 };
             };
             /** @description Validation Error */

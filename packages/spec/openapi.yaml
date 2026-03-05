@@ -534,7 +534,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/StrategySummaryResponse'
+                  $ref: '#/components/schemas/StrategyResponse'
                 title: Response List Strategies Api V1 Strategies Get
         '422':
           description: Validation Error
@@ -804,7 +804,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/StrategySummaryResponse'
+                  $ref: '#/components/schemas/StrategyResponse'
                 title: Response Sync All Wdk Strategies Api V1 Strategies Sync Wdk Post
         '422':
           description: Validation Error
@@ -2082,18 +2082,7 @@ paths:
       tags:
       - experiments
       summary: Get Experiment Record Detail
-      description: 'Get a single record''s full details by primary key.
-
-
-        Expects ``{"primaryKey": [{"name": "...", "value": "..."}, ...]}``
-
-        (or ``primary_key``) matching the record type''s primary key structure.
-
-        If the client sends fewer PK parts than the record type requires (e.g. only
-
-        ``source_id`` for gene), missing parts such as ``project_id`` are filled
-
-        from the site so WDK accepts the request.'
+      description: Get a single record's full details by primary key.
       operationId: get_experiment_record_detail_api_v1_experiments__experiment_id__results_record_post
       security:
       - APIKeyCookie: []
@@ -2159,7 +2148,7 @@ paths:
       tags:
       - experiments
       summary: Get Experiment Distribution
-      description: Get distribution data for an attribute using filter summary.
+      description: Get distribution data for an attribute using the byValue column reporter.
       operationId: get_experiment_distribution_api_v1_experiments__experiment_id__results_distributions__attribute_name__get
       security:
       - APIKeyCookie: []
@@ -2223,7 +2212,12 @@ paths:
       tags:
       - experiments
       summary: Run Experiment Analysis
-      description: Create and run a WDK step analysis on the experiment's step.
+      description: 'Create and run a WDK step analysis on the experiment''s step.
+
+
+        Uses the shared service for defaults+merge+run, but adds
+
+        experiment-specific enrichment persistence.'
       operationId: run_experiment_analysis_api_v1_experiments__experiment_id__analyses_run_post
       security:
       - APIKeyCookie: []
@@ -2641,6 +2635,469 @@ paths:
                 items:
                   $ref: '#/components/schemas/JSONObject'
                 title: Response List Active Api V1 Operations Active Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/gene-sets:
+    post:
+      tags:
+      - gene-sets
+      summary: Create Gene Set
+      description: Create a new gene set.
+      operationId: create_gene_set_api_v1_gene_sets_post
+      security:
+      - APIKeyCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGeneSetRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneSetResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - gene-sets
+      summary: List Gene Sets
+      description: List all gene sets for the current user, optionally filtered by site.
+      operationId: list_gene_sets_api_v1_gene_sets_get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: siteId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Siteid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GeneSetResponse'
+                title: Response List Gene Sets Api V1 Gene Sets Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/gene-sets/{gene_set_id}:
+    get:
+      tags:
+      - gene-sets
+      summary: Get Gene Set
+      description: Get a gene set by ID.
+      operationId: get_gene_set_api_v1_gene_sets__gene_set_id__get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: gene_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gene Set Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneSetResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - gene-sets
+      summary: Delete Gene Set
+      description: Delete a gene set.
+      operationId: delete_gene_set_api_v1_gene_sets__gene_set_id__delete
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: gene_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gene Set Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: boolean
+                title: Response Delete Gene Set Api V1 Gene Sets  Gene Set Id  Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/gene-sets/operations:
+    post:
+      tags:
+      - gene-sets
+      summary: Set Operations
+      description: Perform set operations (intersect, union, minus) between two gene sets.
+      operationId: set_operations_api_v1_gene_sets_operations_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetOperationRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneSetResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - APIKeyCookie: []
+  /api/v1/gene-sets/{gene_set_id}/enrich:
+    post:
+      tags:
+      - gene-sets
+      summary: Enrich Gene Set
+      description: Run enrichment analysis on a gene set.
+      operationId: enrich_gene_set_api_v1_gene_sets__gene_set_id__enrich_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: gene_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gene Set Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneSetEnrichRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JSONObject'
+                title: Response Enrich Gene Set Api V1 Gene Sets  Gene Set Id  Enrich Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/gene-sets/{gene_set_id}/results/attributes:
+    get:
+      tags:
+      - gene-sets
+      summary: Get Gene Set Attributes
+      description: Get available attributes for a gene set's record type.
+      operationId: get_gene_set_attributes_api_v1_gene_sets__gene_set_id__results_attributes_get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: gene_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gene Set Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSONObject'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/gene-sets/{gene_set_id}/results/records:
+    get:
+      tags:
+      - gene-sets
+      summary: Get Gene Set Records
+      description: Get paginated result records for a gene set.
+      operationId: get_gene_set_records_api_v1_gene_sets__gene_set_id__results_records_get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: gene_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gene Set Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Offset
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      - name: sort
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sort
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ASC
+          title: Dir
+      - name: attributes
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Attributes
+      - name: filterAttribute
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Filterattribute
+      - name: filterValue
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Filtervalue
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSONObject'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/gene-sets/{gene_set_id}/results/record:
+    post:
+      tags:
+      - gene-sets
+      summary: Get Gene Set Record Detail
+      description: Get a single record's full details by primary key.
+      operationId: get_gene_set_record_detail_api_v1_gene_sets__gene_set_id__results_record_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: gene_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gene Set Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Request Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSONObject'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/gene-sets/{gene_set_id}/results/distributions/{attribute_name}:
+    get:
+      tags:
+      - gene-sets
+      summary: Get Gene Set Distribution
+      description: Get distribution data for an attribute using the byValue column reporter.
+      operationId: get_gene_set_distribution_api_v1_gene_sets__gene_set_id__results_distributions__attribute_name__get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: gene_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gene Set Id
+      - name: attribute_name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Attribute Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSONObject'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/gene-sets/{gene_set_id}/analyses/types:
+    get:
+      tags:
+      - gene-sets
+      summary: Get Gene Set Analysis Types
+      description: List available WDK step analysis types for a gene set.
+      operationId: get_gene_set_analysis_types_api_v1_gene_sets__gene_set_id__analyses_types_get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: gene_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gene Set Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSONObject'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/gene-sets/{gene_set_id}/analyses/run:
+    post:
+      tags:
+      - gene-sets
+      summary: Run Gene Set Analysis
+      description: Run a WDK step analysis on a gene set.
+      operationId: run_gene_set_analysis_api_v1_gene_sets__gene_set_id__analyses_run_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: gene_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gene Set Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunGeneSetAnalysisRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSONObject'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/gene-sets/{gene_set_id}/strategy:
+    get:
+      tags:
+      - gene-sets
+      summary: Get Gene Set Strategy
+      description: Get the WDK strategy tree for a gene set.
+      operationId: get_gene_set_strategy_api_v1_gene_sets__gene_set_id__strategy_get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: gene_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gene Set Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSONObject'
         '422':
           description: Validation Error
           content:
@@ -3213,6 +3670,63 @@ components:
 
 
         Supports three modes: ``single`` (default), ``multi-step``, and ``import``.'
+    CreateGeneSetRequest:
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          title: Name
+        siteId:
+          type: string
+          title: Siteid
+        geneIds:
+          items:
+            type: string
+          type: array
+          title: Geneids
+        source:
+          type: string
+          enum:
+          - strategy
+          - paste
+          - upload
+          - derived
+          - saved
+          title: Source
+          default: paste
+        wdkStrategyId:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Wdkstrategyid
+        wdkStepId:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Wdkstepid
+        searchName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Searchname
+        recordType:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recordtype
+        parameters:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Parameters
+      type: object
+      required:
+      - name
+      - siteId
+      - geneIds
+      title: CreateGeneSetRequest
+      description: Create a gene set from IDs, strategy, or upload.
     CustomEnrichRequest:
       properties:
         geneSetName:
@@ -3357,6 +3871,106 @@ components:
       - geneId
       title: GeneSearchResultResponse
       description: A single gene result from site-search.
+    GeneSetEnrichRequest:
+      properties:
+        enrichmentTypes:
+          items:
+            type: string
+            enum:
+            - go_function
+            - go_component
+            - go_process
+            - pathway
+            - word
+          type: array
+          title: Enrichmenttypes
+      type: object
+      required:
+      - enrichmentTypes
+      title: GeneSetEnrichRequest
+      description: Run enrichment on a gene set.
+    GeneSetResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        siteId:
+          type: string
+          title: Siteid
+        geneIds:
+          items:
+            type: string
+          type: array
+          title: Geneids
+        source:
+          type: string
+          enum:
+          - strategy
+          - paste
+          - upload
+          - derived
+          - saved
+          title: Source
+        geneCount:
+          type: integer
+          title: Genecount
+        wdkStrategyId:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Wdkstrategyid
+        wdkStepId:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Wdkstepid
+        searchName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Searchname
+        recordType:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recordtype
+        parameters:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Parameters
+        parentSetIds:
+          items:
+            type: string
+          type: array
+          title: Parentsetids
+        operation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operation
+        createdAt:
+          type: string
+          title: Createdat
+        stepCount:
+          type: integer
+          title: Stepcount
+          default: 1
+      type: object
+      required:
+      - id
+      - name
+      - siteId
+      - geneIds
+      - source
+      - geneCount
+      - createdAt
+      title: GeneSetResponse
+      description: Gene set response DTO.
     HTTPValidationError:
       properties:
         detail:
@@ -3946,6 +4560,20 @@ components:
       - enrichmentTypes
       title: RunEnrichmentRequest
       description: Request to run enrichment on an existing experiment.
+    RunGeneSetAnalysisRequest:
+      properties:
+        analysisName:
+          type: string
+          title: Analysisname
+        parameters:
+          additionalProperties: true
+          type: object
+          title: Parameters
+      type: object
+      required:
+      - analysisName
+      title: RunGeneSetAnalysisRequest
+      description: Run a WDK step analysis on a gene set.
     SearchDetailsResponse:
       properties:
         searchData:
@@ -4044,6 +4672,29 @@ components:
       - validation
       title: SearchValidationResponse
       description: Stable validation response for UI consumption.
+    SetOperationRequest:
+      properties:
+        setAId:
+          type: string
+          title: Setaid
+        setBId:
+          type: string
+          title: Setbid
+        operation:
+          type: string
+          title: Operation
+        name:
+          type: string
+          maxLength: 200
+          title: Name
+      type: object
+      required:
+      - setAId
+      - setBId
+      - operation
+      - name
+      title: SetOperationRequest
+      description: Perform set operations between two gene sets.
     SiteResponse:
       properties:
         id:
@@ -4480,76 +5131,36 @@ components:
           type: string
           format: date-time
           title: Updatedat
-      type: object
-      required:
-      - id
-      - name
-      - siteId
-      - recordType
-      - steps
-      - rootStepId
-      - createdAt
-      - updatedAt
-      title: StrategyResponse
-      description: Full strategy with steps.
-    StrategySummaryResponse:
-      properties:
-        id:
-          type: string
-          format: uuid
-          title: Id
-        name:
-          type: string
-          title: Name
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
-        siteId:
-          type: string
-          title: Siteid
-        recordType:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Recordtype
         stepCount:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Stepcount
         resultCount:
           anyOf:
           - type: integer
           - type: 'null'
           title: Resultcount
-        wdkStrategyId:
+        wdkUrl:
           anyOf:
-          - type: integer
+          - type: string
           - type: 'null'
-          title: Wdkstrategyid
-        isSaved:
-          type: boolean
-          title: Issaved
-          default: false
-        createdAt:
-          type: string
-          format: date-time
-          title: Createdat
-        updatedAt:
-          type: string
-          format: date-time
-          title: Updatedat
+          title: Wdkurl
       type: object
       required:
       - id
       - name
       - siteId
       - recordType
-      - stepCount
       - createdAt
       - updatedAt
-      title: StrategySummaryResponse
-      description: Strategy summary for list views.
+      title: StrategyResponse
+      description: 'Unified strategy response — used for both list and detail views.
+
+
+        List views: ``steps`` is ``[]``, ``stepCount``/``resultCount`` are populated.
+
+        Detail views: ``steps`` is populated, summary fields may also be set.'
     SubKaniActivityResponse:
       properties:
         calls:
@@ -4648,11 +5259,22 @@ components:
         parameterName:
           type: string
           title: Parametername
+        sweepType:
+          type: string
+          enum:
+          - numeric
+          - categorical
+          title: Sweeptype
+          default: numeric
         minValue:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Minvalue
         maxValue:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Maxvalue
         steps:
           type: integer
@@ -4660,13 +5282,18 @@ components:
           minimum: 3.0
           title: Steps
           default: 10
+        values:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Values
       type: object
       required:
       - parameterName
-      - minValue
-      - maxValue
       title: ThresholdSweepRequest
-      description: Request to sweep a numeric parameter across a range.
+      description: Request to sweep a parameter across a range (numeric) or set of values (categorical).
     TokenPayload:
       properties:
         token:
@@ -4786,7 +5413,7 @@ components:
       - name
       - siteId
       title: WdkStrategySummaryResponse
-      description: WDK strategy summary for list views.
+      description: WDK strategy summary for list views (backend-only).
     veupath_chatbot__transport__http__routers__experiments__crud__CreateStrategyRequest:
       properties:
         siteId:
