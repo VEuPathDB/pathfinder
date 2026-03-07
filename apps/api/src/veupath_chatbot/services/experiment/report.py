@@ -4,8 +4,6 @@ Generates a single-file HTML document with embedded styles, tables,
 and inline SVG charts. No external dependencies required.
 """
 
-from __future__ import annotations
-
 import html
 from datetime import UTC, datetime
 

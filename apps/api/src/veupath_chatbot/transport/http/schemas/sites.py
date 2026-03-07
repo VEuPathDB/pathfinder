@@ -1,7 +1,5 @@
 """Sites request/response DTOs."""
 
-from __future__ import annotations
-
 from pydantic import BaseModel, Field, RootModel
 
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue

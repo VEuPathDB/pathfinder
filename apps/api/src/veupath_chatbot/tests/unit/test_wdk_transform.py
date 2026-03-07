@@ -1,9 +1,9 @@
 """Tests for WDK transform functions (wdk_transform.py)."""
 
+from veupath_chatbot.domain.parameters.specs import unwrap_search_data
 from veupath_chatbot.integrations.vectorstore.ingest.wdk_transform import (
     _coerce_str,
     _preview_vocab,
-    _unwrap_search_data,
     build_record_type_doc,
     build_search_doc,
 )
@@ -81,21 +81,21 @@ class TestPreviewVocab:
 
 
 class TestUnwrapSearchData:
-    def test_none_returns_empty_dict(self) -> None:
-        assert _unwrap_search_data(None) == {}
+    def test_none_returns_none(self) -> None:
+        assert unwrap_search_data(None) is None
 
     def test_dict_without_search_data_returns_self(self) -> None:
         d = {"searchName": "test", "displayName": "Test"}
-        assert _unwrap_search_data(d) == d
+        assert unwrap_search_data(d) == d
 
     def test_dict_with_search_data_returns_inner(self) -> None:
         inner = {"searchName": "inner_search"}
         d = {"searchData": inner, "otherField": "ignored"}
-        assert _unwrap_search_data(d) == inner
+        assert unwrap_search_data(d) == inner
 
     def test_non_dict_search_data_returns_outer(self) -> None:
         d = {"searchData": "not-a-dict", "searchName": "outer"}
-        assert _unwrap_search_data(d) == d
+        assert unwrap_search_data(d) == d
 
 
 class TestBuildRecordTypeDoc:

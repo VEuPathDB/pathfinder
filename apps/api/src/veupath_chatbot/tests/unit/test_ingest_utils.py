@@ -1,34 +1,6 @@
 """Tests for vectorstore ingest utility functions."""
 
-from veupath_chatbot.integrations.vectorstore.ingest.utils import (
-    extract_search_name,
-    parse_sites,
-)
-
-
-class TestExtractSearchName:
-    def test_prefers_url_segment(self) -> None:
-        obj = {"urlSegment": "transcript", "name": "TranscriptRecordClasses"}
-        assert extract_search_name(obj) == "transcript"
-
-    def test_falls_back_to_name(self) -> None:
-        obj = {"name": "GenesByText"}
-        assert extract_search_name(obj) == "GenesByText"
-
-    def test_strips_whitespace(self) -> None:
-        obj = {"urlSegment": "  transcript  "}
-        assert extract_search_name(obj) == "transcript"
-
-    def test_empty_url_segment_falls_to_name(self) -> None:
-        obj = {"urlSegment": "", "name": "fallback"}
-        assert extract_search_name(obj) == "fallback"
-
-    def test_both_missing_returns_empty(self) -> None:
-        assert extract_search_name({}) == ""
-
-    def test_none_values_return_empty(self) -> None:
-        obj = {"urlSegment": None, "name": None}
-        assert extract_search_name(obj) == ""
+from veupath_chatbot.integrations.vectorstore.ingest.utils import parse_sites
 
 
 class TestParseSites:

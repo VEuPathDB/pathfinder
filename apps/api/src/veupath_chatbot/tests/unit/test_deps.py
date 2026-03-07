@@ -6,8 +6,6 @@ Covers:
 - Inconsistency between single and multi experiment ownership checks
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4

@@ -1,16 +1,13 @@
 """Tests for shared WDK helpers module.
 
-Covers: is_sortable, is_suggested_score, extract_pk, extract_displayable_attr_names,
+Covers: is_sortable, is_suggested_score, extract_pk,
 order_primary_key, extract_record_ids, build_attribute_list, merge_analysis_params.
 """
-
-from __future__ import annotations
 
 import pytest
 
 from veupath_chatbot.services.wdk.helpers import (
     build_attribute_list,
-    extract_displayable_attr_names,
     extract_pk,
     extract_record_ids,
     is_sortable,
@@ -158,109 +155,6 @@ class TestExtractPk:
     def test_value_not_string(self) -> None:
         record = {"id": [{"name": "source_id", "value": 12345}]}
         assert extract_pk(record) is None
-
-
-# ---------------------------------------------------------------------------
-# extract_displayable_attr_names
-# ---------------------------------------------------------------------------
-
-
-class TestExtractDisplayableAttrNames:
-    """Extracts displayable attribute names from WDK record type info."""
-
-    def test_dict_format_all_displayable(self) -> None:
-        attrs = {
-            "gene_name": {"isDisplayable": True, "type": "string"},
-            "score": {"isDisplayable": True, "type": "number"},
-        }
-        result = extract_displayable_attr_names(attrs)
-        assert set(result) == {"gene_name", "score"}
-
-    def test_dict_format_filters_non_displayable(self) -> None:
-        attrs = {
-            "gene_name": {"isDisplayable": True, "type": "string"},
-            "internal_id": {"isDisplayable": False, "type": "string"},
-        }
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]
-
-    def test_dict_format_defaults_displayable_to_true(self) -> None:
-        attrs = {
-            "gene_name": {"type": "string"},
-        }
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]
-
-    def test_dict_format_filters_empty_names(self) -> None:
-        attrs = {
-            "": {"isDisplayable": True},
-            "gene_name": {"isDisplayable": True},
-        }
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]
-
-    def test_list_format_all_displayable(self) -> None:
-        attrs = [
-            {"name": "gene_name", "isDisplayable": True, "type": "string"},
-            {"name": "score", "isDisplayable": True, "type": "number"},
-        ]
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name", "score"]
-
-    def test_list_format_filters_non_displayable(self) -> None:
-        attrs = [
-            {"name": "gene_name", "isDisplayable": True},
-            {"name": "internal_id", "isDisplayable": False},
-        ]
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]
-
-    def test_list_format_defaults_displayable_to_true(self) -> None:
-        attrs = [{"name": "gene_name", "type": "string"}]
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]
-
-    def test_list_format_skips_non_dict_entries(self) -> None:
-        attrs = [
-            {"name": "gene_name", "isDisplayable": True},
-            "not_a_dict",
-            42,
-        ]
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]
-
-    def test_list_format_skips_missing_name(self) -> None:
-        attrs = [
-            {"isDisplayable": True},
-            {"name": "gene_name", "isDisplayable": True},
-        ]
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]
-
-    def test_list_format_strips_whitespace(self) -> None:
-        attrs = [{"name": "  gene_name  ", "isDisplayable": True}]
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]
-
-    def test_list_format_skips_empty_name_after_strip(self) -> None:
-        attrs = [
-            {"name": "  ", "isDisplayable": True},
-            {"name": "gene_name"},
-        ]
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]
-
-    def test_empty_dict(self) -> None:
-        assert extract_displayable_attr_names({}) == []
-
-    def test_empty_list(self) -> None:
-        assert extract_displayable_attr_names([]) == []
-
-    def test_none_returns_empty(self) -> None:
-        assert extract_displayable_attr_names(None) == []
-
-    def test_string_returns_empty(self) -> None:
-        assert extract_displayable_attr_names("invalid") == []
 
 
 # ---------------------------------------------------------------------------

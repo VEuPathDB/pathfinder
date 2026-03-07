@@ -10,8 +10,6 @@ Covers:
 - _enrich_list with partial metadata
 """
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.services.experiment.helpers import (

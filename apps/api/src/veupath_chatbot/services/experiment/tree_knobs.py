@@ -5,17 +5,20 @@ using Optuna, optimizing for rank-based objectives (Precision@K,
 Enrichment@K) with optional list-size constraints.
 """
 
-from __future__ import annotations
-
 import copy
-import math
 import time
 
+from veupath_chatbot.domain.strategy.tree import walk_dict_tree
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.experiment.helpers import safe_int
+from veupath_chatbot.services.experiment.metrics import (
+    compute_confusion_matrix,
+    compute_metrics,
+)
 from veupath_chatbot.services.experiment.types import (
     ControlValueFormat,
+    ExperimentMetrics,
     OperatorKnob,
     ThresholdKnob,
     TreeOptimizationResult,
@@ -136,28 +139,18 @@ async def optimize_tree_knobs(
         total_pos = len(positive_controls)
         total_neg = len(negative_controls)
 
-        tp = pos_hits
-        fn = total_pos - tp
-        fp = neg_hits
-        tn = total_neg - fp
-
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-        random_prec = total_pos / total_results if total_results > 0 else 0.0
-        enrichment = precision / random_prec if random_prec > 0 else 0.0
-
-        score = _select_metric(
-            objective,
-            tp=tp,
-            fp=fp,
-            fn=fn,
-            tn=tn,
-            precision=precision,
-            recall=recall,
-            specificity=specificity,
-            enrichment=enrichment,
+        cm = compute_confusion_matrix(
+            positive_hits=pos_hits,
+            total_positives=total_pos,
+            negative_hits=neg_hits,
+            total_negatives=total_neg,
         )
+        m = compute_metrics(cm, total_results=total_results)
+
+        random_prec = total_pos / total_results if total_results > 0 else 0.0
+        enrichment = m.precision / random_prec if random_prec > 0 else 0.0
+
+        score = _select_metric(objective, metrics=m, enrichment=enrichment)
 
         params: dict[str, float | str] = {**threshold_vals, **operator_vals}
         t = TreeOptimizationTrial(
@@ -192,36 +185,25 @@ def _apply_knobs_recursive(
     operator_vals: dict[str, str],
 ) -> None:
     """Recursively apply knob values to a tree in-place."""
-    node_id = str(node.get("id", ""))
 
-    if node_id in operator_vals:
-        node["operator"] = operator_vals[node_id]
+    def _apply(n: JSONObject) -> None:
+        nid = str(n.get("id", ""))
+        if nid in operator_vals:
+            n["operator"] = operator_vals[nid]
+        raw_params = n.get("parameters")
+        if isinstance(raw_params, dict):
+            for key, val in threshold_vals.items():
+                step_id, param_name = key.split(":", 1)
+                if nid == step_id:
+                    raw_params[param_name] = str(val)
 
-    raw_params = node.get("parameters")
-    if isinstance(raw_params, dict):
-        for key, val in threshold_vals.items():
-            step_id, param_name = key.split(":", 1)
-            if node_id == step_id:
-                raw_params[param_name] = str(val)
-
-    primary = node.get("primaryInput")
-    if isinstance(primary, dict):
-        _apply_knobs_recursive(primary, threshold_vals, operator_vals)
-    secondary = node.get("secondaryInput")
-    if isinstance(secondary, dict):
-        _apply_knobs_recursive(secondary, threshold_vals, operator_vals)
+    walk_dict_tree(node, _apply)
 
 
 def _select_metric(
     objective: str,
     *,
-    tp: int,
-    fp: int,
-    fn: int,
-    tn: int,
-    precision: float,
-    recall: float,
-    specificity: float,
+    metrics: ExperimentMetrics,
     enrichment: float,
 ) -> float:
     """Select the metric value based on the objective name.
@@ -232,20 +214,18 @@ def _select_metric(
     obj = objective.lower()
 
     if "precision" in obj:
-        return precision
+        return metrics.precision
     if obj in ("sensitivity", "recall") or obj.startswith("recall"):
-        return recall
+        return metrics.sensitivity
     if "enrichment" in obj:
         return enrichment
     if "specificity" in obj:
-        return specificity
+        return metrics.specificity
     if "balanced_accuracy" in obj:
-        return (recall + specificity) / 2
+        return metrics.balanced_accuracy
     if "mcc" in obj:
-        denom = math.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
-        return ((tp * tn - fp * fn) / denom) if denom > 0 else 0.0
+        return metrics.mcc
     if "f1" in obj:
-        denom = precision + recall
-        return (2 * precision * recall / denom) if denom > 0 else 0.0
+        return metrics.f1_score
 
-    return precision
+    return metrics.precision

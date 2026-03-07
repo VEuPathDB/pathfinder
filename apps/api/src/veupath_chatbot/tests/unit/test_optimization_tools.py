@@ -5,8 +5,6 @@ it delegates to the optimization service. These tests exercise every
 validation branch without calling the actual optimization engine.
 """
 
-from __future__ import annotations
-
 import json
 from unittest.mock import AsyncMock, patch
 

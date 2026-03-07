@@ -4,8 +4,6 @@ These tests mock the StrategyAPI to test the materialization logic without
 making actual WDK calls.
 """
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

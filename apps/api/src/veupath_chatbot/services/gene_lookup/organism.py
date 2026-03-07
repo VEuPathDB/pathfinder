@@ -1,7 +1,5 @@
 """Organism fuzzy matching for gene lookup."""
 
-from __future__ import annotations
-
 import re
 
 from veupath_chatbot.integrations.veupathdb.site_search import strip_html_tags

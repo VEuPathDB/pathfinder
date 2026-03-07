@@ -4,8 +4,6 @@ This module extracts the "spawn sub-agents, run tasks with dependencies, emit ev
 workflow out of the main agent runtime to keep concerns separated.
 """
 
-from __future__ import annotations
-
 import asyncio
 import time
 from collections.abc import Awaitable, Callable
@@ -403,6 +401,7 @@ async def delegate_strategy_subtasks(
                 subkani_timeout_seconds=settings.subkani_timeout_seconds,
             )
         except Exception as exc:  # pragma: no cover
+            logger.error("Sub-kani task crashed", task=task_text, error=str(exc))
             result = tool_error("SUBKANI_FAILED", str(exc), notes="failed")
         if isinstance(result, dict):
             result["id"] = node_id

@@ -8,8 +8,6 @@ Design goals:
 - Separation of concerns: keep logic out of AI prompt text and tool mixins.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import cast
 

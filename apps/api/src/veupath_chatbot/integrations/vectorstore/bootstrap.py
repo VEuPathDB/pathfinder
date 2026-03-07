@@ -1,7 +1,5 @@
 """Vectorstore startup/bootstrap helpers."""
 
-from __future__ import annotations
-
 import asyncio
 
 from veupath_chatbot.integrations.vectorstore.collections import (

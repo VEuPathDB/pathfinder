@@ -4,8 +4,6 @@ Provides :class:`ArtifactToolsMixin` with tools for saving planning
 artifacts, setting conversation titles, and reporting reasoning.
 """
 
-from __future__ import annotations
-
 from typing import Annotated, cast
 
 from kani import AIParam, ai_function

@@ -10,12 +10,10 @@ Covers:
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from veupath_chatbot.domain.parameters.specs import unwrap_search_data
 from veupath_chatbot.integrations.vectorstore.ingest.wdk_fetch import (
     fetch_record_types_and_searches,
     fetch_search_details,
-)
-from veupath_chatbot.integrations.vectorstore.ingest.wdk_transform import (
-    _unwrap_search_data,
 )
 
 # ---------------------------------------------------------------------------
@@ -290,25 +288,25 @@ class TestFetchSearchDetails:
 
 
 # ---------------------------------------------------------------------------
-# _unwrap_search_data (wdk_transform variant)
+# unwrap_search_data
 # ---------------------------------------------------------------------------
 
 
-class TestUnwrapSearchDataTransform:
-    """Test the _unwrap_search_data from wdk_transform.py (returns {} for None)."""
+class TestUnwrapSearchData:
+    """Test the canonical unwrap_search_data from param_resolution."""
 
-    def test_none_returns_empty_dict(self) -> None:
-        assert _unwrap_search_data(None) == {}
+    def test_none_returns_none(self) -> None:
+        assert unwrap_search_data(None) is None
 
     def test_dict_without_search_data(self) -> None:
         d = {"displayName": "Test"}
-        assert _unwrap_search_data(d) == d
+        assert unwrap_search_data(d) == d
 
     def test_dict_with_search_data(self) -> None:
         inner = {"displayName": "Inner"}
         d = {"searchData": inner}
-        assert _unwrap_search_data(d) == inner
+        assert unwrap_search_data(d) == inner
 
     def test_non_dict_search_data_returns_outer(self) -> None:
         d = {"searchData": "not-a-dict"}
-        assert _unwrap_search_data(d) == d
+        assert unwrap_search_data(d) == d

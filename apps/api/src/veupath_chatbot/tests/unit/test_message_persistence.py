@@ -8,8 +8,6 @@ Uses fakeredis (real Redis protocol, in-memory) so we test actual XADD/XRANGE
 behavior.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import SimpleNamespace

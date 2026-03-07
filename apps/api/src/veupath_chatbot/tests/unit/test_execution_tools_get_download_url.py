@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.ai.tools.result_tools import ResultTools
@@ -17,21 +15,18 @@ class _CaptureClient:
         self,
         *,
         post_response: JSONObject | None = None,
-        get_responses: list[JSONObject] | None = None,
+        base_url: str = "https://example.org/service",
     ) -> None:
         self.last_path: str | None = None
         self.last_json: JSONObject | None = None
-        self._post_response = post_response or {
-            "id": "tmp-1",
-            "url": "https://example/download.csv",
-        }
-        self._get_responses = list(get_responses or [])
+        self.base_url = base_url
+        self._post_response = (
+            post_response if post_response is not None else {"id": "tmp-1"}
+        )
 
     async def get(self, path: str):
         if path == "/users/current":
             return {}
-        if self._get_responses:
-            return self._get_responses.pop(0)
         return {}
 
     async def post(self, path: str, json: JSONObject | None = None):
@@ -53,14 +48,13 @@ async def test_get_download_url_validates_format() -> None:
 
 @pytest.mark.asyncio
 async def test_get_download_url_maps_report_name_payload_error() -> None:
-    tools = ResultTools(FakeResultToolsSession())
     fake_api = FakeResultsAPI(
         error=WDKError(
             'POST /temporary-results -> HTTP 400: JSONObject["reportName"] not found.',
             400,
         )
     )
-    tools._get_results_api = lambda: fake_api
+    tools = ResultTools(FakeResultToolsSession(), results_api=fake_api)
 
     result = await tools.get_download_url(
         wdk_step_id=437637443,
@@ -76,9 +70,8 @@ async def test_get_download_url_maps_report_name_payload_error() -> None:
 
 @pytest.mark.asyncio
 async def test_get_download_url_returns_url_on_success() -> None:
-    tools = ResultTools(FakeResultToolsSession())
     fake_api = FakeResultsAPI(url="https://example/download.csv")
-    tools._get_results_api = lambda: fake_api
+    tools = ResultTools(FakeResultToolsSession(), results_api=fake_api)
 
     result = await tools.get_download_url(
         wdk_step_id=101, format="csv", attributes=None
@@ -103,34 +96,19 @@ async def test_create_temporary_result_uses_report_name_field() -> None:
 
 
 @pytest.mark.asyncio
-async def test_temporary_results_get_download_url_polls_until_url_available() -> None:
-    client = _CaptureClient(
-        post_response={"id": "tmp-1"},
-        get_responses=[
-            {"id": "tmp-1", "status": "pending"},
-            {
-                "id": "tmp-1",
-                "status": "complete",
-                "url": "https://example/download.csv",
-            },
-        ],
-    )
+async def test_temporary_results_get_download_url_constructs_from_id() -> None:
+    client = _CaptureClient(post_response={"id": "tmp-1"})
     api = TemporaryResultsAPI(client)
 
     url = await api.get_download_url(step_id=123, format="csv", attributes=None)
 
-    assert url == "https://example/download.csv"
+    assert url == "https://example.org/service/temporary-results/tmp-1/result"
 
 
 @pytest.mark.asyncio
-async def test_temporary_results_get_download_url_raises_when_url_never_available() -> (
-    None
-):
-    client = _CaptureClient(
-        post_response={"id": "tmp-1"},
-        get_responses=[{"id": "tmp-1", "status": "pending"}] * 8,
-    )
+async def test_temporary_results_get_download_url_raises_when_no_id() -> None:
+    client = _CaptureClient(post_response={})
     api = TemporaryResultsAPI(client)
 
-    with pytest.raises(RuntimeError, match="did not produce a download URL"):
+    with pytest.raises(RuntimeError, match="did not include.*id"):
         await api.get_download_url(step_id=123, format="csv", attributes=None)

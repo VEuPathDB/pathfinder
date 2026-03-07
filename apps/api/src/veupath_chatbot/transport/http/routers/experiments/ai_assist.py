@@ -1,7 +1,5 @@
 """AI assistant SSE streaming endpoint for the experiment wizard."""
 
-from __future__ import annotations
-
 import json
 from collections.abc import AsyncIterator
 

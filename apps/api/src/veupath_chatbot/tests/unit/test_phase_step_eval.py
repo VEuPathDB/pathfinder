@@ -2,18 +2,17 @@
 
 Tests focus on pure functions:
 - _extract_eval_counts from various result shapes
-- _f1 approximation function
+- _f1_from_counts F1 computation via canonical metrics engine
 - _collect_combine_nodes for tree structure analysis
 - _build_subtree_with_operator for operator swaps
 """
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.services.experiment.step_analysis._evaluation import (
+    _EvalCounts,
     _extract_eval_counts,
-    _f1,
+    _f1_from_counts,
 )
 from veupath_chatbot.services.experiment.step_analysis._tree_utils import (
     _build_subtree_with_operator,
@@ -107,43 +106,48 @@ class TestExtractEvalCounts:
         assert counts.pos_ids == ["123", "None"]
 
 
-class TestF1Approximation:
-    """_f1 approximates F1 from recall and FPR."""
+class TestF1FromCounts:
+    """_f1_from_counts computes F1 via the canonical metrics engine."""
 
     def test_perfect_classifier(self) -> None:
-        """recall=1, fpr=0 -> specificity=1, precision~=1 -> F1~=1."""
-        result = _f1(1.0, 0.0, 10)
-        assert result == pytest.approx(1.0)
+        """All positives found, no negatives found => F1=1.0."""
+        counts = _EvalCounts(pos_hits=10, pos_total=10, neg_hits=0, neg_total=10)
+        assert _f1_from_counts(counts) == pytest.approx(1.0)
 
     def test_zero_recall(self) -> None:
-        """recall=0 -> F1=0 regardless of FPR."""
-        assert _f1(0.0, 0.5, 10) == 0.0
+        """No positives found => F1=0.0."""
+        counts = _EvalCounts(pos_hits=0, pos_total=10, neg_hits=5, neg_total=10)
+        assert _f1_from_counts(counts) == 0.0
 
     def test_zero_recall_and_zero_precision(self) -> None:
-        """Both zero -> denom=0 -> F1=0."""
-        assert _f1(0.0, 1.0, 10) == 0.0
+        """No positives, no negatives => F1=0.0."""
+        counts = _EvalCounts(pos_hits=0, pos_total=0, neg_hits=0, neg_total=0)
+        assert _f1_from_counts(counts) == 0.0
 
     def test_no_negatives(self) -> None:
-        """When neg_total=0, specificity defaults to 1.0."""
-        result = _f1(0.8, 0.5, 0)
-        # specificity = 1.0 (because neg_total=0), precision proxy = 1.0
-        # F1 = 2 * 1.0 * 0.8 / (1.0 + 0.8) = 1.6 / 1.8
+        """When neg_total=0, precision=1.0 (no FP possible)."""
+        # tp=8, fp=0, fn=2 => precision=1.0, recall=0.8
+        # F1 = 2*1.0*0.8/(1.0+0.8) = 1.6/1.8
+        counts = _EvalCounts(pos_hits=8, pos_total=10, neg_hits=0, neg_total=0)
         expected = 2 * 1.0 * 0.8 / (1.0 + 0.8)
-        assert result == pytest.approx(expected)
+        assert _f1_from_counts(counts) == pytest.approx(expected)
 
-    def test_high_fpr(self) -> None:
-        """fpr=1.0 -> specificity=0 -> precision proxy=0 -> F1=0."""
-        result = _f1(0.8, 1.0, 10)
-        # specificity = 0.0, precision = 0.0, denom = 0.0 + 0.8 = 0.8
-        # F1 = 2 * 0.0 * 0.8 / 0.8 = 0.0
-        assert result == 0.0
+    def test_high_false_positives(self) -> None:
+        """All negatives found => low precision => low F1."""
+        # tp=8, fp=10, fn=2, tn=0 => precision=8/18, recall=0.8
+        counts = _EvalCounts(pos_hits=8, pos_total=10, neg_hits=10, neg_total=10)
+        precision = 8 / 18
+        recall = 0.8
+        expected = 2 * precision * recall / (precision + recall)
+        assert _f1_from_counts(counts) == pytest.approx(expected)
 
     def test_moderate_values(self) -> None:
-        result = _f1(0.7, 0.2, 10)
-        # specificity = 0.8, precision proxy = 0.8
-        # F1 = 2 * 0.8 * 0.7 / (0.8 + 0.7) = 1.12 / 1.5
-        expected = 2 * 0.8 * 0.7 / (0.8 + 0.7)
-        assert result == pytest.approx(expected)
+        """tp=7, fp=2, fn=3, tn=8 => precision=7/9, recall=0.7."""
+        counts = _EvalCounts(pos_hits=7, pos_total=10, neg_hits=2, neg_total=10)
+        precision = 7 / 9
+        recall = 0.7
+        expected = 2 * precision * recall / (precision + recall)
+        assert _f1_from_counts(counts) == pytest.approx(expected)
 
 
 class TestCollectCombineNodes:

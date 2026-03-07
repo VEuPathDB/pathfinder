@@ -1,7 +1,5 @@
 """Sub-agent used for decomposed strategy-building tasks."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from kani import ChatMessage, Kani
@@ -16,29 +14,15 @@ from veupath_chatbot.ai.tools.registry import AgentToolRegistryMixin
 from veupath_chatbot.ai.tools.result_tools import ResultTools
 from veupath_chatbot.ai.tools.strategy_tools import StrategyTools
 from veupath_chatbot.domain.strategy.session import StrategySession
-from veupath_chatbot.platform.types import JSONObject, JSONValue
 
 
 def _load_subtask_system_prompt() -> str:
-    prompt_path = Path(__file__).parent / "prompts" / "subtask.md"
+    prompt_path = Path(__file__).parent.parent / "prompts" / "subtask.md"
     return prompt_path.read_text()
 
 
 class SubtaskAgent(AgentToolRegistryMixin, Kani):
     """Sub-kani agent for search discovery and parameter lookup."""
-
-    def _combined_result(
-        self,
-        *,
-        rag: JSONValue,
-        wdk: JSONValue,
-        rag_note: str | None = None,
-        wdk_note: str | None = None,
-    ) -> JSONObject:
-        return {
-            "rag": {"data": rag, "note": rag_note or ""},
-            "wdk": {"data": wdk, "note": wdk_note or ""},
-        }
 
     def __init__(
         self,

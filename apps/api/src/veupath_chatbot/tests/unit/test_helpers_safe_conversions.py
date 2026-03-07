@@ -1,7 +1,5 @@
 """Tests for safe_int, safe_float, extract_wdk_id, coerce_step_id in helpers.py."""
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.services.experiment.helpers import (

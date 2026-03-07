@@ -1,7 +1,5 @@
 """Tests for citation domain types and utilities."""
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.research.citations import (
     Citation,
     _new_citation_id,

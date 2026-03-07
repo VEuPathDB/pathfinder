@@ -1,7 +1,5 @@
 """Repository for stream (conversation) identity + projections."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -42,6 +40,7 @@ class StreamRepository:
         proj = StreamProjection(
             stream_id=stream.id,
             name=name or DEFAULT_STREAM_NAME,
+            site_id=site_id,
         )
         self.session.add(proj)
         await self.session.flush()

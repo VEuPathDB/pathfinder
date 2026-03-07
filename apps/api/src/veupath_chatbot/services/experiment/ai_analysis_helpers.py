@@ -4,8 +4,6 @@ Utility functions for extracting WDK record data, classifying genes,
 searching records, and fetching result IDs.
 """
 
-from __future__ import annotations
-
 from typing import cast
 
 from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI

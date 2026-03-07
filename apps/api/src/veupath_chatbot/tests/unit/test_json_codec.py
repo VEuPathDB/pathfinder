@@ -4,8 +4,6 @@ Covers snake_to_camel, field rounding, nested dataclasses, Union/Optional,
 Literal passthrough, list/tuple/dict coercion, and edge cases.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 from veupath_chatbot.services.experiment.types.json_codec import (

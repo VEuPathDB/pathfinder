@@ -1,7 +1,5 @@
 """Small chat utilities (parsing, ids)."""
 
-from __future__ import annotations
-
 import json
 
 from veupath_chatbot.platform.types import JSONObject

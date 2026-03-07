@@ -6,9 +6,9 @@ update_strategy, set_saved, delete_strategy.
 
 from unittest.mock import AsyncMock, MagicMock
 
+from veupath_chatbot.domain.strategy.ast import StepTreeNode
 from veupath_chatbot.integrations.veupathdb.strategy_api.helpers import (
     PATHFINDER_INTERNAL_STRATEGY_NAME_PREFIX,
-    StepTreeNode,
 )
 from veupath_chatbot.integrations.veupathdb.strategy_api.strategies import (
     StrategiesMixin,

@@ -1,14 +1,13 @@
 """WDK parameter fetching, caching, and expansion."""
 
-from __future__ import annotations
-
-from typing import cast
+from typing import Any, cast
 
 from veupath_chatbot.domain.parameters.normalize import ParameterNormalizer
 from veupath_chatbot.domain.parameters.specs import (
     adapt_param_specs,
     extract_param_specs,
     find_input_step_param,
+    unwrap_search_data,
 )
 from veupath_chatbot.domain.parameters.vocab_utils import flatten_vocab
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
@@ -23,147 +22,66 @@ from veupath_chatbot.platform.errors import ErrorCode, WDKError
 from veupath_chatbot.platform.errors import ValidationError as CoreValidationError
 from veupath_chatbot.platform.tool_errors import tool_error
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.services.wdk.record_types import resolve_record_type
 
-from .searches import _resolve_record_type_for_search
+from .searches import find_record_type_for_search
+
+# ---------------------------------------------------------------------------
+# Extracted helpers
+# ---------------------------------------------------------------------------
 
 
-async def get_search_parameters(
-    site_id: str,
-    record_type: str,
-    search_name: str,
-) -> JSONObject:
-    """Get detailed parameter info for a specific search.
+def _allowed_values(vocab: JSONObject | JSONArray | None) -> list[str]:
+    """Extract WDK-accepted parameter values from a vocabulary.
 
-    This is intentionally defensive: WDK responses can vary by site/endpoint.
+    Uses term/value (what WDK actually accepts) rather than display labels,
+    so the LLM can pass these values directly to WDK API calls without
+    needing vocabulary normalisation.
+
+    :param vocab: Vocabulary tree or flat list from catalog.
+    :returns: List of WDK-accepted values (capped at 50).
     """
-    discovery = get_discovery_service()
-    details: JSONObject | None = None
-    resolved_record_type = record_type
+    if not vocab:
+        return []
+    values: list[str] = []
+    seen: set[str] = set()
+    for entry in flatten_vocab(vocab, prefer_term=True):
+        # Prefer the WDK-accepted value; fall back to display if missing.
+        candidate = entry.get("value") or entry.get("display")
+        if not candidate:
+            continue
+        text = str(candidate)
+        if text in seen:
+            continue
+        seen.add(text)
+        values.append(text)
+        if len(values) >= 50:
+            break
+    return values
 
-    record_types = await discovery.get_record_types(site_id)
 
-    def normalize(value: str) -> str:
-        return value.strip().lower()
+def _format_param_info(param_specs: JSONArray) -> JSONArray:
+    """Build a formatted parameter info array from raw WDK param specs.
 
-    if record_type:
-        normalized = normalize(record_type)
-        exact: list[JSONObject] = []
-        for rt in record_types:
-            if not isinstance(rt, dict):
-                continue
-            if normalize(wdk_entity_name(rt)) == normalized:
-                exact.append(rt)
-        if exact:
-            new_rt = wdk_entity_name(exact[0])
-            if new_rt:
-                resolved_record_type = new_rt
-        else:
-            display_matches: list[JSONObject] = []
-            for rt in record_types:
-                if not isinstance(rt, dict):
-                    continue
-                display_name_raw = rt.get("displayName")
-                display_name = (
-                    display_name_raw if isinstance(display_name_raw, str) else ""
-                )
-                if normalize(display_name) == normalized:
-                    display_matches.append(rt)
-            if len(display_matches) == 1:
-                new_rt = wdk_entity_name(display_matches[0])
-                if new_rt:
-                    resolved_record_type = new_rt
+    Each spec dict is transformed into a normalized info dict with keys:
+    name, displayName, type, required, isVisible, help, and optionally
+    allowedValues and defaultValue.
 
-    try:
-        details = await discovery.get_search_details(
-            site_id, resolved_record_type, search_name, expand_params=True
-        )
-    except Exception as e:
-        for rt in record_types:
-            if not isinstance(rt, dict):
-                continue
-            rt_name = wdk_entity_name(rt)
-            if not rt_name:
-                continue
-            searches = await discovery.get_searches(site_id, rt_name)
-            if any(wdk_search_matches(s, search_name) for s in searches):
-                resolved_record_type = rt_name
-                try:
-                    details = await discovery.get_search_details(
-                        site_id, rt_name, search_name, expand_params=True
-                    )
-                except Exception:
-                    details = None
-                break
-
-        if details is None:
-            available = await discovery.get_searches(site_id, resolved_record_type)
-            available_searches: list[str] = [
-                wdk_entity_name(s)
-                for s in available
-                if isinstance(s, dict) and wdk_entity_name(s)
-            ]
-
-            error_dict: JSONObject = {
-                "path": "searchName",
-                "message": f"Search not found: {search_name}",
-                "code": ErrorCode.SEARCH_NOT_FOUND.value,
-                "recordType": resolved_record_type,
-                "searchName": search_name,
-                "availableSearches": cast(JSONValue, available_searches),
-                "details": str(e),
-            }
-            raise CoreValidationError(
-                title="Search not found",
-                detail=f"Search not found: {search_name}",
-                errors=[error_dict],
-            ) from e
-
-    details = _unwrap_search_data(details) or details
-    param_specs = extract_param_specs(details if isinstance(details, dict) else {})
-
-    def _allowed_values(vocab: JSONObject | JSONArray | None) -> list[str]:
-        """Extract WDK-accepted parameter values from a vocabulary.
-
-        Uses term/value (what WDK actually accepts) rather than display labels,
-        so the LLM can pass these values directly to WDK API calls without
-        needing vocabulary normalisation.
-
-        :param vocab: Vocabulary tree or flat list from catalog.
-        :returns: List of WDK-accepted values.
-        """
-        if not vocab:
-            return []
-        values: list[str] = []
-        seen: set[str] = set()
-        for entry in flatten_vocab(vocab, prefer_term=True):
-            # Prefer the WDK-accepted value; fall back to display if missing.
-            candidate = entry.get("value") or entry.get("display")
-            if not candidate:
-                continue
-            text = str(candidate)
-            if text in seen:
-                continue
-            seen.add(text)
-            values.append(text)
-            if len(values) >= 50:
-                break
-        return values
-
+    :param param_specs: Raw parameter spec dicts from WDK.
+    :returns: Formatted parameter info array.
+    """
     param_info: JSONArray = []
     for spec in param_specs:
         if not isinstance(spec, dict):
             continue
-        # WDK parameter specs use JsonKeys.NAME = "name".
         name_raw = spec.get("name")
         name = name_raw if isinstance(name_raw, str) else ""
         if not name:
             continue
-        is_required_raw = spec.get("isRequired")
-        if isinstance(is_required_raw, bool):
-            required = is_required_raw
-        else:
-            allow_empty_raw = spec.get("allowEmptyValue")
-            required = not bool(allow_empty_raw)
+
+        allow_empty_raw = spec.get("allowEmptyValue")
+        required = not bool(allow_empty_raw)
+
         display_name_raw = spec.get("displayName")
         display_name = display_name_raw if isinstance(display_name_raw, str) else name
         type_raw = spec.get("type")
@@ -172,6 +90,7 @@ async def get_search_parameters(
         help_text = help_raw if isinstance(help_raw, str) else ""
         is_visible_raw = spec.get("isVisible")
         is_visible = is_visible_raw if isinstance(is_visible_raw, bool) else True
+
         info: JSONObject = {
             "name": name,
             "displayName": display_name,
@@ -197,6 +116,131 @@ async def get_search_parameters(
             info["defaultValue"] = default_value_raw
 
         param_info.append(info)
+    return param_info
+
+
+async def _fetch_search_details(
+    discovery: Any,
+    site_id: str,
+    resolved_record_type: str,
+    search_name: str,
+    *,
+    record_types: list[Any] | None = None,
+) -> tuple[JSONObject, str]:
+    """Fetch search details, falling back to scanning all record types.
+
+    :param discovery: Discovery service instance.
+    :param site_id: Site identifier.
+    :param resolved_record_type: Record type to try first.
+    :param search_name: Name of the search.
+    :param record_types: All available record types (for fallback scan).
+    :returns: Tuple of (details dict, resolved record type).
+    :raises CoreValidationError: When the search cannot be found.
+    """
+    try:
+        details = await discovery.get_search_details(
+            site_id, resolved_record_type, search_name, expand_params=True
+        )
+        return details, resolved_record_type
+    except Exception as e:
+        return await _fallback_scan_record_types(
+            discovery,
+            site_id,
+            resolved_record_type,
+            search_name,
+            record_types=record_types or [],
+            original_error=e,
+        )
+
+
+async def _fallback_scan_record_types(
+    discovery: Any,
+    site_id: str,
+    resolved_record_type: str,
+    search_name: str,
+    *,
+    record_types: list[Any],
+    original_error: Exception,
+) -> tuple[JSONObject, str]:
+    """Scan all record types trying to find the search, raising if not found."""
+    details: JSONObject | None = None
+    for rt in record_types:
+        if not isinstance(rt, dict):
+            continue
+        rt_name = wdk_entity_name(rt)
+        if not rt_name:
+            continue
+        searches = await discovery.get_searches(site_id, rt_name)
+        if any(wdk_search_matches(s, search_name) for s in searches):
+            resolved_record_type = rt_name
+            try:
+                details = await discovery.get_search_details(
+                    site_id, rt_name, search_name, expand_params=True
+                )
+            except Exception:
+                details = None
+            break
+
+    if details is None:
+        available = await discovery.get_searches(site_id, resolved_record_type)
+        available_searches: list[str] = [
+            name
+            for s in available
+            if isinstance(s, dict) and (name := wdk_entity_name(s))
+        ]
+        error_dict: JSONObject = {
+            "path": "searchName",
+            "message": f"Search not found: {search_name}",
+            "code": ErrorCode.SEARCH_NOT_FOUND.value,
+            "recordType": resolved_record_type,
+            "searchName": search_name,
+            "availableSearches": cast(JSONValue, available_searches),
+            "details": str(original_error),
+        }
+        raise CoreValidationError(
+            title="Search not found",
+            detail=f"Search not found: {search_name}",
+            errors=[error_dict],
+        ) from original_error
+
+    return details, resolved_record_type
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+async def get_search_parameters(
+    site_id: str,
+    record_type: str,
+    search_name: str,
+) -> JSONObject:
+    """Get detailed parameter info for a specific search.
+
+    This is intentionally defensive: WDK responses can vary by site/endpoint.
+    """
+    discovery = get_discovery_service()
+    resolved_record_type = record_type
+
+    record_types = await discovery.get_record_types(site_id)
+
+    if record_type:
+        resolved = resolve_record_type(record_types, record_type)
+        if resolved:
+            resolved_record_type = resolved
+
+    details, resolved_record_type = await _fetch_search_details(
+        discovery,
+        site_id,
+        resolved_record_type,
+        search_name,
+        record_types=record_types,
+    )
+
+    details = unwrap_search_data(details) or details
+    param_specs = extract_param_specs(details if isinstance(details, dict) else {})
+    param_info = _format_param_info(param_specs)
 
     details_display_name = search_name
     details_description = ""
@@ -263,7 +307,7 @@ async def expand_search_details_with_params(
     )
     filtered_context = _filter_context_values(raw_context, allowed)
 
-    details_unwrapped = _unwrap_search_data(details)
+    details_unwrapped = unwrap_search_data(details)
     specs = adapt_param_specs(details_unwrapped) if details_unwrapped else {}
 
     if specs:
@@ -272,8 +316,8 @@ async def expand_search_details_with_params(
             normalized_context = normalizer.normalize(filtered_context)
         except CoreValidationError:
             try:
-                resolved_record_type = await _resolve_record_type_for_search(
-                    client, record_type, search_name
+                resolved_record_type = await find_record_type_for_search(
+                    site_id, record_type, search_name
                 )
                 details = await client.get_search_details_with_params(
                     resolved_record_type,
@@ -283,7 +327,7 @@ async def expand_search_details_with_params(
                 )
             except Exception:
                 raise
-            details = _unwrap_search_data(details) or details
+            details = unwrap_search_data(details) or details
             specs = adapt_param_specs(details if isinstance(details, dict) else {})
             normalizer = ParameterNormalizer(specs)
             normalized_context = normalizer.normalize(filtered_context)
@@ -294,8 +338,8 @@ async def expand_search_details_with_params(
         normalized_context = {
             key: normalize_param_value(value) for key, value in filtered_context.items()
         }
-    resolved_record_type = await _resolve_record_type_for_search(
-        client, record_type, search_name
+    resolved_record_type = await find_record_type_for_search(
+        site_id, record_type, search_name
     )
     return await _get_search_details_with_portal_fallback(
         site_id=site_id,
@@ -318,20 +362,6 @@ def _filter_context_values(raw_context: JSONObject, allowed: set[str]) -> JSONOb
         if allowed
         else dict(raw_context)
     )
-
-
-def _unwrap_search_data(details: JSONObject | None) -> JSONObject | None:
-    """Normalize WDK/discovery payload shape to the dict that contains parameters.
-
-    :param details: Search details from WDK/discovery.
-    :returns: Search data dict or None.
-    """
-    if not isinstance(details, dict):
-        return None
-    search_data_raw = details.get("searchData")
-    if isinstance(search_data_raw, dict):
-        return search_data_raw
-    return details
 
 
 async def _load_discovery_details_and_allowed(
@@ -372,6 +402,47 @@ async def _get_search_details_with_portal_fallback(
             return await portal_client.get_search_details_with_params(
                 record_type,
                 search_name,
+                context_values,
+            )
+        raise
+
+
+async def get_refreshed_dependent_params(
+    *,
+    site_id: str,
+    record_type: str,
+    search_name: str,
+    parameter_name: str,
+    context_values: JSONObject,
+) -> JSONObject:
+    """Get refreshed dependent parameter vocabulary, falling back to the portal.
+
+    Tries the site-specific WDK client first.  If that fails with a
+    ``WDKError`` and the site is not already ``veupathdb``, retries against
+    the portal client (``veupathdb``).
+
+    :param site_id: Site identifier.
+    :param record_type: WDK record type.
+    :param search_name: WDK search name.
+    :param parameter_name: The dependent parameter to refresh.
+    :param context_values: Current context parameter values.
+    :returns: Refreshed dependent param payload from WDK.
+    """
+    client = get_wdk_client(site_id)
+    try:
+        return await client.get_refreshed_dependent_params(
+            record_type,
+            search_name,
+            parameter_name,
+            context_values,
+        )
+    except WDKError:
+        if site_id != "veupathdb":
+            portal_client = get_wdk_client("veupathdb")
+            return await portal_client.get_refreshed_dependent_params(
+                record_type,
+                search_name,
+                parameter_name,
                 context_values,
             )
         raise

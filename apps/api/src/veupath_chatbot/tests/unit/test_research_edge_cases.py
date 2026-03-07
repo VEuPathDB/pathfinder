@@ -23,8 +23,6 @@ Covers:
 - Web search summary edge cases
 """
 
-from __future__ import annotations
-
 import math
 
 import httpx

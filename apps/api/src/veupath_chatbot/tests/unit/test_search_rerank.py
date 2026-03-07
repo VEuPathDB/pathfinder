@@ -1,7 +1,5 @@
 """Tests for search reranking utilities."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.search_rerank import (
     ScoredResult,
     _build_wildcard_ids,

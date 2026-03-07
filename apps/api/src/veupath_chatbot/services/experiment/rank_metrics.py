@@ -5,8 +5,6 @@ classifiers, which better matches how researchers use strategy results
 ("how many known positives are in my top K?").
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject

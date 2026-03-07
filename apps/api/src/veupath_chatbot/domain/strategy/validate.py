@@ -10,8 +10,8 @@ from veupath_chatbot.domain.strategy.ops import CombineOp
 
 
 @dataclass
-class ValidationError:
-    """A validation error."""
+class StepValidationIssue:
+    """A single validation issue found during step/strategy validation."""
 
     path: str
     message: str
@@ -23,7 +23,7 @@ class ValidationResult:
     """Result of validation."""
 
     valid: bool
-    errors: list[ValidationError]
+    errors: list[StepValidationIssue]
 
     @classmethod
     def success(cls) -> ValidationResult:
@@ -31,7 +31,7 @@ class ValidationResult:
         return cls(valid=True, errors=[])
 
     @classmethod
-    def failure(cls, errors: list[ValidationError]) -> ValidationResult:
+    def failure(cls, errors: list[StepValidationIssue]) -> ValidationResult:
         """Create a failed result.
 
         :param errors: Validation errors list.
@@ -62,12 +62,12 @@ class StrategyValidator:
         :param strategy: Strategy AST.
 
         """
-        errors: list[ValidationError] = []
+        errors: list[StepValidationIssue] = []
 
         # Validate record type
         if not strategy.record_type:
             errors.append(
-                ValidationError(
+                StepValidationIssue(
                     path="recordType",
                     message="Record type is required",
                     code="MISSING_RECORD_TYPE",
@@ -77,7 +77,7 @@ class StrategyValidator:
         # Check for empty strategy
         if strategy.root is None:
             errors.append(
-                ValidationError(
+                StepValidationIssue(
                     path="root",
                     message="Strategy must have at least one step",
                     code="EMPTY_STRATEGY",
@@ -98,7 +98,7 @@ class StrategyValidator:
         node: PlanStepNode,
         path: str,
         expected_record_type: str,
-        errors: list[ValidationError],
+        errors: list[StepValidationIssue],
     ) -> None:
         """Validate a single node in the AST.
 
@@ -112,7 +112,7 @@ class StrategyValidator:
 
         if not node.search_name:
             errors.append(
-                ValidationError(
+                StepValidationIssue(
                     path=f"{path}.searchName",
                     message="searchName is required",
                     code="MISSING_SEARCH_NAME",
@@ -123,7 +123,7 @@ class StrategyValidator:
             rt_searches = self.available_searches.get(expected_record_type, [])
             if node.search_name and node.search_name not in rt_searches:
                 errors.append(
-                    ValidationError(
+                    StepValidationIssue(
                         path=f"{path}.searchName",
                         message=f"Unknown search: {node.search_name}",
                         code="UNKNOWN_SEARCH",
@@ -133,7 +133,7 @@ class StrategyValidator:
         if kind == "combine":
             if node.operator is None:
                 errors.append(
-                    ValidationError(
+                    StepValidationIssue(
                         path=f"{path}.operator",
                         message="operator is required for combine nodes",
                         code="MISSING_OPERATOR",
@@ -141,7 +141,7 @@ class StrategyValidator:
                 )
             elif node.operator not in CombineOp:
                 errors.append(
-                    ValidationError(
+                    StepValidationIssue(
                         path=f"{path}.operator",
                         message=f"Invalid operator: {node.operator}",
                         code="INVALID_OPERATOR",
@@ -149,7 +149,7 @@ class StrategyValidator:
                 )
             if node.primary_input is None or node.secondary_input is None:
                 errors.append(
-                    ValidationError(
+                    StepValidationIssue(
                         path=path,
                         message="Combine nodes require two inputs",
                         code="MISSING_INPUT",
@@ -158,7 +158,7 @@ class StrategyValidator:
             if node.operator == CombineOp.COLOCATE:
                 if node.colocation_params is None:
                     errors.append(
-                        ValidationError(
+                        StepValidationIssue(
                             path=f"{path}.colocationParams",
                             message="colocationParams is required for COLOCATE",
                             code="MISSING_COLOCATION_PARAMS",
@@ -167,7 +167,7 @@ class StrategyValidator:
                 else:
                     for err in node.colocation_params.validate():
                         errors.append(
-                            ValidationError(
+                            StepValidationIssue(
                                 path=f"{path}.colocationParams",
                                 message=err,
                                 code="INVALID_COLOCATION_PARAMS",

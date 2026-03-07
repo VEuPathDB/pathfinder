@@ -1,7 +1,5 @@
 """Tests for cross-experiment enrichment comparison."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.enrichment_compare import (
     compare_enrichment_across,
 )

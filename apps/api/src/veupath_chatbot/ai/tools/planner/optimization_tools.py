@@ -4,8 +4,6 @@ Provides :class:`OptimizationToolsMixin` with the long-running
 ``optimize_search_parameters`` tool.
 """
 
-from __future__ import annotations
-
 import json
 from typing import Annotated, cast
 

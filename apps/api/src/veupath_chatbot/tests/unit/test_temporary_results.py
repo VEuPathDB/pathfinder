@@ -1,7 +1,7 @@
 """Unit tests for veupath_chatbot.integrations.veupathdb.temporary_results.
 
 Tests TemporaryResultsAPI: create_temporary_result, get_download_url,
-get_step_preview, and the _extract_download_url static method.
+and get_step_preview.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,61 +11,18 @@ import pytest
 from veupath_chatbot.integrations.veupathdb.temporary_results import TemporaryResultsAPI
 
 
-def _make_api(user_id: str = "current") -> tuple[TemporaryResultsAPI, MagicMock]:
+def _make_api(
+    user_id: str = "current",
+    base_url: str = "https://plasmodb.org/plasmo/service",
+) -> tuple[TemporaryResultsAPI, MagicMock]:
     """Create TemporaryResultsAPI with a mocked client."""
     client = MagicMock()
+    client.base_url = base_url
     client.get = AsyncMock()
     client.post = AsyncMock()
     api = TemporaryResultsAPI(client)
     api.user_id = user_id
     return api, client
-
-
-# ---------------------------------------------------------------------------
-# _extract_download_url (static method, no mocking needed)
-# ---------------------------------------------------------------------------
-
-
-class TestExtractDownloadUrl:
-    """Tests for the static _extract_download_url method."""
-
-    def test_direct_url_field(self) -> None:
-        assert (
-            TemporaryResultsAPI._extract_download_url({"url": "https://x/dl"})
-            == "https://x/dl"
-        )
-
-    def test_download_url_field(self) -> None:
-        assert (
-            TemporaryResultsAPI._extract_download_url({"downloadUrl": "https://x/dl"})
-            == "https://x/dl"
-        )
-
-    def test_download_url_snake_case(self) -> None:
-        assert (
-            TemporaryResultsAPI._extract_download_url({"download_url": "https://x/dl"})
-            == "https://x/dl"
-        )
-
-    def test_links_download_field(self) -> None:
-        payload = {"links": {"download": "https://x/dl"}}
-        assert TemporaryResultsAPI._extract_download_url(payload) == "https://x/dl"
-
-    def test_links_url_field(self) -> None:
-        payload = {"links": {"url": "https://x/dl"}}
-        assert TemporaryResultsAPI._extract_download_url(payload) == "https://x/dl"
-
-    def test_empty_payload_returns_empty(self) -> None:
-        assert TemporaryResultsAPI._extract_download_url({}) == ""
-
-    def test_blank_url_returns_empty(self) -> None:
-        assert TemporaryResultsAPI._extract_download_url({"url": "  "}) == ""
-
-    def test_non_string_url_returns_empty(self) -> None:
-        assert TemporaryResultsAPI._extract_download_url({"url": 123}) == ""
-
-    def test_links_not_dict_returns_empty(self) -> None:
-        assert TemporaryResultsAPI._extract_download_url({"links": "not_dict"}) == ""
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +77,7 @@ class TestCreateTemporaryResult:
     async def test_basic_creation(self) -> None:
         api, client = _make_api("12345")
         api._session_initialized = True
-        client.post.return_value = {"id": "abc123", "url": "https://x/dl"}
+        client.post.return_value = {"id": "abc123"}
 
         result = await api.create_temporary_result(step_id=42)
 
@@ -167,23 +124,24 @@ class TestCreateTemporaryResult:
 
 
 class TestGetDownloadUrl:
-    """Tests for get_download_url which creates a temporary result and extracts URL."""
+    """Tests for get_download_url which creates a temp result and constructs URL."""
 
-    async def test_returns_url_from_direct_response(self) -> None:
+    async def test_constructs_url_from_id(self) -> None:
         api, client = _make_api("12345")
         api._session_initialized = True
-        client.post.return_value = {
-            "id": "result1",
-            "url": "https://plasmodb.org/download/result1.csv",
-        }
+        client.post.return_value = {"id": "result1"}
 
         url = await api.get_download_url(step_id=42, format="csv")
-        assert url == "https://plasmodb.org/download/result1.csv"
+
+        assert (
+            url
+            == "https://plasmodb.org/plasmo/service/temporary-results/result1/result"
+        )
 
     async def test_csv_format_uses_standard_reporter(self) -> None:
         api, client = _make_api("12345")
         api._session_initialized = True
-        client.post.return_value = {"url": "https://x/dl"}
+        client.post.return_value = {"id": "r1"}
 
         await api.get_download_url(step_id=42, format="csv")
 
@@ -193,7 +151,7 @@ class TestGetDownloadUrl:
     async def test_json_format_uses_full_record_reporter(self) -> None:
         api, client = _make_api("12345")
         api._session_initialized = True
-        client.post.return_value = {"url": "https://x/dl"}
+        client.post.return_value = {"id": "r1"}
 
         await api.get_download_url(step_id=42, format="json")
 
@@ -203,7 +161,7 @@ class TestGetDownloadUrl:
     async def test_with_attributes(self) -> None:
         api, client = _make_api("12345")
         api._session_initialized = True
-        client.post.return_value = {"url": "https://x/dl"}
+        client.post.return_value = {"id": "r1"}
 
         await api.get_download_url(
             step_id=42, format="csv", attributes=["gene_name", "product"]
@@ -215,28 +173,22 @@ class TestGetDownloadUrl:
             "product",
         ]
 
-    async def test_polls_when_no_direct_url(self) -> None:
-        """When initial response has no URL but has an ID, poll for it."""
+    async def test_no_polling_needed(self) -> None:
+        """GET is never called -- URL is constructed from POST response id."""
         api, client = _make_api("12345")
         api._session_initialized = True
-        # Initial create returns ID but no URL
         client.post.return_value = {"id": "result1"}
-        # First poll: no URL yet. Second poll: URL ready.
-        client.get.side_effect = [
-            {"id": "result1", "status": "PENDING"},
-            {"id": "result1", "url": "https://x/dl/result1.csv"},
-        ]
 
-        url = await api.get_download_url(step_id=42, format="csv")
-        assert url == "https://x/dl/result1.csv"
-        assert client.get.call_count == 2
+        await api.get_download_url(step_id=42, format="csv")
 
-    async def test_raises_when_no_url_and_no_id(self) -> None:
+        client.get.assert_not_awaited()
+
+    async def test_raises_when_no_id(self) -> None:
         api, client = _make_api("12345")
         api._session_initialized = True
         client.post.return_value = {}
 
-        with pytest.raises(RuntimeError, match="download URL or a temporary result id"):
+        with pytest.raises(RuntimeError, match="did not include.*id"):
             await api.get_download_url(step_id=42, format="csv")
 
 

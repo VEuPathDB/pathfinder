@@ -1,7 +1,5 @@
 """Formatting and parsing utilities for control-test evaluation."""
 
-from __future__ import annotations
-
 from veupath_chatbot.integrations.veupathdb.strategy_api import (
     StrategyAPI,
     is_internal_wdk_strategy_name,

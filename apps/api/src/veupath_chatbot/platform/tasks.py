@@ -8,8 +8,6 @@ module-level set until it finishes.
 See: https://docs.python.org/3/library/asyncio-task.html#creating-tasks
 """
 
-from __future__ import annotations
-
 import asyncio
 from collections.abc import Coroutine
 from typing import Any

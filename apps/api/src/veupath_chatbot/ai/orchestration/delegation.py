@@ -4,8 +4,6 @@ This is AI-orchestration logic: it validates a model-produced *nested* plan
 into a strict, executable shape.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass
 

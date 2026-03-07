@@ -1,6 +1,7 @@
 """Main entry point: run_step_analysis coordinates all four analysis phases."""
 
-from __future__ import annotations
+from collections.abc import Callable
+from typing import Any
 
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
@@ -22,8 +23,6 @@ from veupath_chatbot.services.experiment.step_analysis.phase_step_eval import (
 )
 from veupath_chatbot.services.experiment.types import (
     ControlValueFormat,
-    OperatorComparison,
-    ParameterSensitivity,
     StepAnalysisResult,
     StepContribution,
     StepEvaluation,
@@ -155,112 +154,57 @@ async def run_step_analysis(
         ]
     )
 
-    step_evals: list[StepEvaluation] = []
-    op_comparisons: list[OperatorComparison] = []
-    contributions: list[StepContribution] = []
-    sensitivities: list[ParameterSensitivity] = []
+    # Shared kwargs passed to every phase function.
+    shared_kwargs: JSONObject = {
+        "site_id": site_id,
+        "record_type": record_type,
+        "tree": tree,
+        "controls_search_name": controls_search_name,
+        "controls_param_name": controls_param_name,
+        "controls_value_format": controls_value_format,
+        "positive_controls": positive_controls,
+        "negative_controls": negative_controls,
+        "progress_callback": progress_callback,
+    }
 
-    if "step_evaluation" in enabled:
+    # Phase descriptors: (phase_key, progress_message, async_fn, extra_kwargs)
+    phase_descriptors: list[tuple[str, str, Callable[..., Any], JSONObject]] = [
+        ("step_evaluation", "Starting per-step evaluation...", evaluate_steps, {}),
+        ("operator_comparison", "Comparing operators...", compare_operators, {}),
+        (
+            "contribution",
+            "Running ablation analysis...",
+            analyze_contributions,
+            {"baseline_metrics": baseline_result},
+        ),
+        ("sensitivity", "Sweeping parameters...", sweep_parameters, {}),
+    ]
+
+    results: dict[str, Any] = {}
+    for phase_key, message, phase_fn, extra_kwargs in phase_descriptors:
+        if phase_key not in enabled:
+            continue
         if progress_callback:
             await progress_callback(
                 {
                     "type": "step_analysis_progress",
-                    "data": {
-                        "phase": "step_evaluation",
-                        "message": "Starting per-step evaluation...",
-                    },
+                    "data": {"phase": phase_key, "message": message},
                 }
             )
-        step_evals = await evaluate_steps(
-            site_id=site_id,
-            record_type=record_type,
-            tree=tree,
-            controls_search_name=controls_search_name,
-            controls_param_name=controls_param_name,
-            controls_value_format=controls_value_format,
-            positive_controls=positive_controls,
-            negative_controls=negative_controls,
-            progress_callback=progress_callback,
-        )
-        step_evals = _enrich_step_evals_with_movement(
-            step_evals,
-            baseline_result,
-        )
+        results[phase_key] = await phase_fn(**shared_kwargs, **extra_kwargs)
 
-    if "operator_comparison" in enabled:
-        if progress_callback:
-            await progress_callback(
-                {
-                    "type": "step_analysis_progress",
-                    "data": {
-                        "phase": "operator_comparison",
-                        "message": "Comparing operators...",
-                    },
-                }
-            )
-        op_comparisons = await compare_operators(
-            site_id=site_id,
-            record_type=record_type,
-            tree=tree,
-            controls_search_name=controls_search_name,
-            controls_param_name=controls_param_name,
-            controls_value_format=controls_value_format,
-            positive_controls=positive_controls,
-            negative_controls=negative_controls,
-            progress_callback=progress_callback,
-        )
+    # Post-process phases that need enrichment.
+    step_evals: list[StepEvaluation] = results.get("step_evaluation", [])
+    if step_evals:
+        step_evals = _enrich_step_evals_with_movement(step_evals, baseline_result)
 
-    if "contribution" in enabled:
-        if progress_callback:
-            await progress_callback(
-                {
-                    "type": "step_analysis_progress",
-                    "data": {
-                        "phase": "contribution",
-                        "message": "Running ablation analysis...",
-                    },
-                }
-            )
-        contributions = await analyze_contributions(
-            site_id=site_id,
-            record_type=record_type,
-            tree=tree,
-            controls_search_name=controls_search_name,
-            controls_param_name=controls_param_name,
-            controls_value_format=controls_value_format,
-            positive_controls=positive_controls,
-            negative_controls=negative_controls,
-            baseline_metrics=baseline_result,
-            progress_callback=progress_callback,
-        )
+    contributions: list[StepContribution] = results.get("contribution", [])
+    if contributions:
         contributions = _enrich_contributions_with_narrative(contributions)
-
-    if "sensitivity" in enabled:
-        if progress_callback:
-            await progress_callback(
-                {
-                    "type": "step_analysis_progress",
-                    "data": {
-                        "phase": "sensitivity",
-                        "message": "Sweeping parameters...",
-                    },
-                }
-            )
-        sensitivities = await sweep_parameters(
-            site_id=site_id,
-            record_type=record_type,
-            tree=tree,
-            controls_search_name=controls_search_name,
-            controls_param_name=controls_param_name,
-            controls_value_format=controls_value_format,
-            positive_controls=positive_controls,
-            negative_controls=negative_controls,
-            progress_callback=progress_callback,
-        )
 
     return StepAnalysisResult(
         step_evaluations=step_evals,
-        operator_comparisons=op_comparisons,
+        operator_comparisons=results.get("operator_comparison", []),
         step_contributions=contributions,
-        parameter_sensitivities=sensitivities,
+        parameter_sensitivities=results.get("sensitivity", []),
     )

@@ -10,8 +10,6 @@ Implements a "fetch wide, rerank narrow" pattern for VEuPathDB search:
 5. **Return** the top-N results sorted by combined score.
 """
 
-from __future__ import annotations
-
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass

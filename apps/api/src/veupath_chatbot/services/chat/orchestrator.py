@@ -2,26 +2,26 @@
 
 Every event is persisted to Redis the moment it's emitted. The PostgreSQL
 projection is updated inline. No accumulation, no finalization step.
+
+AI-layer dependencies (agent factory, model resolver) are injected at
+startup via :func:`configure` — the transport layer calls this once to
+wire the concrete implementations so that the services layer never
+imports from ``veupath_chatbot.ai``.
 """
 
-from __future__ import annotations
-
 import asyncio
-from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from collections.abc import AsyncIterator, Callable
 from uuid import UUID, uuid4
 
-from kani import ChatMessage, ChatRole
+from kani import ChatMessage, ChatRole, Kani
 
-from veupath_chatbot.ai.agents.factory import create_agent, resolve_effective_model_id
-from veupath_chatbot.ai.models.catalog import ModelProvider, ReasoningEffort
 from veupath_chatbot.persistence.models import Stream
 from veupath_chatbot.persistence.repositories import StreamRepository, UserRepository
 from veupath_chatbot.persistence.session import async_session_factory
 from veupath_chatbot.platform.events import emit, read_stream_messages
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.redis import get_redis
-from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.platform.types import JSONObject, ModelProvider, ReasoningEffort
 from veupath_chatbot.services.chat.streaming import stream_chat
 from veupath_chatbot.services.chat.utils import parse_selected_nodes
 
@@ -31,199 +31,39 @@ logger = get_logger(__name__)
 # Used to cancel operations from the HTTP layer.
 _active_tasks: dict[str, asyncio.Task[None]] = {}
 
+# ── Injected AI-layer dependencies ──────────────────────────────────
+# Set once at startup via configure(). Avoids services importing from ai.
 
-def _use_mock_chat_provider() -> bool:
-    from veupath_chatbot.platform.config import get_settings
+_create_agent: Callable[..., Kani] | None = None
+_resolve_effective_model_id: Callable[..., str] | None = None
+_mock_stream_fn: Callable[..., AsyncIterator[JSONObject]] | None = None
 
-    return get_settings().chat_provider.strip().lower() == "mock"
 
+def configure(
+    *,
+    create_agent_fn: Callable[..., Kani],
+    resolve_model_id_fn: Callable[..., str],
+    mock_stream_fn: Callable[..., AsyncIterator[JSONObject]] | None = None,
+) -> None:
+    """Wire AI-layer implementations into the orchestrator.
 
-async def _mock_stream_chat(
-    *, message: str, strategy_id: str | None = None
-) -> AsyncIterator[JSONObject]:
-    """Deterministic, offline-friendly stream for tests/E2E runs.
+    Called once at application startup from the composition root.
 
-    Matches the semantic event contract produced by `stream_chat()`.
+    Parameters
+    ----------
+    create_agent_fn:
+        Factory that builds a Kani agent for a chat turn.
+    resolve_model_id_fn:
+        Resolves the effective model ID from overrides and persisted state.
+    mock_stream_fn:
+        Optional mock stream provider for deterministic E2E testing.
+        When provided, the orchestrator uses this instead of the real
+        agent for every chat turn.
     """
-    deltas = [
-        "[mock] ",
-        "I received your message: ",
-        message,
-    ]
-    message_id = str(uuid4())
-    for d in deltas:
-        if "slow" in message.lower():
-            await asyncio.sleep(0.2)
-        yield {"type": "assistant_delta", "data": {"messageId": message_id, "delta": d}}
-
-    msg_lower = message.lower()
-    if "artifact graph" in msg_lower:
-        now = datetime.now(UTC).isoformat()
-        yield {
-            "type": "planning_artifact",
-            "data": {
-                "planningArtifact": {
-                    "id": "mock_exec_graph_artifact",
-                    "title": "Mock graph artifact",
-                    "summaryMarkdown": "A deterministic multi-step artifact for E2E graph interaction tests.",
-                    "assumptions": [],
-                    "parameters": {},
-                    "proposedStrategyPlan": {
-                        "recordType": "gene",
-                        "root": {
-                            "id": "mock_transform_1",
-                            "searchName": "mock_transform",
-                            "displayName": "Mock transform step",
-                            "parameters": {},
-                            "primaryInput": {
-                                "id": "mock_search_1",
-                                "searchName": "mock_search",
-                                "displayName": "Mock search step",
-                                "parameters": {},
-                            },
-                        },
-                        "metadata": {"name": "Mock graph plan"},
-                    },
-                    "createdAt": now,
-                }
-            },
-        }
-    elif "delegation draft" in msg_lower:
-        now = datetime.now(UTC).isoformat()
-        yield {
-            "type": "planning_artifact",
-            "data": {
-                "planningArtifact": {
-                    "id": "delegation_draft",
-                    "title": "Delegation draft",
-                    "summaryMarkdown": "Build a gene strategy using an ortholog transform and a combine.",
-                    "assumptions": [],
-                    "parameters": {
-                        "delegationGoal": "Build a gene strategy using an ortholog transform and a combine.",
-                        "delegationPlan": {
-                            "tasks": [
-                                {
-                                    "id": "task_search",
-                                    "type": "search",
-                                    "searchName": "GenesByTaxon",
-                                    "context": "Find genes in P. falciparum",
-                                },
-                                {
-                                    "id": "task_transform",
-                                    "type": "transform",
-                                    "searchName": "GenesByOrthologPattern",
-                                    "context": "Ortholog transform",
-                                    "dependsOn": ["task_search"],
-                                },
-                                {
-                                    "id": "task_combine",
-                                    "type": "combine",
-                                    "operator": "UNION",
-                                    "context": "Combine search and transform",
-                                    "dependsOn": ["task_search", "task_transform"],
-                                },
-                            ]
-                        },
-                    },
-                    "createdAt": now,
-                }
-            },
-        }
-    elif "delegate_strategy_subtasks" in msg_lower or "delegation" in msg_lower:
-        yield {
-            "type": "subkani_task_start",
-            "data": {"task": "delegate:build-strategy"},
-        }
-        yield {
-            "type": "subkani_tool_call_start",
-            "data": {
-                "task": "delegate:build-strategy",
-                "id": "tc_delegate_1",
-                "name": "search_for_searches",
-                "arguments": '{"query":"ortholog transform","record_type":"gene","limit":3}',
-            },
-        }
-        yield {
-            "type": "subkani_tool_call_end",
-            "data": {
-                "task": "delegate:build-strategy",
-                "id": "tc_delegate_1",
-                "result": '{"rag":{"data":[],"note":""},"wdk":{"data":[],"note":"mock"}}',
-            },
-        }
-        yield {
-            "type": "subkani_task_end",
-            "data": {"task": "delegate:build-strategy", "status": "done"},
-        }
-
-        gid = strategy_id or "mock_graph_delegation"
-        yield {
-            "type": "strategy_update",
-            "data": {
-                "graphId": gid,
-                "step": {
-                    "graphId": gid,
-                    "stepId": "mock_search_1",
-                    "kind": "search",
-                    "displayName": "Delegated search step",
-                    "searchName": "mock_search",
-                    "parameters": {"q": "gametocyte", "min": 10},
-                    "recordType": "gene",
-                    "graphName": "Delegation-built strategy",
-                    "description": "A deterministic delegated strategy for E2E.",
-                },
-            },
-        }
-        yield {
-            "type": "strategy_update",
-            "data": {
-                "graphId": gid,
-                "step": {
-                    "graphId": gid,
-                    "stepId": "mock_transform_1",
-                    "kind": "transform",
-                    "displayName": "Delegated transform step",
-                    "searchName": "mock_transform",
-                    "primaryInputStepId": "mock_search_1",
-                    "parameters": {"insertBetween": True, "species": "P. falciparum"},
-                    "recordType": "gene",
-                },
-            },
-        }
-        yield {
-            "type": "strategy_update",
-            "data": {
-                "graphId": gid,
-                "step": {
-                    "graphId": gid,
-                    "stepId": "mock_combine_1",
-                    "kind": "combine",
-                    "displayName": "Delegated combine step",
-                    "operator": "UNION",
-                    "primaryInputStepId": "mock_transform_1",
-                    "secondaryInputStepId": "mock_search_1",
-                    "parameters": {},
-                    "recordType": "gene",
-                },
-            },
-        }
-
-        yield {
-            "type": "assistant_message",
-            "data": {
-                "messageId": message_id,
-                "content": "[mock] Delegation complete. Built a multi-step strategy and emitted sub-kani activity.",
-            },
-        }
-        yield {"type": "message_end", "data": {}}
-        return
-
-    yield {
-        "type": "assistant_message",
-        "data": {"messageId": message_id, "content": "".join(deltas)},
-    }
-
-    yield {"type": "message_end", "data": {}}
+    global _create_agent, _resolve_effective_model_id, _mock_stream_fn
+    _create_agent = create_agent_fn
+    _resolve_effective_model_id = resolve_model_id_fn
+    _mock_stream_fn = mock_stream_fn
 
 
 async def _ensure_stream(
@@ -340,6 +180,180 @@ async def start_chat_stream(
     return operation_id, stream_id_str
 
 
+async def _build_agent_context(
+    *,
+    stream_id_str: str,
+    site_id: str,
+    user_id: UUID,
+    model_message: str,
+    selected_nodes: JSONObject | None,
+    provider_override: ModelProvider | None,
+    model_override: str | None,
+    reasoning_effort: ReasoningEffort | None,
+    mentions: list[dict[str, str]] | None,
+    projection: object,
+    stream_repo: StreamRepository | None = None,
+) -> tuple[Kani, str]:
+    """Build the agent and resolve the effective model.
+
+    Handles mention context building, chat history retrieval,
+    strategy graph construction, model resolution, and agent creation.
+
+    Returns ``(agent, effective_model_id)``.
+    """
+    if _create_agent is None or _resolve_effective_model_id is None:
+        raise RuntimeError(
+            "Chat orchestrator not configured. "
+            "Call services.chat.orchestrator.configure() at startup."
+        )
+
+    # Build rich context from @-mentions.
+    mentioned_context: str | None = None
+    if mentions:
+        from veupath_chatbot.services.chat.mention_context import (
+            build_mention_context,
+        )
+
+        mentioned_context = await build_mention_context(mentions, stream_repo) or None
+
+    # Build chat history from Redis (not from DB).
+    history = await _build_chat_history_from_redis(stream_id_str)
+
+    # Build strategy graph payload from projection.
+    strategy_graph_payload: JSONObject = {
+        "id": stream_id_str,
+        "name": projection.name,
+        "plan": projection.plan,
+        "steps": projection.steps,
+        "rootStepId": projection.root_step_id,
+        "recordType": projection.record_type,
+    }
+
+    # Resolve the effective model.
+    effective_model: str = _resolve_effective_model_id(
+        model_override=model_override,
+        persisted_model_id=projection.model_id,
+    )
+
+    agent = _create_agent(
+        site_id=site_id,
+        user_id=user_id,
+        chat_history=history,
+        strategy_graph=strategy_graph_payload,
+        selected_nodes=selected_nodes,
+        provider_override=provider_override,
+        model_override=effective_model,
+        reasoning_effort=reasoning_effort,
+        mentioned_context=mentioned_context,
+    )
+
+    return agent, effective_model
+
+
+async def _run_stream_loop(
+    *,
+    redis: object,
+    session: object,
+    stream_id_str: str,
+    operation_id: str,
+    site_id: str,
+    projection: object,
+    stream_iter: AsyncIterator[JSONObject],
+    stream_repo: StreamRepository,
+) -> None:
+    """Emit message_start, iterate the stream, and mark completion.
+
+    Emits a ``message_start`` event with strategy context, then forwards
+    every event from the stream iterator to Redis/PostgreSQL via ``emit()``.
+    """
+    strategy_payload: JSONObject = {
+        "id": stream_id_str,
+        "name": projection.name,
+        "siteId": site_id,
+        "recordType": projection.record_type,
+        "wdkStrategyId": projection.wdk_strategy_id,
+    }
+    await emit(
+        redis,
+        stream_id_str,
+        operation_id,
+        "message_start",
+        {"strategyId": stream_id_str, "strategy": strategy_payload},
+        session=session,
+    )
+
+    async for event_value in stream_iter:
+        if not isinstance(event_value, dict):
+            continue
+        event_type_raw = event_value.get("type", "")
+        event_type = event_type_raw if isinstance(event_type_raw, str) else ""
+        event_data_raw = event_value.get("data")
+        event_data = event_data_raw if isinstance(event_data_raw, dict) else {}
+
+        await emit(
+            redis,
+            stream_id_str,
+            operation_id,
+            event_type,
+            event_data,
+            session=session,
+        )
+
+    await stream_repo.complete_operation(operation_id)
+
+
+async def _handle_cancellation(
+    *,
+    redis: object,
+    session: object,
+    stream_id_str: str,
+    operation_id: str,
+    stream_repo: StreamRepository,
+) -> None:
+    """Handle task cancellation: emit message_end and update operation status."""
+    logger.info("Chat producer cancelled", operation_id=operation_id)
+    await emit(
+        redis,
+        stream_id_str,
+        operation_id,
+        "message_end",
+        {},
+        session=session,
+    )
+    await stream_repo.cancel_operation(operation_id)
+    await session.commit()
+
+
+async def _handle_error(
+    *,
+    error: Exception,
+    redis: object,
+    session: object,
+    stream_id_str: str,
+    operation_id: str,
+    stream_repo: StreamRepository,
+) -> None:
+    """Handle producer errors: log, emit error + message_end, fail operation."""
+    logger.error("Chat producer error", error=str(error), exc_info=True)
+    await emit(
+        redis,
+        stream_id_str,
+        operation_id,
+        "error",
+        {"error": str(error)},
+        session=session,
+    )
+    await emit(
+        redis,
+        stream_id_str,
+        operation_id,
+        "message_end",
+        {},
+        session=session,
+    )
+    await stream_repo.fail_operation(operation_id)
+
+
 async def _chat_producer(
     *,
     stream_id_str: str,
@@ -372,49 +386,20 @@ async def _chat_producer(
             await session.commit()
             return
 
-        # Build rich context from @-mentions.
-        mentioned_context: str | None = None
-        if mentions:
-            from veupath_chatbot.services.chat.mention_context import (
-                build_mention_context,
-            )
-
-            mentioned_context = (
-                await build_mention_context(mentions, bg_stream_repo) or None
-            )
-
-        # Build chat history from Redis (not from DB).
-        history = await _build_chat_history_from_redis(stream_id_str)
-
-        # Build strategy graph payload from projection.
-        strategy_graph_payload: JSONObject = {
-            "id": stream_id_str,
-            "name": projection.name,
-            "plan": projection.plan,
-            "steps": projection.steps,
-            "rootStepId": projection.root_step_id,
-            "recordType": projection.record_type,
-        }
-
-        # Resolve the effective model.
-        effective_model = resolve_effective_model_id(
-            model_override=model_override,
-            persisted_model_id=projection.model_id,
-        )
-
-        agent = create_agent(
+        agent, effective_model = await _build_agent_context(
+            stream_id_str=stream_id_str,
             site_id=site_id,
             user_id=user_id,
-            chat_history=history,
-            strategy_graph=strategy_graph_payload,
+            model_message=model_message,
             selected_nodes=selected_nodes,
             provider_override=provider_override,
-            model_override=effective_model,
+            model_override=model_override,
             reasoning_effort=reasoning_effort,
-            mentioned_context=mentioned_context,
+            mentions=mentions,
+            projection=projection,
+            stream_repo=bg_stream_repo,
         )
 
-        # Persist model selection if changed.
         if effective_model != projection.model_id:
             await emit(
                 redis,
@@ -425,86 +410,41 @@ async def _chat_producer(
                 session=session,
             )
 
+        stream_iter = (
+            _mock_stream_fn(message=model_message, strategy_id=stream_id_str)
+            if _mock_stream_fn is not None
+            else stream_chat(agent, model_message)
+        )
+
         try:
-            # Emit message_start with strategy context for the frontend.
-            strategy_payload: JSONObject = {
-                "id": stream_id_str,
-                "name": projection.name,
-                "siteId": site_id,
-                "recordType": projection.record_type,
-                "wdkStrategyId": projection.wdk_strategy_id,
-            }
-            await emit(
-                redis,
-                stream_id_str,
-                operation_id,
-                "message_start",
-                {"strategyId": stream_id_str, "strategy": strategy_payload},
+            await _run_stream_loop(
+                redis=redis,
                 session=session,
+                stream_id_str=stream_id_str,
+                operation_id=operation_id,
+                site_id=site_id,
+                projection=projection,
+                stream_iter=stream_iter,
+                stream_repo=bg_stream_repo,
             )
-
-            stream_iter = (
-                _mock_stream_chat(
-                    message=model_message,
-                    strategy_id=stream_id_str,
-                )
-                if _use_mock_chat_provider()
-                else stream_chat(agent, model_message)
-            )
-            async for event_value in stream_iter:
-                if not isinstance(event_value, dict):
-                    continue
-                event_type_raw = event_value.get("type", "")
-                event_type = event_type_raw if isinstance(event_type_raw, str) else ""
-                event_data_raw = event_value.get("data")
-                event_data = event_data_raw if isinstance(event_data_raw, dict) else {}
-
-                # Every event is persisted to Redis + projected to PostgreSQL.
-                await emit(
-                    redis,
-                    stream_id_str,
-                    operation_id,
-                    event_type,
-                    event_data,
-                    session=session,
-                )
-
-            # Mark operation complete.
-            await bg_stream_repo.complete_operation(operation_id)
-
         except asyncio.CancelledError:
-            logger.info("Chat producer cancelled", operation_id=operation_id)
-            await emit(
-                redis,
-                stream_id_str,
-                operation_id,
-                "message_end",
-                {},
+            await _handle_cancellation(
+                redis=redis,
                 session=session,
+                stream_id_str=stream_id_str,
+                operation_id=operation_id,
+                stream_repo=bg_stream_repo,
             )
-            await bg_stream_repo.cancel_operation(operation_id)
-            await session.commit()
             return
-
         except Exception as e:
-            logger.error("Chat producer error", error=str(e), exc_info=True)
-            await emit(
-                redis,
-                stream_id_str,
-                operation_id,
-                "error",
-                {"error": str(e)},
+            await _handle_error(
+                error=e,
+                redis=redis,
                 session=session,
+                stream_id_str=stream_id_str,
+                operation_id=operation_id,
+                stream_repo=bg_stream_repo,
             )
-            await emit(
-                redis,
-                stream_id_str,
-                operation_id,
-                "message_end",
-                {},
-                session=session,
-            )
-            await bg_stream_repo.fail_operation(operation_id)
 
         await session.commit()
 

@@ -6,9 +6,9 @@ and delete WDK strategies.
 
 from typing import cast
 
+from veupath_chatbot.domain.strategy.ast import StepTreeNode
 from veupath_chatbot.integrations.veupathdb.strategy_api.base import StrategyAPIBase
 from veupath_chatbot.integrations.veupathdb.strategy_api.helpers import (
-    StepTreeNode,
     tag_internal_wdk_strategy_name,
 )
 from veupath_chatbot.platform.logging import get_logger

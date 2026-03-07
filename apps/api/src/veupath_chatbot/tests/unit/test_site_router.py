@@ -4,16 +4,16 @@ Covers SiteInfo properties, SiteRouter site lookup / client creation /
 caching / error handling, and routing preferences.
 """
 
-from __future__ import annotations
-
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from veupath_chatbot.integrations.veupathdb.site_router import (
+    SiteConfig,
     SiteInfo,
     SiteRouter,
+    SitesConfig,
 )
 from veupath_chatbot.platform.errors import ErrorCode, NotFoundError
 
@@ -78,42 +78,67 @@ class TestSiteInfo:
         assert site.is_portal is True
         assert site.to_dict()["isPortal"] is True
 
+    def test_from_config_factory(self) -> None:
+        cfg = SiteConfig(
+            name="PlasmoDB",
+            display_name="PlasmoDB (Plasmodium)",
+            base_url="https://plasmodb.org/plasmo/service",
+            project_id="PlasmoDB",
+            is_portal=False,
+        )
+        site = SiteInfo.from_config("plasmodb", cfg)
+        assert site.id == "plasmodb"
+        assert site.name == "PlasmoDB"
+        assert site.display_name == "PlasmoDB (Plasmodium)"
+        assert site.is_portal is False
+
 
 # ---------------------------------------------------------------------------
 # SiteRouter
 # ---------------------------------------------------------------------------
 
 
-_MINIMAL_CONFIG: dict[str, Any] = {
-    "sites": {
-        "plasmodb": {
-            "name": "PlasmoDB",
-            "display_name": "PlasmoDB (Plasmodium)",
-            "base_url": "https://plasmodb.org/plasmo/service",
-            "project_id": "PlasmoDB",
-            "is_portal": False,
+_MINIMAL_CONFIG = SitesConfig.model_validate(
+    {
+        "sites": {
+            "plasmodb": {
+                "name": "PlasmoDB",
+                "display_name": "PlasmoDB (Plasmodium)",
+                "base_url": "https://plasmodb.org/plasmo/service",
+                "project_id": "PlasmoDB",
+                "is_portal": False,
+            },
+            "veupathdb": {
+                "name": "VEuPathDB",
+                "display_name": "VEuPathDB Portal",
+                "base_url": "https://veupathdb.org/veupathdb/service",
+                "project_id": "EuPathDB",
+                "is_portal": True,
+            },
         },
-        "veupathdb": {
-            "name": "VEuPathDB",
-            "display_name": "VEuPathDB Portal",
-            "base_url": "https://veupathdb.org/veupathdb/service",
-            "project_id": "EuPathDB",
-            "is_portal": True,
+        "default_site": "plasmodb",
+        "routing": {
+            "portal_timeout": 120,
+            "component_timeout": 30,
         },
-    },
-    "default_site": "plasmodb",
-    "routing": {
-        "portal_timeout": 120,
-        "component_timeout": 30,
-    },
-}
+    }
+)
 
 
-def _make_router(config: dict[str, Any] | None = None) -> SiteRouter:
-    """Build a SiteRouter backed by the given config dict."""
+def _make_router(config: SitesConfig | dict[str, Any] | None = None) -> SiteRouter:
+    """Build a SiteRouter backed by the given config.
+
+    Accepts either a SitesConfig model or a raw dict (auto-validated).
+    """
+    if config is None:
+        resolved = _MINIMAL_CONFIG
+    elif isinstance(config, dict):
+        resolved = SitesConfig.model_validate(config)
+    else:
+        resolved = config
     with patch(
         "veupath_chatbot.integrations.veupathdb.site_router.load_sites_config",
-        return_value=config or _MINIMAL_CONFIG,
+        return_value=resolved,
     ):
         return SiteRouter()
 
@@ -150,7 +175,11 @@ class TestSiteRouterSiteLookup:
             assert site.id == "plasmodb"
 
     def test_get_default_site_from_config(self) -> None:
-        config = {**_MINIMAL_CONFIG, "default_site": "veupathdb"}
+        config = SitesConfig(
+            sites=_MINIMAL_CONFIG.sites,
+            default_site="veupathdb",
+            routing=_MINIMAL_CONFIG.routing,
+        )
         router = _make_router(config)
         with patch(
             "veupath_chatbot.integrations.veupathdb.site_router.get_settings"
@@ -229,36 +258,17 @@ class TestSiteRouterCloseAll:
 class TestSiteRouterEdgeCases:
     """Test malformed config handling."""
 
-    def test_non_dict_sites_config_is_handled(self) -> None:
-        config = {"sites": "not_a_dict", "default_site": "plasmodb"}
+    def test_empty_sites_config_is_handled(self) -> None:
+        config = SitesConfig(sites={}, default_site="plasmodb")
         router = _make_router(config)
         assert router.list_sites() == []
 
-    def test_non_dict_site_entry_is_skipped(self) -> None:
-        config = {
-            "sites": {
-                "good": {
-                    "name": "Good",
-                    "display_name": "Good Site",
-                    "base_url": "https://good.org/service",
-                    "project_id": "Good",
-                    "is_portal": False,
-                },
-                "bad": "not_a_dict",
-            },
-            "default_site": "good",
-        }
-        router = _make_router(config)
-        sites = router.list_sites()
-        assert len(sites) == 1
-        assert sites[0].id == "good"
-
     def test_missing_routing_config_uses_defaults(self) -> None:
-        config = {
-            "sites": _MINIMAL_CONFIG["sites"],
-            "default_site": "plasmodb",
-            # no "routing" key
-        }
+        config = SitesConfig(
+            sites=_MINIMAL_CONFIG.sites,
+            default_site="plasmodb",
+            # routing defaults to RoutingConfig()
+        )
         router = _make_router(config)
         with patch(
             "veupath_chatbot.integrations.veupathdb.site_router.get_settings"
@@ -267,3 +277,38 @@ class TestSiteRouterEdgeCases:
             client = router.get_client("plasmodb")
         # Default component_timeout = 30
         assert client.timeout == 30.0
+
+
+class TestSiteConfigValidation:
+    """Test Pydantic config model validation."""
+
+    def test_site_config_defaults(self) -> None:
+        cfg = SiteConfig()
+        assert cfg.name == ""
+        assert cfg.is_portal is False
+
+    def test_sites_config_from_yaml_dict(self) -> None:
+        raw = {
+            "sites": {
+                "test": {
+                    "name": "TestDB",
+                    "display_name": "Test Database",
+                    "base_url": "https://test.org/service",
+                    "project_id": "Test",
+                    "is_portal": False,
+                }
+            },
+            "default_site": "test",
+            "routing": {"portal_timeout": 60, "component_timeout": 15},
+        }
+        config = SitesConfig.model_validate(raw)
+        assert "test" in config.sites
+        assert config.sites["test"].name == "TestDB"
+        assert config.routing.portal_timeout == 60.0
+        assert config.routing.component_timeout == 15.0
+
+    def test_sites_config_missing_fields_use_defaults(self) -> None:
+        config = SitesConfig.model_validate({})
+        assert config.sites == {}
+        assert config.default_site == "plasmodb"
+        assert config.routing.portal_timeout == 120.0

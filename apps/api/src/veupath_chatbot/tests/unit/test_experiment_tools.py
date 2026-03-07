@@ -1,7 +1,5 @@
 """Tests for ExperimentToolsMixin — control test delegation."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, patch
 
 from veupath_chatbot.ai.tools.planner.experiment_tools import ExperimentToolsMixin

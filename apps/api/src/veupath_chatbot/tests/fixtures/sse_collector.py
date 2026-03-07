@@ -4,8 +4,6 @@ Sends a chat request through the full HTTP endpoint and collects all
 SSE events into a structured list for assertion.
 """
 
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass, field
 

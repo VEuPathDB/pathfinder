@@ -1,11 +1,10 @@
 """Models endpoint — exposes available LLM models and their status."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 
-from veupath_chatbot.ai.models.catalog import MODEL_CATALOG, ModelProvider
+from veupath_chatbot.ai.models.catalog import MODEL_CATALOG
 from veupath_chatbot.platform.config import get_settings
+from veupath_chatbot.platform.types import ModelProvider
 
 router = APIRouter(prefix="/api/v1", tags=["models"])
 

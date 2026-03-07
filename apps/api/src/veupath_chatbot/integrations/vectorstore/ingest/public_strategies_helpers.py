@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 
 from veupath_chatbot.platform.types import JSONArray, JSONObject
@@ -88,9 +86,8 @@ def embedding_text_for_example(
 
 
 def simplify_strategy_details(details: JSONObject) -> JSONObject:
-    step_tree = (
-        details.get("stepTree") or {}
-    )  # BUG: `or {}` converts absent/None stepTree to {}, producing an empty-but-present simplified node instead of None
+    step_tree_raw = details.get("stepTree")
+    step_tree = step_tree_raw if isinstance(step_tree_raw, dict) else None
     steps = details.get("steps") or {}
 
     def simplify_step_node(node: JSONObject) -> JSONObject:

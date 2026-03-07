@@ -13,10 +13,10 @@ Focus areas:
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from veupath_chatbot.domain.parameters.specs import unwrap_search_data
 from veupath_chatbot.services.catalog.param_resolution import (
     _extract_param_names,
     _filter_context_values,
-    _unwrap_search_data,
 )
 from veupath_chatbot.services.catalog.parameters import (
     expand_search_details_with_params,
@@ -130,26 +130,26 @@ class TestFilterContextValuesEdgeCases:
 
 
 # ---------------------------------------------------------------------------
-# _unwrap_search_data edge cases (param_resolution version)
+# unwrap_search_data edge cases (param_resolution version)
 # ---------------------------------------------------------------------------
 
 
 class TestUnwrapSearchDataResolution:
-    """Edge cases for _unwrap_search_data in param_resolution.py."""
+    """Edge cases for unwrap_search_data in param_resolution.py."""
 
     def test_empty_dict_returns_itself(self) -> None:
-        result = _unwrap_search_data({})
+        result = unwrap_search_data({})
         assert result == {}
 
     def test_search_data_empty_dict_returns_inner(self) -> None:
         """An empty searchData dict should still unwrap."""
-        result = _unwrap_search_data({"searchData": {}})
+        result = unwrap_search_data({"searchData": {}})
         assert result == {}
 
     def test_search_data_with_nested_search_data(self) -> None:
         """Only one level of unwrapping."""
         inner = {"searchData": {"displayName": "Deep"}}
-        result = _unwrap_search_data({"searchData": inner})
+        result = unwrap_search_data({"searchData": inner})
         assert result is inner
         # The inner searchData is not further unwrapped
         assert "searchData" in result
@@ -261,7 +261,7 @@ class TestGetSearchParametersUnknownTypes:
         assert "defaultValue" not in p
 
     async def test_required_defaults_to_true_without_explicit_flags(self) -> None:
-        """When neither isRequired nor allowEmptyValue present, required = not bool(None) = True."""
+        """When allowEmptyValue is absent, required = not bool(None) = True."""
         discovery = MagicMock()
         discovery.get_record_types = AsyncMock(return_value=[{"urlSegment": "gene"}])
         discovery.get_search_details = AsyncMock(

@@ -1,7 +1,5 @@
 """Gene search and resolve endpoints."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -63,7 +61,7 @@ class OrganismsResponse(BaseModel):
 @router.get("/{siteId}/organisms", response_model=OrganismsResponse)
 async def list_organisms(siteId: str) -> OrganismsResponse:
     """Return all available organism names for a site via site-search."""
-    from veupath_chatbot.integrations.veupathdb.site_search import query_site_search
+    from veupath_chatbot.services.wdk import query_site_search
 
     data = await query_site_search(
         siteId,

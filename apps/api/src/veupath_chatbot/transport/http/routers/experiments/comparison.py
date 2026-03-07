@@ -1,7 +1,5 @@
 """Cross-experiment comparison endpoints: overlap and enrichment comparison."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 
 from veupath_chatbot.platform.types import JSONObject

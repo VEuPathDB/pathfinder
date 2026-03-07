@@ -1,7 +1,5 @@
 """Tests for bootstrap robustness and uncertainty estimation."""
 
-from __future__ import annotations
-
 from collections import defaultdict
 
 from veupath_chatbot.services.experiment.robustness import (

@@ -54,26 +54,23 @@ async def test_download_url_rejects_blank_attributes():
 
 async def test_download_url_accepts_all_valid_formats():
     for fmt in ("csv", "tab", "json"):
-        tools = ResultTools(FakeResultToolsSession())
         fake_api = FakeResultsAPI(url=f"https://example/dl.{fmt}")
-        tools._get_results_api = lambda api=fake_api: api
+        tools = ResultTools(FakeResultToolsSession(), results_api=fake_api)
         result = await tools.get_download_url(wdk_step_id=1, format=fmt)
         assert "downloadUrl" in result, f"Failed for format={fmt}"
 
 
 async def test_download_url_handles_empty_url_from_api():
-    tools = ResultTools(FakeResultToolsSession())
     fake_api = FakeResultsAPI(url="")
-    tools._get_results_api = lambda: fake_api
+    tools = ResultTools(FakeResultToolsSession(), results_api=fake_api)
     result = await tools.get_download_url(wdk_step_id=1, format="csv")
     assert result["ok"] is False
     assert result["code"] == "WDK_ERROR"
 
 
 async def test_download_url_handles_generic_exception():
-    tools = ResultTools(FakeResultToolsSession())
     fake_api = FakeResultsAPI(error=RuntimeError("Connection reset"))
-    tools._get_results_api = lambda: fake_api
+    tools = ResultTools(FakeResultToolsSession(), results_api=fake_api)
     result = await tools.get_download_url(wdk_step_id=1, format="csv")
     assert result["ok"] is False
     assert result["code"] == "WDK_ERROR"
@@ -97,9 +94,8 @@ async def test_sample_records_limit_negative():
 
 
 async def test_sample_records_empty_records_list():
-    tools = ResultTools(FakeResultToolsSession())
     fake_api = FakeStrategyAPI(response={"records": [], "meta": {"totalCount": 0}})
-    tools._get_api = lambda: fake_api
+    tools = ResultTools(FakeResultToolsSession(), strategy_api=fake_api)
     result = await tools.get_sample_records(wdk_step_id=1, limit=5)
     assert result["records"] == []
     assert result["totalCount"] == 0
@@ -107,9 +103,8 @@ async def test_sample_records_empty_records_list():
 
 
 async def test_sample_records_non_dict_response_raises():
-    tools = ResultTools(FakeResultToolsSession())
     fake_api = FakeStrategyAPI(response="not a dict")
-    tools._get_api = lambda: fake_api
+    tools = ResultTools(FakeResultToolsSession(), strategy_api=fake_api)
     result = await tools.get_sample_records(wdk_step_id=1, limit=5)
     # Should be caught by the generic exception handler
     assert result["ok"] is False
@@ -117,16 +112,14 @@ async def test_sample_records_non_dict_response_raises():
 
 
 async def test_sample_records_wdk_500_error():
-    tools = ResultTools(FakeResultToolsSession())
     fake_api = FakeStrategyAPI(error=WDKError("Internal Server Error", 500))
-    tools._get_api = lambda: fake_api
+    tools = ResultTools(FakeResultToolsSession(), strategy_api=fake_api)
     result = await tools.get_sample_records(wdk_step_id=1, limit=5)
     assert result["ok"] is False
     assert "temporarily unavailable" in str(result["message"])
 
 
 async def test_sample_records_extracts_attributes_from_first_record():
-    tools = ResultTools(FakeResultToolsSession())
     fake_api = FakeStrategyAPI(
         response={
             "records": [
@@ -136,7 +129,7 @@ async def test_sample_records_extracts_attributes_from_first_record():
             "meta": {"totalCount": 42},
         }
     )
-    tools._get_api = lambda: fake_api
+    tools = ResultTools(FakeResultToolsSession(), strategy_api=fake_api)
     result = await tools.get_sample_records(wdk_step_id=1, limit=5)
     assert result["totalCount"] == 42
     assert result["attributes"] == ["gene_id", "organism"]

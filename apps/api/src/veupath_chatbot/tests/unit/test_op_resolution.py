@@ -4,7 +4,6 @@ import pytest
 
 from veupath_chatbot.domain.strategy.ops import (
     CombineOp,
-    get_op_label,
     get_wdk_operator,
     parse_op,
 )
@@ -65,11 +64,6 @@ class TestOperationParsing:
             parse_op("")
         with pytest.raises(ValueError):
             parse_op("   ")
-
-    def test_get_op_labels(self) -> None:
-        """Test getting human-readable labels."""
-        assert "AND" in get_op_label(CombineOp.INTERSECT)
-        assert "OR" in get_op_label(CombineOp.UNION)
 
     def test_get_wdk_operators(self) -> None:
         """Test getting WDK boolean operator names."""

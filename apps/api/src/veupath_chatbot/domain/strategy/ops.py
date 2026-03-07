@@ -72,15 +72,6 @@ class ColocationParams:
         return errors
 
 
-def get_op_label(op: CombineOp) -> str:
-    """Get human-readable label for an operator.
-
-    :param op: Combine operator.
-    :returns: Human-readable label.
-    """
-    return OP_LABELS.get(op, op.value)
-
-
 def get_wdk_operator(op: CombineOp) -> str:
     """Get WDK boolean operator name.
 

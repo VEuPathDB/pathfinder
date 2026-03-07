@@ -1,7 +1,5 @@
 """Experiment Lab endpoints -- split into sub-routers for maintainability."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 
 from .analysis import router as analysis_router

@@ -4,8 +4,6 @@ Computes all standard binary classification metrics from the raw
 intersection counts returned by :func:`run_positive_negative_controls`.
 """
 
-from __future__ import annotations
-
 import math
 
 from veupath_chatbot.platform.types import JSONObject

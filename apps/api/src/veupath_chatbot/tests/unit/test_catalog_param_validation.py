@@ -164,7 +164,6 @@ class TestValidateSearchParamsErrors:
                 {
                     "name": "organism",
                     "type": "string",
-                    "isRequired": True,
                     "allowEmptyValue": False,
                 },
             ]
@@ -190,12 +189,12 @@ class TestValidateSearchParamsErrors:
                 {
                     "name": "organism",
                     "type": "string",
-                    "isRequired": True,
+                    "allowEmptyValue": False,
                 },
                 {
                     "name": "taxon",
                     "type": "string",
-                    "isRequired": True,
+                    "allowEmptyValue": False,
                 },
             ]
         }
@@ -219,7 +218,6 @@ class TestValidateSearchParamsErrors:
                 {
                     "name": "organism",
                     "type": "string",
-                    "isRequired": True,
                     "allowEmptyValue": False,
                 },
             ]
@@ -303,7 +301,7 @@ class TestValidateSearchParamsStructure:
                 {
                     "name": "organism",
                     "type": "string",
-                    "isRequired": True,
+                    "allowEmptyValue": False,
                 },
             ]
         }
@@ -391,7 +389,6 @@ class TestValidateSearchParamsCanonicalizationErrors:
                 {
                     "name": "organisms",
                     "type": "multi-pick-vocabulary",
-                    "isRequired": True,
                     "allowEmptyValue": False,
                 },
             ]

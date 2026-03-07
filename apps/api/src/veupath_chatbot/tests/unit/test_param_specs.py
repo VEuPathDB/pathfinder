@@ -1,7 +1,5 @@
 """Tests for domain/parameters/specs.py."""
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.parameters.specs import (
     ParamSpecNormalized,
     adapt_param_specs,
@@ -68,35 +66,6 @@ class TestExtractParamSpecs:
                 "paramMap": {
                     "p1": {"type": "string"},
                 }
-            }
-        }
-        specs = extract_param_specs(payload)
-        assert len(specs) == 1
-
-    def test_from_question_parameters(self) -> None:
-        payload = {
-            "question": {
-                "parameters": [
-                    {"name": "p1", "type": "string"},
-                ]
-            }
-        }
-        specs = extract_param_specs(payload)
-        assert len(specs) == 1
-
-    def test_from_parameter_details(self) -> None:
-        payload = {
-            "parameterDetails": {
-                "p1": {"type": "string"},
-            }
-        }
-        specs = extract_param_specs(payload)
-        assert len(specs) == 1
-
-    def test_from_param_details(self) -> None:
-        payload = {
-            "paramDetails": {
-                "p1": {"type": "string"},
             }
         }
         specs = extract_param_specs(payload)
@@ -295,32 +264,32 @@ class TestFindMissingRequiredParams:
         assert missing == []
 
     def test_required_param_present(self) -> None:
-        specs = [{"name": "p1", "type": "string", "isRequired": True}]
+        specs = [{"name": "p1", "type": "string", "allowEmptyValue": False}]
         missing = find_missing_required_params(specs, {"p1": "val"})
         assert missing == []
 
     def test_required_param_missing(self) -> None:
-        specs = [{"name": "p1", "type": "string", "isRequired": True}]
+        specs = [{"name": "p1", "type": "string", "allowEmptyValue": False}]
         missing = find_missing_required_params(specs, {})
         assert missing == ["p1"]
 
     def test_required_param_none_value(self) -> None:
-        specs = [{"name": "p1", "type": "string", "isRequired": True}]
+        specs = [{"name": "p1", "type": "string", "allowEmptyValue": False}]
         missing = find_missing_required_params(specs, {"p1": None})
         assert missing == ["p1"]
 
     def test_required_param_empty_string(self) -> None:
-        specs = [{"name": "p1", "type": "string", "isRequired": True}]
+        specs = [{"name": "p1", "type": "string", "allowEmptyValue": False}]
         missing = find_missing_required_params(specs, {"p1": ""})
         assert missing == ["p1"]
 
     def test_required_param_empty_list(self) -> None:
-        specs = [{"name": "p1", "type": "string", "isRequired": True}]
+        specs = [{"name": "p1", "type": "string", "allowEmptyValue": False}]
         missing = find_missing_required_params(specs, {"p1": []})
         assert missing == ["p1"]
 
     def test_required_param_empty_dict(self) -> None:
-        specs = [{"name": "p1", "type": "string", "isRequired": True}]
+        specs = [{"name": "p1", "type": "string", "allowEmptyValue": False}]
         missing = find_missing_required_params(specs, {"p1": {}})
         assert missing == ["p1"]
 
@@ -335,45 +304,47 @@ class TestFindMissingRequiredParams:
         assert missing == []
 
     def test_multi_pick_empty_json_string(self) -> None:
-        specs = [{"name": "p1", "type": "multi-pick-vocabulary", "isRequired": True}]
+        specs = [
+            {"name": "p1", "type": "multi-pick-vocabulary", "allowEmptyValue": False}
+        ]
         missing = find_missing_required_params(specs, {"p1": "[]"})
         assert missing == ["p1"]
 
     def test_multi_pick_empty_list(self) -> None:
-        specs = [{"name": "p1", "type": "multi-pick-vocabulary", "isRequired": True}]
+        specs = [
+            {"name": "p1", "type": "multi-pick-vocabulary", "allowEmptyValue": False}
+        ]
         missing = find_missing_required_params(specs, {"p1": []})
         assert missing == ["p1"]
 
     def test_multi_pick_with_values(self) -> None:
-        specs = [{"name": "p1", "type": "multi-pick-vocabulary", "isRequired": True}]
+        specs = [
+            {"name": "p1", "type": "multi-pick-vocabulary", "allowEmptyValue": False}
+        ]
         missing = find_missing_required_params(specs, {"p1": '["a"]'})
         assert missing == []
 
     def test_skips_non_dict_specs(self) -> None:
-        specs = ["not_a_dict", {"name": "p1", "type": "string", "isRequired": True}]
+        specs = [
+            "not_a_dict",
+            {"name": "p1", "type": "string", "allowEmptyValue": False},
+        ]
         missing = find_missing_required_params(specs, {})
         assert missing == ["p1"]
 
     def test_skips_spec_without_name(self) -> None:
-        specs = [{"type": "string", "isRequired": True}]
+        specs = [{"type": "string", "allowEmptyValue": False}]
         missing = find_missing_required_params(specs, {})
         assert missing == []
 
     def test_multiple_missing(self) -> None:
         specs = [
-            {"name": "p1", "type": "string", "isRequired": True},
-            {"name": "p2", "type": "string", "isRequired": True},
+            {"name": "p1", "type": "string", "allowEmptyValue": False},
+            {"name": "p2", "type": "string", "allowEmptyValue": False},
             {"name": "p3", "type": "string", "allowEmptyValue": True},
         ]
         missing = find_missing_required_params(specs, {"p3": "val"})
         assert missing == ["p1", "p2"]
-
-    def test_is_required_non_bool_defaults_false(self) -> None:
-        specs = [{"name": "p1", "type": "string", "isRequired": "yes"}]
-        # "yes" is not a bool, so isRequired defaults to False
-        # But allowEmptyValue is also missing, defaults to True, so not required
-        missing = find_missing_required_params(specs, {})
-        assert missing == []
 
     def test_allow_empty_non_bool_defaults_true(self) -> None:
         specs = [{"name": "p1", "type": "string", "allowEmptyValue": "yes"}]

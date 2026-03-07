@@ -1,7 +1,5 @@
 """Phase 3: Step contribution (ablation) -- measure impact of removing each leaf."""
 
-from __future__ import annotations
-
 import asyncio
 
 from veupath_chatbot.platform.logging import get_logger

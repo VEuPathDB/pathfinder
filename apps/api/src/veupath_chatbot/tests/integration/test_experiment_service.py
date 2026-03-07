@@ -9,8 +9,6 @@ Run with:
     pytest src/veupath_chatbot/tests/integration/test_experiment_service.py -v -s
 """
 
-from __future__ import annotations
-
 import math
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -19,10 +17,7 @@ import pytest
 
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.experiment.service import run_experiment
-from veupath_chatbot.services.experiment.store import (
-    ExperimentStore,
-    get_experiment_store,
-)
+from veupath_chatbot.services.experiment.store import get_experiment_store
 from veupath_chatbot.services.experiment.types import (
     ExperimentConfig,
     ExperimentMetrics,
@@ -145,14 +140,13 @@ def _make_mock_strategy_api() -> AsyncMock:
 
 @pytest.fixture(autouse=True)
 def _reset_experiment_store() -> None:
-    """Replace the global experiment store with a fresh instance per test.
+    """Clear the cached singleton so each test gets a fresh ExperimentStore.
 
-    Prevents leaked state between tests without touching the module-level
-    singleton pattern.
+    ``get_experiment_store`` is decorated with ``@functools.cache``, so the
+    only way to guarantee a clean store is to invalidate that cache before
+    every test.
     """
-    import veupath_chatbot.services.experiment.store as store_module
-
-    store_module._global_store = ExperimentStore()
+    get_experiment_store.cache_clear()
 
 
 # ---------------------------------------------------------------------------

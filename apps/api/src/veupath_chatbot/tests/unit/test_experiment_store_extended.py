@@ -4,8 +4,6 @@ Covers edge cases: thread safety via concurrent async access, stale reads
 after updates, filter edge cases, delete semantics, and cache-DB consistency.
 """
 
-from __future__ import annotations
-
 import asyncio
 from unittest.mock import AsyncMock, patch
 
@@ -65,7 +63,7 @@ class TestAdeleteConsistency:
         store = ExperimentStore()
         store.save(_make_experiment("exp_001"))
 
-        with patch.object(ExperimentStore, "_delete_fn", new_callable=AsyncMock):
+        with patch.object(store, "_delete_from_db", new_callable=AsyncMock):
             result = await store.adelete("exp_001")
 
         assert result is True
@@ -75,7 +73,7 @@ class TestAdeleteConsistency:
         with the sync delete() method."""
         store = ExperimentStore()
 
-        with patch.object(ExperimentStore, "_delete_fn", new_callable=AsyncMock):
+        with patch.object(store, "_delete_from_db", new_callable=AsyncMock):
             result = await store.adelete("ghost")
 
         assert result is False
@@ -84,7 +82,7 @@ class TestAdeleteConsistency:
         store = ExperimentStore()
         store.save(_make_experiment("doomed"))
 
-        with patch.object(ExperimentStore, "_delete_fn", new_callable=AsyncMock):
+        with patch.object(store, "_delete_from_db", new_callable=AsyncMock):
             await store.adelete("doomed")
 
         assert store.get("doomed") is None
@@ -170,7 +168,7 @@ class TestConcurrentAccess:
             await asyncio.sleep(0.01)
             return db_exp if entity_id == "shared" else None
 
-        with patch.object(ExperimentStore, "_load_fn", side_effect=slow_load):
+        with patch.object(store, "_load", side_effect=slow_load):
             results = await asyncio.gather(
                 store.aget("shared"),
                 store.aget("shared"),
@@ -258,9 +256,7 @@ class TestAgetCachePopulation:
         store = ExperimentStore()
         db_exp = _make_experiment("from-db", site_id="plasmodb")
 
-        with patch.object(
-            ExperimentStore, "_load_fn", new_callable=AsyncMock, return_value=db_exp
-        ):
+        with patch.object(store, "_load", new_callable=AsyncMock, return_value=db_exp):
             result = await store.aget("from-db")
 
         assert result is db_exp

@@ -4,8 +4,6 @@ Composes category-specific mixins into a single ``AgentToolRegistryMixin``
 that provides all @ai_function methods for the agent.
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.ai.tools.catalog_registry import CatalogToolsMixin
 from veupath_chatbot.ai.tools.research_registry import ResearchToolsMixin
 from veupath_chatbot.ai.tools.strategy_registry import StrategyToolsMixin
@@ -23,8 +21,8 @@ class AgentToolRegistryMixin(
 
     Inherits catalog lookup tools from :class:`CatalogToolsMixin`.
 
-    Inherits strategy, execution, and conversation tools from
-    :class:`StrategyToolsMixin`.
+    Inherits strategy, execution, result, and conversation tools from
+    :class:`StrategyToolsMixin` (auto-delegated to underlying tool instances).
 
     Classes using this mixin must provide these attributes:
     - site_id: str

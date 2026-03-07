@@ -4,8 +4,6 @@ All WDK calls are mocked — these tests validate the optimisation loop logic,
 scoring, error handling, cancellation, and early-abort behaviour.
 """
 
-from __future__ import annotations
-
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 

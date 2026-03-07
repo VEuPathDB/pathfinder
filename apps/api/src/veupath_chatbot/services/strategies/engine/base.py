@@ -1,7 +1,5 @@
 """Shared base class for strategy tool implementations (service layer)."""
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.strategy.session import StrategySession
 
 

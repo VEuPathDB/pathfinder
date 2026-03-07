@@ -8,13 +8,12 @@ the request and returns immediately; events are consumed from a Redis-backed
 SSE subscription endpoint.
 """
 
-from __future__ import annotations
-
 from unittest.mock import patch
 
 import httpx
 import pytest
 
+from veupath_chatbot.tests.fixtures.mock_chat import mock_stream_chat
 from veupath_chatbot.tests.fixtures.scripted_engine import (
     ScriptedEngineFactory,
     ScriptedToolCall,
@@ -23,8 +22,8 @@ from veupath_chatbot.tests.fixtures.scripted_engine import (
 from veupath_chatbot.tests.fixtures.sse_collector import collect_chat_stream
 
 _MOCK_PROVIDER_PATCH = patch(
-    "veupath_chatbot.services.chat.orchestrator._use_mock_chat_provider",
-    return_value=True,
+    "veupath_chatbot.services.chat.orchestrator._mock_stream_fn",
+    mock_stream_chat,
 )
 
 

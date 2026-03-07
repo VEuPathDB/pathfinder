@@ -1,7 +1,5 @@
 """Tests for custom gene set enrichment analysis."""
 
-from __future__ import annotations
-
 import math
 
 from veupath_chatbot.services.experiment.custom_enrichment import run_custom_enrichment

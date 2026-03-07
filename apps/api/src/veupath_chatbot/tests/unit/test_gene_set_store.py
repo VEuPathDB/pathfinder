@@ -1,7 +1,5 @@
 """Tests for GeneSetStore."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
@@ -151,9 +149,7 @@ class TestAsyncGet:
         store = GeneSetStore()
         db_set = _make_set("db-only")
 
-        with patch.object(
-            GeneSetStore, "_load_fn", new_callable=AsyncMock, return_value=db_set
-        ):
+        with patch.object(store, "_load", new_callable=AsyncMock, return_value=db_set):
             result = await store.aget("db-only")
 
         assert result is db_set
@@ -163,9 +159,7 @@ class TestAsyncGet:
     async def test_returns_none_when_not_in_cache_or_db(self) -> None:
         store = GeneSetStore()
 
-        with patch.object(
-            GeneSetStore, "_load_fn", new_callable=AsyncMock, return_value=None
-        ):
+        with patch.object(store, "_load", new_callable=AsyncMock, return_value=None):
             result = await store.aget("ghost")
 
         assert result is None
@@ -176,9 +170,7 @@ class TestAsyncDelete:
         store = GeneSetStore()
         store.save(_make_set("doomed"))
 
-        with patch.object(
-            GeneSetStore, "_delete_fn", new_callable=AsyncMock
-        ) as mock_del:
+        with patch.object(store, "_delete_from_db", new_callable=AsyncMock) as mock_del:
             result = await store.adelete("doomed")
 
         assert result is True

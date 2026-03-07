@@ -1,16 +1,15 @@
 """Editing tools for existing graph steps (AI-exposed)."""
 
-from __future__ import annotations
-
 from typing import Annotated, cast
 
 from kani import AIParam, ai_function
 
-from veupath_chatbot.domain.parameters.validation import validate_parameters
 from veupath_chatbot.domain.strategy.ast import PlanStepNode
 from veupath_chatbot.domain.strategy.ops import parse_op
 from veupath_chatbot.platform.errors import ErrorCode, ValidationError
+from veupath_chatbot.platform.tool_errors import tool_error
 from veupath_chatbot.platform.types import JSONArray, JSONObject
+from veupath_chatbot.services.catalog.param_validation import validate_parameters
 from veupath_chatbot.services.strategies.engine.helpers import StrategyToolsHelpers
 
 
@@ -50,7 +49,7 @@ class StrategyEditOps(StrategyToolsHelpers):
 
         remaining = {sid for sid in graph.steps if sid not in to_remove}
         if not remaining:
-            return self._tool_error(
+            return tool_error(
                 ErrorCode.VALIDATION_ERROR,
                 "Deleting this step would remove all nodes. Use clear_strategy(confirm=true) to start over.",
                 graphId=graph.id,
@@ -90,7 +89,7 @@ class StrategyEditOps(StrategyToolsHelpers):
             )
         return self._with_full_graph(
             graph,
-            self._tool_error(
+            tool_error(
                 ErrorCode.VALIDATION_ERROR,
                 "Nothing to undo",
                 graphId=graph.id,
@@ -132,13 +131,14 @@ class StrategyEditOps(StrategyToolsHelpers):
         ] = None,
         graph_id: Annotated[str | None, AIParam(desc="Graph ID to edit")] = None,
     ) -> JSONObject:
+        """Update an existing strategy step's search, parameters, operator, or display name."""
         result = self._get_graph_and_step(graph_id, step_id)
         if isinstance(result, dict):
             return result
         graph, step = result
 
         if not isinstance(step, PlanStepNode):
-            return self._tool_error(
+            return tool_error(
                 ErrorCode.VALIDATION_ERROR,
                 "Unsupported step object.",
                 stepId=step_id,
@@ -159,7 +159,7 @@ class StrategyEditOps(StrategyToolsHelpers):
                         record_type=record_type,
                         search_name=step.search_name,
                         parameters=parameters,
-                        resolve_record_type_for_search=self._resolve_record_type_for_search,
+                        resolve_record_type_for_search=self._find_record_type_for_search,
                         find_record_type_hint=self._find_record_type_hint,
                         extract_vocab_options=self._extract_vocab_options,
                     )
@@ -171,7 +171,7 @@ class StrategyEditOps(StrategyToolsHelpers):
 
         if operator is not None:
             if step.secondary_input is None:
-                return self._tool_error(
+                return tool_error(
                     ErrorCode.VALIDATION_ERROR,
                     "operator can only be set for binary steps.",
                     stepId=step_id,

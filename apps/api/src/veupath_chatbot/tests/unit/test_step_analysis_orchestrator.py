@@ -1,7 +1,5 @@
 """Unit tests for step_analysis.orchestrator -- enrichment/movement logic."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.step_analysis.orchestrator import (
     _enrich_contributions_with_narrative,
     _enrich_step_evals_with_movement,

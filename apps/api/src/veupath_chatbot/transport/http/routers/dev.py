@@ -1,7 +1,5 @@
 """Development-only endpoints (available only when chat_provider=mock)."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 

@@ -3,8 +3,6 @@
 Provides gene-list extraction utilities and the progress callback type alias.
 """
 
-from __future__ import annotations
-
 from collections.abc import Awaitable, Callable
 
 from veupath_chatbot.platform.logging import get_logger

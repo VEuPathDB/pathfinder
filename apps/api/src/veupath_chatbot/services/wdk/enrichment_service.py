@@ -5,8 +5,6 @@ whether the caller is an experiment endpoint, gene set endpoint,
 or AI tool.
 """
 
-from __future__ import annotations
-
 import asyncio
 
 from veupath_chatbot.platform.logging import get_logger

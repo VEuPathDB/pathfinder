@@ -5,8 +5,6 @@ Only ``Experiment`` / ``ExperimentConfig`` require hand-written logic due
 to conditional field defaults and enrichment deduplication.
 """
 
-from __future__ import annotations
-
 from typing import Any, cast
 
 from veupath_chatbot.services.experiment.types import (

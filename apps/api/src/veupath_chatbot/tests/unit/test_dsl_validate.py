@@ -254,9 +254,9 @@ class TestValidationResult:
         assert result.errors == []
 
     def test_failure(self) -> None:
-        from veupath_chatbot.domain.strategy.validate import ValidationError
+        from veupath_chatbot.domain.strategy.validate import StepValidationIssue
 
-        err = ValidationError(path="root", message="bad", code="BAD")
+        err = StepValidationIssue(path="root", message="bad", code="BAD")
         result = ValidationResult.failure([err])
         assert result.valid is False
         assert len(result.errors) == 1

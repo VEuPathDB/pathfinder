@@ -1,7 +1,5 @@
 """Edge-case tests for gene set store and types."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
@@ -127,14 +125,14 @@ class TestAdeleteReturnValue:
 
     async def test_adelete_nonexistent_returns_false(self) -> None:
         store = GeneSetStore()
-        with patch.object(GeneSetStore, "_delete_fn", new_callable=AsyncMock):
+        with patch.object(store, "_delete_from_db", new_callable=AsyncMock):
             result = await store.adelete("nonexistent")
         assert result is False
 
     async def test_adelete_existing_returns_true(self) -> None:
         store = GeneSetStore()
         store.save(_make_set("doomed"))
-        with patch.object(GeneSetStore, "_delete_fn", new_callable=AsyncMock):
+        with patch.object(store, "_delete_from_db", new_callable=AsyncMock):
             result = await store.adelete("doomed")
         assert result is True
 

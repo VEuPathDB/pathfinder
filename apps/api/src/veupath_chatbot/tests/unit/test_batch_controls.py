@@ -6,8 +6,6 @@ Verifies that:
 - Explicit list → uses the provided list
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.types import (
     BatchExperimentConfig,
     BatchOrganismTarget,

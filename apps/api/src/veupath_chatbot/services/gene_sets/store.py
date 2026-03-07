@@ -4,26 +4,18 @@ Keeps an in-memory dict for fast synchronous access during AI tool calls,
 and persists every mutation to PostgreSQL so gene sets survive API restarts.
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from functools import cache
 from uuid import UUID
 
-from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from veupath_chatbot.persistence.models import GeneSetRow
-from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.store import WriteThruStore
 from veupath_chatbot.services.gene_sets.types import GeneSet
 
-logger = get_logger(__name__)
-
-
 # ---------------------------------------------------------------------------
-# Private DB helpers
+# Row conversion helpers
 # ---------------------------------------------------------------------------
 
 
@@ -67,34 +59,9 @@ def _gene_set_from_row(row: GeneSetRow) -> GeneSet:
     )
 
 
-async def _persist_to_db(gs: GeneSet) -> None:
-    from veupath_chatbot.persistence.session import async_session_factory
-
-    try:
-        vals = _row_from_gene_set(gs)
-        stmt = (
-            pg_insert(GeneSetRow)
-            .values(**vals)
-            .on_conflict_do_update(
-                index_elements=[GeneSetRow.id],
-                set_={k: v for k, v in vals.items() if k != "id"},
-            )
-        )
-        async with async_session_factory() as session:
-            await session.execute(stmt)
-            await session.commit()
-    except Exception:
-        logger.exception("Failed to persist gene set to DB", gene_set_id=gs.id)
-
-
-async def _load_from_db(gene_set_id: str) -> GeneSet | None:
-    from veupath_chatbot.persistence.session import async_session_factory
-
-    async with async_session_factory() as session:
-        row = await session.get(GeneSetRow, gene_set_id)
-        if row is None:
-            return None
-        return _gene_set_from_row(row)
+# ---------------------------------------------------------------------------
+# DB list helper (domain-specific query, not covered by base class)
+# ---------------------------------------------------------------------------
 
 
 async def _list_from_db(
@@ -116,15 +83,6 @@ async def _list_from_db(
         return [_gene_set_from_row(r) for r in rows]
 
 
-async def _delete_from_db(gene_set_id: str) -> None:
-    from veupath_chatbot.persistence.session import async_session_factory
-
-    stmt = sa_delete(GeneSetRow).where(GeneSetRow.id == gene_set_id)
-    async with async_session_factory() as session:
-        await session.execute(stmt)
-        await session.commit()
-
-
 # ---------------------------------------------------------------------------
 # Store
 # ---------------------------------------------------------------------------
@@ -137,9 +95,9 @@ class GeneSetStore(WriteThruStore[GeneSet]):
     Adds domain-specific listing methods.
     """
 
-    _persist_fn = staticmethod(_persist_to_db)
-    _load_fn = staticmethod(_load_from_db)
-    _delete_fn = staticmethod(_delete_from_db)
+    _model = GeneSetRow
+    _to_row = staticmethod(_row_from_gene_set)
+    _from_row = staticmethod(_gene_set_from_row)
 
     # -- Sync listing (used by AI tools / workbench_tools.py) ----------------
 

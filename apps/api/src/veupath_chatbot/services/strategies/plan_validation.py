@@ -1,7 +1,5 @@
 """Strategy plan validation helpers."""
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.strategy.ast import StrategyAST, from_dict
 from veupath_chatbot.domain.strategy.validate import validate_strategy
 from veupath_chatbot.platform.errors import ValidationError

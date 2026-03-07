@@ -1,7 +1,5 @@
 """Unit tests for experiment metrics computation."""
 
-from __future__ import annotations
-
 import math
 
 from veupath_chatbot.services.experiment.metrics import (

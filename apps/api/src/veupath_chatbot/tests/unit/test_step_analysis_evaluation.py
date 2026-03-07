@@ -1,11 +1,9 @@
 """Unit tests for step_analysis._evaluation -- pure extraction and metric functions."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.step_analysis._evaluation import (
     _EvalCounts,
     _extract_eval_counts,
-    _f1,
+    _f1_from_counts,
 )
 
 # ---------------------------------------------------------------------------
@@ -137,40 +135,43 @@ class TestExtractEvalCounts:
 
 
 # ---------------------------------------------------------------------------
-# _f1
+# _f1_from_counts
 # ---------------------------------------------------------------------------
 
 
-class TestF1:
+class TestF1FromCounts:
     def test_perfect_scores(self) -> None:
-        """recall=1.0, fpr=0.0 => specificity=1.0 => precision proxy=1.0 => F1=1.0."""
-        assert _f1(recall=1.0, fpr=0.0, neg_total=10) == 1.0
+        """All positives found, no negatives found => F1=1.0."""
+        counts = _EvalCounts(pos_hits=10, pos_total=10, neg_hits=0, neg_total=10)
+        assert _f1_from_counts(counts) == 1.0
 
     def test_zero_recall(self) -> None:
-        """recall=0.0 => numerator=0 => F1=0.0."""
-        assert _f1(recall=0.0, fpr=0.5, neg_total=10) == 0.0
+        """No positives found => F1=0.0."""
+        counts = _EvalCounts(pos_hits=0, pos_total=10, neg_hits=5, neg_total=10)
+        assert _f1_from_counts(counts) == 0.0
 
     def test_both_zero(self) -> None:
-        """recall=0.0, denom=0 => F1=0.0 (no division error)."""
-        assert _f1(recall=0.0, fpr=1.0, neg_total=10) == 0.0
+        """No positives, no negatives => F1=0.0."""
+        counts = _EvalCounts(pos_hits=0, pos_total=0, neg_hits=0, neg_total=0)
+        assert _f1_from_counts(counts) == 0.0
 
-    def test_no_negatives_means_perfect_specificity(self) -> None:
-        """When neg_total=0, specificity defaults to 1.0."""
-        # recall=0.5, precision_proxy=1.0, F1 = 2*1*0.5/(1+0.5) = 2/3
-        result = _f1(recall=0.5, fpr=0.5, neg_total=0)
+    def test_no_negatives(self) -> None:
+        """When neg_total=0 and half positives found, precision=1.0."""
+        # tp=5, fp=0, fn=5 => precision=1.0, recall=0.5
+        # F1 = 2*1.0*0.5/(1.0+0.5) = 2/3
+        counts = _EvalCounts(pos_hits=5, pos_total=10, neg_hits=0, neg_total=0)
         expected = 2 * 1.0 * 0.5 / (1.0 + 0.5)
-        assert abs(result - expected) < 1e-10
+        assert abs(_f1_from_counts(counts) - expected) < 1e-10
 
     def test_moderate_scores(self) -> None:
-        """recall=0.8, fpr=0.2 => specificity=0.8 => precision_proxy=0.8."""
-        result = _f1(recall=0.8, fpr=0.2, neg_total=10)
-        # precision = 0.8, recall = 0.8
-        # F1 = 2 * 0.8 * 0.8 / (0.8 + 0.8) = 0.8
-        assert abs(result - 0.8) < 1e-10
+        """tp=8, fp=2, fn=2, tn=8 => precision=0.8, recall=0.8 => F1=0.8."""
+        counts = _EvalCounts(pos_hits=8, pos_total=10, neg_hits=2, neg_total=10)
+        assert abs(_f1_from_counts(counts) - 0.8) < 1e-10
 
-    def test_high_fpr(self) -> None:
-        """High FPR means low precision proxy."""
-        result = _f1(recall=0.9, fpr=0.9, neg_total=10)
-        # specificity = 0.1, precision_proxy = 0.1
-        # F1 = 2 * 0.1 * 0.9 / (0.1 + 0.9) = 0.18
-        assert abs(result - 0.18) < 1e-10
+    def test_high_false_positives(self) -> None:
+        """Many negatives found => low precision => low F1."""
+        # tp=9, fp=9, fn=1, tn=1 => precision=0.5, recall=0.9
+        # F1 = 2*0.5*0.9/(0.5+0.9) = 0.9/1.4
+        counts = _EvalCounts(pos_hits=9, pos_total=10, neg_hits=9, neg_total=10)
+        expected = 2 * 0.5 * 0.9 / (0.5 + 0.9)
+        assert abs(_f1_from_counts(counts) - expected) < 1e-10

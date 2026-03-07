@@ -1,7 +1,5 @@
 """Tests for WorkbenchToolsMixin — verifying async store usage."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 

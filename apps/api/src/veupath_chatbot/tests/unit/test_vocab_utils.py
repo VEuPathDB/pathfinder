@@ -1,7 +1,5 @@
 """Tests for vocab_utils shared vocabulary matching functions."""
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.domain.parameters.vocab_utils import (

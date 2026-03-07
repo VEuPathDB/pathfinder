@@ -4,8 +4,6 @@ Verifies parameter names match VEuPathDB WDK step analysis plugins
 (``stepAnalysisPlugins.xml`` / ``GoEnrichmentPlugin.java``).
 """
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.services.experiment.enrichment import (

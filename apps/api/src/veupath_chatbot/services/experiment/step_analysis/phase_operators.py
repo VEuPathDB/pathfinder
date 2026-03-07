@@ -1,7 +1,5 @@
 """Phase 2: Operator comparison -- try all operators at each combine node."""
 
-from __future__ import annotations
-
 import asyncio
 
 from veupath_chatbot.domain.strategy.ops import CombineOp
@@ -11,7 +9,7 @@ from veupath_chatbot.services.experiment.helpers import ProgressCallback
 from veupath_chatbot.services.experiment.step_analysis._evaluation import (
     _evaluate_tree_against_controls,
     _extract_eval_counts,
-    _f1,
+    _f1_from_counts,
 )
 from veupath_chatbot.services.experiment.step_analysis._tree_utils import (
     _build_subtree_with_operator,
@@ -113,7 +111,7 @@ async def compare_operators(
                 total_results=counts.total_results,
                 recall=recall,
                 false_positive_rate=fpr,
-                f1_score=_f1(recall, fpr, counts.neg_total),
+                f1_score=_f1_from_counts(counts),
             )
 
         op_tasks = [_try_operator(op) for op in COMPARISON_OPERATORS]

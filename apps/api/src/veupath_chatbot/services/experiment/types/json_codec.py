@@ -10,8 +10,6 @@ Float rounding (default 4 decimal places) can be overridden per-field::
     p_value: float = field(metadata={"round": None})  # skip rounding
 """
 
-from __future__ import annotations
-
 import dataclasses
 import functools
 import types

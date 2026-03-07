@@ -4,8 +4,6 @@ These models make the plan contract explicit in OpenAPI instead of using
 `dict[str, Any]`, which is a major source of drift.
 """
 
-from __future__ import annotations
-
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -69,8 +67,8 @@ class PlanNode(BasePlanNode):
     searchName: str
     parameters: JSONObject = Field(default_factory=dict)
 
-    primaryInput: PlanNode | None = Field(default=None)
-    secondaryInput: PlanNode | None = Field(default=None)
+    primaryInput: "PlanNode | None" = Field(default=None)
+    secondaryInput: "PlanNode | None" = Field(default=None)
 
     # Required iff secondaryInput present
     operator: str | None = None
@@ -79,7 +77,7 @@ class PlanNode(BasePlanNode):
     model_config = {"extra": "allow"}
 
     @model_validator(mode="after")
-    def _validate_structure(self) -> PlanNode:
+    def _validate_structure(self) -> "PlanNode":
         # secondary requires primary
         if self.secondaryInput is not None and self.primaryInput is None:
             raise ValueError("secondaryInput requires primaryInput")

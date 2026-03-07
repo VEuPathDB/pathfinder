@@ -1,19 +1,17 @@
 """Plan normalization endpoints (frontend-consumer alignment)."""
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 
 from fastapi import APIRouter
 
-from veupath_chatbot.integrations.veupathdb.client import (
-    encode_context_param_values_for_wdk,
-)
-from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.platform.errors import WDKError
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.strategies.plan_normalize import (
     canonicalize_plan_parameters,
+)
+from veupath_chatbot.services.wdk import (
+    encode_context_param_values_for_wdk,
+    get_strategy_api,
 )
 from veupath_chatbot.transport.http.schemas import (
     PlanNormalizeRequest,

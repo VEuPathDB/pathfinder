@@ -1,38 +1,22 @@
 """Tree traversal and manipulation helpers for step analysis."""
 
-from __future__ import annotations
-
 import copy
 
+from veupath_chatbot.domain.strategy.tree import (
+    collect_dict_combine_nodes,
+    collect_dict_leaves,
+)
 from veupath_chatbot.platform.types import JSONObject
 
 
 def _collect_leaves(tree: JSONObject) -> list[JSONObject]:
     """Return all leaf (search) nodes from the tree."""
-    leaves: list[JSONObject] = []
-    pi = tree.get("primaryInput")
-    si = tree.get("secondaryInput")
-    if not isinstance(pi, dict) and not isinstance(si, dict):
-        leaves.append(tree)
-    if isinstance(pi, dict):
-        leaves.extend(_collect_leaves(pi))
-    if isinstance(si, dict):
-        leaves.extend(_collect_leaves(si))
-    return leaves
+    return collect_dict_leaves(tree)
 
 
 def _collect_combine_nodes(tree: JSONObject) -> list[JSONObject]:
     """Return all combine (binary) nodes from the tree."""
-    nodes: list[JSONObject] = []
-    pi = tree.get("primaryInput")
-    si = tree.get("secondaryInput")
-    if isinstance(pi, dict) and isinstance(si, dict):
-        nodes.append(tree)
-    if isinstance(pi, dict):
-        nodes.extend(_collect_combine_nodes(pi))
-    if isinstance(si, dict):
-        nodes.extend(_collect_combine_nodes(si))
-    return nodes
+    return collect_dict_combine_nodes(tree)
 
 
 def _node_id(node: JSONObject) -> str:

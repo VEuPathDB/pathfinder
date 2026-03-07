@@ -1,7 +1,5 @@
 """Tests for domain/parameters/_decode_values.py."""
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.domain.parameters._decode_values import (

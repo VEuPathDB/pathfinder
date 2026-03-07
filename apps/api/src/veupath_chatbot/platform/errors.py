@@ -65,7 +65,8 @@ class AppError(Exception):
         self.status = status
         self.detail = detail
         self.errors = errors
-        super().__init__(title)
+        msg = f"{title}: {detail}" if detail else title
+        super().__init__(msg)
 
 
 class InternalError(AppError):
@@ -118,18 +119,6 @@ class ForbiddenError(AppError):
         detail: str | None = None,
     ) -> None:
         super().__init__(code=code, title=title, status=403, detail=detail)
-
-
-class RateLimitedError(AppError):
-    """Rate limited error."""
-
-    def __init__(
-        self,
-        code: ErrorCode = ErrorCode.RATE_LIMITED,
-        title: str = "Rate limit exceeded",
-        detail: str | None = None,
-    ) -> None:
-        super().__init__(code=code, title=title, status=429, detail=detail)
 
 
 class ValidationError(AppError):

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import hashlib
 import json
 import uuid
@@ -119,25 +117,15 @@ class QdrantStore:
 
             info = await client.get_collection(collection_name=name)
             # Validate vector size to prevent silent corruption.
+            # PathFinder uses simple dense vectors, so `vectors` is always VectorParams.
             current = info.config.params.vectors
-            # `current` can be either VectorParams or a dict of named vectors.
-            if current is not None:
-                if hasattr(current, "size"):
-                    size = int(current.size)
-                    if size != int(vector_size):
-                        raise InternalError(
-                            title="Vector store misconfigured",
-                            detail=f"Qdrant collection {name} has vector size {size}, expected {vector_size}",
-                        )
-                elif isinstance(current, dict) and current:
-                    any_vec = next(iter(current.values()))
-                    if hasattr(any_vec, "size"):
-                        size = int(any_vec.size)
-                        if size != int(vector_size):
-                            raise InternalError(
-                                title="Vector store misconfigured",
-                                detail=f"Qdrant collection {name} has vector size {size}, expected {vector_size}",
-                            )
+            if current is not None and hasattr(current, "size"):
+                size = int(current.size)
+                if size != int(vector_size):
+                    raise InternalError(
+                        title="Vector store misconfigured",
+                        detail=f"Qdrant collection {name} has vector size {size}, expected {vector_size}",
+                    )
 
     async def upsert(
         self,
@@ -205,92 +193,15 @@ class QdrantStore:
         if not res:
             return None
         p = res[0]
-        # Convert vector to JSON-compatible format
-        vector_value: JSONValue
-        if p.vector is None:
-            vector_value = None
-        elif isinstance(p.vector, list):
-            # Convert to list[float] then to JSONValue (list[JsonValue])
-            vector_list: list[JSONValue] = []
-            for v in p.vector:
-                if isinstance(v, (int, float)):
-                    vector_list.append(float(v))
-                elif isinstance(v, list):
-                    # Nested list (multi-vector)
-                    nested: list[JSONValue] = [
-                        float(x) if isinstance(x, (int, float)) else x for x in v
-                    ]
-                    vector_list.append(nested)
-                else:
-                    # Keep as-is for other types
-                    vector_list.append(v)
-            vector_value = vector_list
-        elif isinstance(p.vector, dict):
-            # Handle named vectors or sparse vectors - convert to dict[str, JSONValue]
-            vector_dict: dict[str, JSONValue] = {}
-            for k, vec_val in p.vector.items():
-                key_str = str(k)
-                if isinstance(vec_val, list):
-                    # Handle list[float] or list[list[float]]
-                    if vec_val and isinstance(vec_val[0], list):
-                        # Nested list
-                        nested_list: list[JSONValue] = []
-                        for nested_item in vec_val:
-                            if isinstance(nested_item, list):
-                                # Convert nested list to list[JSONValue]
-                                nested_float_list: list[JSONValue] = []
-                                for x in nested_item:
-                                    if isinstance(x, (int, float)):
-                                        nested_float_list.append(float(x))
-                                    else:
-                                        nested_float_list.append(x)
-                                nested_list.append(nested_float_list)
-                            else:
-                                nested_list.append(
-                                    float(nested_item)
-                                    if isinstance(nested_item, (int, float))
-                                    else nested_item
-                                )
-                        vector_dict[key_str] = nested_list
-                    else:
-                        # Simple list[float] - convert to list[JSONValue]
-                        # In this branch, vec_val[0] is not a list, so elements should be scalars
-                        float_list: list[JSONValue] = []
-                        for item in vec_val:
-                            # Handle each item - could be scalar or unexpected nested list
-                            if isinstance(item, list):
-                                # Unexpected nested list - convert recursively
-                                nested_converted: list[JSONValue] = []
-                                for sub_item in item:
-                                    if isinstance(sub_item, (int, float)):
-                                        nested_converted.append(float(sub_item))
-                                    else:
-                                        nested_converted.append(sub_item)
-                                float_list.append(nested_converted)
-                            elif isinstance(item, (int, float)):
-                                float_list.append(float(item))
-                            else:
-                                float_list.append(item)
-                        vector_dict[key_str] = float_list
-                elif isinstance(vec_val, (int, float)):
-                    vector_dict[key_str] = float(vec_val)
-                else:
-                    # Handle SparseVector or other types - convert to dict representation
-                    if hasattr(vec_val, "__dict__"):
-                        vector_dict[key_str] = {
-                            str(attr_k): attr_v
-                            for attr_k, attr_v in vec_val.__dict__.items()
-                        }
-                    else:
-                        vector_dict[key_str] = str(vec_val)
-            vector_value = vector_dict
-        else:
-            # Fallback: convert to string representation
-            vector_value = str(p.vector)
+        # PathFinder uses simple dense vectors (OpenAI embeddings).
+        # p.vector is either None or list[float].
+        vector: list[float] | None = None
+        if isinstance(p.vector, list):
+            vector = [float(v) for v in p.vector]
         return {
             "id": str(p.id),
             "payload": p.payload or {},
-            "vector": vector_value,
+            "vector": vector,
         }
 
     async def search(

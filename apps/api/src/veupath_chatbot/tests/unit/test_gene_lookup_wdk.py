@@ -1,7 +1,5 @@
 """Tests for services.gene_lookup.wdk -- WDK gene search and ID resolution."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from veupath_chatbot.services.gene_lookup.wdk import (

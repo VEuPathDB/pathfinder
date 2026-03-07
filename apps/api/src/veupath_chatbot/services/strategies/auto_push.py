@@ -10,8 +10,6 @@ request's DB session.  It creates its own session to avoid the
 when a fire-and-forget task shares a request-scoped connection.
 """
 
-from __future__ import annotations
-
 import asyncio
 from uuid import UUID
 
@@ -21,6 +19,7 @@ from veupath_chatbot.persistence.repositories.stream import StreamRepository
 from veupath_chatbot.persistence.session import async_session_factory
 from veupath_chatbot.platform.errors import WDKError
 from veupath_chatbot.platform.logging import get_logger
+from veupath_chatbot.services.catalog.searches import make_record_type_resolver
 from veupath_chatbot.services.strategies.plan_validation import validate_plan_or_raise
 
 logger = get_logger(__name__)
@@ -91,8 +90,11 @@ async def try_auto_push_to_wdk(
 
             strategy_ast = validate_plan_or_raise(plan)
             api = get_strategy_api(site_id)
+            resolver = await make_record_type_resolver(site_id)
 
-            result = await compile_strategy(strategy_ast, api, site_id=site_id)
+            result = await compile_strategy(
+                strategy_ast, api, site_id=site_id, resolve_search_record_type=resolver
+            )
 
             await api.update_strategy(
                 strategy_id=projection.wdk_strategy_id,

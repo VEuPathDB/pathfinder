@@ -17,8 +17,6 @@ Skip with:
     pytest -m "not live_wdk"
 """
 
-from __future__ import annotations
-
 from collections.abc import AsyncGenerator
 from typing import cast
 

@@ -4,8 +4,6 @@ Provides :class:`GeneToolsMixin` with tools for searching and resolving
 gene records via VEuPathDB site-search.
 """
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from kani import AIParam, ai_function

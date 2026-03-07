@@ -1,7 +1,5 @@
 """Tests for research utility functions."""
 
-from __future__ import annotations
-
 import httpx
 import respx
 

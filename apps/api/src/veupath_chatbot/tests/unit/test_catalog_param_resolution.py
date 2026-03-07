@@ -1,6 +1,6 @@
 """Unit tests for services/catalog/param_resolution.py.
 
-Covers _extract_param_names(), _filter_context_values(), _unwrap_search_data(),
+Covers _extract_param_names(), _filter_context_values(), unwrap_search_data(),
 get_search_parameters(), get_search_parameters_tool(),
 expand_search_details_with_params(), and _get_search_details_with_portal_fallback().
 """
@@ -10,12 +10,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from veupath_chatbot.domain.parameters.specs import unwrap_search_data
 from veupath_chatbot.platform.errors import ErrorCode, ValidationError, WDKError
 from veupath_chatbot.services.catalog.param_resolution import (
     _extract_param_names,
     _filter_context_values,
     _get_search_details_with_portal_fallback,
-    _unwrap_search_data,
     expand_search_details_with_params,
     get_search_parameters,
     get_search_parameters_tool,
@@ -201,33 +201,33 @@ class TestFilterContextValues:
 
 
 # ---------------------------------------------------------------------------
-# _unwrap_search_data
+# unwrap_search_data
 # ---------------------------------------------------------------------------
 
 
 class TestUnwrapSearchData:
-    """Test the _unwrap_search_data() helper."""
+    """Test the unwrap_search_data() helper."""
 
     def test_unwraps_search_data_key(self) -> None:
         details: dict[str, Any] = {
             "searchData": {"parameters": [{"name": "organism"}]},
             "other": "stuff",
         }
-        result = _unwrap_search_data(details)
+        result = unwrap_search_data(details)
         assert result == {"parameters": [{"name": "organism"}]}
 
     def test_returns_details_when_no_search_data(self) -> None:
         details: dict[str, Any] = {"parameters": [{"name": "organism"}]}
-        result = _unwrap_search_data(details)
+        result = unwrap_search_data(details)
         assert result is details
 
     def test_returns_none_for_non_dict(self) -> None:
-        assert _unwrap_search_data(None) is None
-        assert _unwrap_search_data("not_a_dict") is None
+        assert unwrap_search_data(None) is None
+        assert unwrap_search_data("not_a_dict") is None
 
     def test_returns_details_when_search_data_not_dict(self) -> None:
         details: dict[str, Any] = {"searchData": "not_a_dict", "parameters": []}
-        result = _unwrap_search_data(details)
+        result = unwrap_search_data(details)
         assert result is details
 
 
@@ -252,7 +252,7 @@ class TestGetSearchParameters:
                         "name": "organism",
                         "displayName": "Organism",
                         "type": "single-pick-vocabulary",
-                        "isRequired": True,
+                        "allowEmptyValue": False,
                         "isVisible": True,
                         "help": "Choose an organism",
                     },
@@ -373,7 +373,7 @@ class TestGetSearchParameters:
         assert len(params) == 1
 
     async def test_parameter_required_from_allow_empty(self) -> None:
-        """When isRequired is absent, required = not allowEmptyValue."""
+        """required = not allowEmptyValue."""
         discovery = _mock_discovery(
             record_types=[{"urlSegment": "gene"}],
             search_details={

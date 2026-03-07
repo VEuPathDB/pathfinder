@@ -1,7 +1,5 @@
 """Prompt loading helpers for the AI agent."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 # All .md prompt files live alongside this module.

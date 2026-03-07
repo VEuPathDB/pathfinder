@@ -1,7 +1,5 @@
 """Extended tests for experiment types: serialization round-trips, edge cases."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 import pytest

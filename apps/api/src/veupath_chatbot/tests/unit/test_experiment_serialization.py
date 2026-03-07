@@ -1,7 +1,5 @@
 """Unit tests for experiment serialization and deserialization roundtrips."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment._deserialize import experiment_from_json
 from veupath_chatbot.services.experiment.types import (
     ConfusionMatrix,

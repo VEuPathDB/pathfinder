@@ -1,7 +1,5 @@
 """Unit tests for strategy combine operations."""
 
-from __future__ import annotations
-
 from typing import Literal, cast
 
 import pytest
@@ -13,7 +11,6 @@ from veupath_chatbot.domain.strategy.ops import (
     OP_LABELS,
     ColocationParams,
     CombineOp,
-    get_op_label,
     get_wdk_operator,
     parse_op,
 )
@@ -85,22 +82,6 @@ class TestGetWdkOperator:
     def test_colocate_raises(self) -> None:
         with pytest.raises(ValueError, match="COLOCATE"):
             get_wdk_operator(CombineOp.COLOCATE)
-
-
-class TestGetOpLabel:
-    """Tests for get_op_label()."""
-
-    def test_known_ops_have_labels(self) -> None:
-        for op in CombineOp:
-            label = get_op_label(op)
-            assert isinstance(label, str)
-            assert len(label) > 0
-
-    def test_intersect_label(self) -> None:
-        assert "AND" in get_op_label(CombineOp.INTERSECT)
-
-    def test_union_label(self) -> None:
-        assert "OR" in get_op_label(CombineOp.UNION)
 
 
 class TestColocationParamsValidate:

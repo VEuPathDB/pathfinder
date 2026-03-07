@@ -5,8 +5,6 @@ corner cases, trial generation, sampler creation, callback payloads, and
 the Pareto frontier algorithm in depth.  All WDK calls are mocked.
 """
 
-from __future__ import annotations
-
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 

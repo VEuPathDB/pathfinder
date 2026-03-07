@@ -1,7 +1,5 @@
 """Operations endpoints: subscribe via Redis Streams, discover active operations."""
 
-from __future__ import annotations
-
 import json
 
 from fastapi import APIRouter, Query

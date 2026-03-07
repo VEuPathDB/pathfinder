@@ -1,7 +1,5 @@
 """Core type aliases and Literal types for the Experiment Lab."""
 
-from __future__ import annotations
-
 from typing import Literal
 
 EnrichmentAnalysisType = Literal[

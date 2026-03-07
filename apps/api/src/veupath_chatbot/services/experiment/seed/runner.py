@@ -4,8 +4,6 @@ Creates real WDK strategies (visible in the sidebar) and curated control sets
 (available in the Experiments tab) across multiple VEuPathDB sites.
 """
 
-from __future__ import annotations
-
 import time
 from collections.abc import AsyncIterator
 from typing import Any

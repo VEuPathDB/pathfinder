@@ -1,7 +1,5 @@
 """Unit tests for the in-memory experiment store."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, patch
 
 from veupath_chatbot.services.experiment.store import ExperimentStore
@@ -149,9 +147,7 @@ class TestAsyncGet:
         store = ExperimentStore()
         db_exp = _make_experiment("db-only")
 
-        with patch.object(
-            ExperimentStore, "_load_fn", new_callable=AsyncMock, return_value=db_exp
-        ):
+        with patch.object(store, "_load", new_callable=AsyncMock, return_value=db_exp):
             result = await store.aget("db-only")
 
         assert result is db_exp
@@ -160,9 +156,7 @@ class TestAsyncGet:
     async def test_returns_none_when_not_in_cache_or_db(self) -> None:
         store = ExperimentStore()
 
-        with patch.object(
-            ExperimentStore, "_load_fn", new_callable=AsyncMock, return_value=None
-        ):
+        with patch.object(store, "_load", new_callable=AsyncMock, return_value=None):
             result = await store.aget("ghost")
 
         assert result is None
@@ -173,9 +167,7 @@ class TestAsyncDelete:
         store = ExperimentStore()
         store.save(_make_experiment("doomed"))
 
-        with patch.object(
-            ExperimentStore, "_delete_fn", new_callable=AsyncMock
-        ) as mock_del:
+        with patch.object(store, "_delete_from_db", new_callable=AsyncMock) as mock_del:
             result = await store.adelete("doomed")
 
         assert result is True

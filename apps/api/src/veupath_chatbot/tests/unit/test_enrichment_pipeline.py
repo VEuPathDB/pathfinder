@@ -10,8 +10,6 @@ Focuses on areas the existing test_enrichment.py does NOT cover:
 - upsert_enrichment_result mutation ordering
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.enrichment import (
     _encode_vocab_value,
     _extract_analysis_rows,

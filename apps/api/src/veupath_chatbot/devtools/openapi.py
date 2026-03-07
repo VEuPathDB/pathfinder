@@ -3,8 +3,6 @@
 This is intentionally NOT run by the API at runtime. It writes repo files.
 """
 
-from __future__ import annotations
-
 import argparse
 from pathlib import Path
 

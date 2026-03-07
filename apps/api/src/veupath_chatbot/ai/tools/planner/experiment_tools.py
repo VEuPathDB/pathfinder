@@ -3,8 +3,6 @@
 Provides :class:`ExperimentToolsMixin` with the ``run_control_tests`` tool.
 """
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from kani import AIParam, ai_function

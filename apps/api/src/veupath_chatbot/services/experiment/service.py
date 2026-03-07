@@ -8,8 +8,6 @@ intermediate state to the store.  The public ``run_experiment()`` function
 orchestrates phase sequencing, lifecycle management, and error handling.
 """
 
-from __future__ import annotations
-
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -19,10 +17,7 @@ from uuid import uuid4
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.control_tests import run_positive_negative_controls
-from veupath_chatbot.services.experiment.cross_validation import (
-    run_cross_validation,
-    run_cross_validation_tree,
-)
+from veupath_chatbot.services.experiment.cross_validation import run_cross_validation
 from veupath_chatbot.services.experiment.enrichment import upsert_enrichment_result
 from veupath_chatbot.services.experiment.helpers import (
     ProgressCallback,
@@ -116,12 +111,7 @@ async def _phase_evaluate(
     """
     await emit("evaluating", message="Running control tests...")
 
-    mode = config.mode or "single"
-    is_tree_mode = mode in ("multi-step", "import") and isinstance(
-        config.step_tree, dict
-    )
-
-    if is_tree_mode:
+    if config.is_tree_mode:
         tree_dict: JSONObject = cast(JSONObject, config.step_tree)
         cvf: ControlValueFormat = config.controls_value_format
 
@@ -471,35 +461,21 @@ async def _phase_cross_validate(
             cvTotalFolds=total,
         )
 
-    if final_tree is not None:
-        experiment.cross_validation = await run_cross_validation_tree(
-            site_id=config.site_id,
-            record_type=config.record_type,
-            tree=final_tree,
-            controls_search_name=config.controls_search_name,
-            controls_param_name=config.controls_param_name,
-            controls_value_format=cvf,
-            positive_controls=config.positive_controls,
-            negative_controls=config.negative_controls,
-            k=config.k_folds,
-            full_metrics=metrics,
-            progress_callback=_cv_progress,
-        )
-    else:
-        experiment.cross_validation = await run_cross_validation(
-            site_id=config.site_id,
-            record_type=config.record_type,
-            search_name=config.search_name,
-            parameters=config.parameters,
-            controls_search_name=config.controls_search_name,
-            controls_param_name=config.controls_param_name,
-            positive_controls=config.positive_controls,
-            negative_controls=config.negative_controls,
-            controls_value_format=config.controls_value_format,
-            k=config.k_folds,
-            full_metrics=metrics,
-            progress_callback=_cv_progress,
-        )
+    experiment.cross_validation = await run_cross_validation(
+        site_id=config.site_id,
+        record_type=config.record_type,
+        controls_search_name=config.controls_search_name,
+        controls_param_name=config.controls_param_name,
+        controls_value_format=cvf,
+        positive_controls=config.positive_controls,
+        negative_controls=config.negative_controls,
+        tree=final_tree,
+        search_name=config.search_name if final_tree is None else None,
+        parameters=config.parameters if final_tree is None else None,
+        k=config.k_folds,
+        full_metrics=metrics,
+        progress_callback=_cv_progress,
+    )
     store.save(experiment)
 
 
@@ -575,22 +551,17 @@ async def run_experiment(
     try:
         await _emit("started", message="Starting evaluation...")
 
-        mode = config.mode or "single"
-        is_tree_mode = mode in ("multi-step", "import") and isinstance(
-            config.step_tree, dict
-        )
-
         # Phase 1: Control-test evaluation + metrics + gene enrichment
         result, metrics = await _phase_evaluate(config, experiment, _emit, store)
 
         tree_dict: JSONObject = (
-            cast(JSONObject, config.step_tree) if is_tree_mode else {}
+            cast(JSONObject, config.step_tree) if config.is_tree_mode else {}
         )
         cvf: ControlValueFormat = config.controls_value_format
-        final_tree: JSONObject | None = tree_dict if is_tree_mode else None
+        final_tree: JSONObject | None = tree_dict if config.is_tree_mode else None
 
         # Phase 2: Step analysis (multi-step only)
-        if is_tree_mode and config.enable_step_analysis:
+        if config.is_tree_mode and config.enable_step_analysis:
             await _phase_step_analysis(
                 config,
                 experiment,
@@ -621,7 +592,7 @@ async def run_experiment(
 
         # Phase 6: Parameter optimization (single-step only)
         if (
-            not is_tree_mode
+            not config.is_tree_mode
             and config.optimization_specs
             and len(config.optimization_specs) > 0
         ):
@@ -635,7 +606,7 @@ async def run_experiment(
 
         # Phase 7: Tree-knob optimization (multi-step only)
         has_tree_knobs = bool(config.threshold_knobs or config.operator_knobs)
-        if is_tree_mode and has_tree_knobs and final_tree is not None:
+        if config.is_tree_mode and has_tree_knobs and final_tree is not None:
             await _phase_optimize_tree_knobs(
                 config, experiment, _emit, store, tree_dict, cvf
             )

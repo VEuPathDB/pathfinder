@@ -1,7 +1,5 @@
 """Tests for services.gene_lookup.scoring -- gene relevance scoring."""
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.services.gene_lookup.scoring import (

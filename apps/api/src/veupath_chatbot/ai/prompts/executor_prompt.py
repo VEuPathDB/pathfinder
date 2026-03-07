@@ -1,7 +1,5 @@
 """Prompt builders for the main agent."""
 
-from __future__ import annotations
-
 import json
 
 from veupath_chatbot.ai.prompts.loader import load_system_prompt

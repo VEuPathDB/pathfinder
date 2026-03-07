@@ -1,7 +1,5 @@
 """Unit tests for step_analysis.phase_sensitivity -- pure helper functions."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.step_analysis.phase_sensitivity import (
     _constrain_sweep_range,
     _find_bound_partner,

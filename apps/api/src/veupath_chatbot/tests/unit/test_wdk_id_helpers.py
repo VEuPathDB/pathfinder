@@ -1,7 +1,5 @@
 """Tests for extract_wdk_id and coerce_step_id helpers."""
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.services.experiment.helpers import (

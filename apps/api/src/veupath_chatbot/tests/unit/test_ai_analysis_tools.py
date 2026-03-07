@@ -5,8 +5,6 @@ the _get_experiment method via patching rather than constructing a
 full agent.
 """
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, patch
 
 from veupath_chatbot.services.experiment.store import ExperimentStore
@@ -42,9 +40,7 @@ class TestGetExperiment:
 
         assert store.get("db-only") is None
 
-        with patch.object(
-            ExperimentStore, "_load_fn", new_callable=AsyncMock, return_value=db_exp
-        ):
+        with patch.object(store, "_load", new_callable=AsyncMock, return_value=db_exp):
             result = await store.aget("db-only")
 
         assert result is db_exp

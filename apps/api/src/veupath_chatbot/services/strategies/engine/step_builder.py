@@ -1,7 +1,5 @@
 """Step creation, parameter assembly, and vocabulary helpers."""
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.parameters.vocab_utils import (
     flatten_vocab,
     normalize_vocab_key,

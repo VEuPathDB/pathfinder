@@ -1,7 +1,5 @@
 """Unit tests for WDK step counts caching."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -62,12 +60,10 @@ async def test_all_none_results_are_cached():
             new_callable=AsyncMock,
         ) as mock_compile,
     ):
+        from veupath_chatbot.domain.strategy.ast import StepTreeNode
         from veupath_chatbot.domain.strategy.compile import (
             CompilationResult,
             CompiledStep,
-        )
-        from veupath_chatbot.integrations.veupathdb.strategy_api.helpers import (
-            StepTreeNode,
         )
 
         mock_compile.return_value = CompilationResult(

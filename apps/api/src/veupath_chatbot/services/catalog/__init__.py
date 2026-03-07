@@ -1,17 +1,21 @@
-"""Catalog services: sites, record types, searches, parameter metadata.
+"""Catalog services: sites, record types, searches, parameter metadata, RAG.
 
 Single source of truth for catalog/discovery logic used by both:
 - HTTP transport (`transport/http/routers/sites.py`)
-- AI tools (`ai/tools/catalog_tools.py`)
+- AI tools (`ai/tools/catalog_tools.py`, `ai/tools/catalog_rag_tools.py`, etc.)
 """
 
 from veupath_chatbot.services.catalog.parameters import (
     expand_search_details_with_params,
+    get_refreshed_dependent_params,
     get_search_parameters,
     get_search_parameters_tool,
     validate_search_params,
 )
+from veupath_chatbot.services.catalog.rag_search import RagSearchService
 from veupath_chatbot.services.catalog.searches import (
+    get_raw_record_types,
+    get_raw_searches,
     list_searches,
     search_for_searches,
 )
@@ -21,7 +25,11 @@ from veupath_chatbot.services.catalog.sites import (
 )
 
 __all__ = [
+    "RagSearchService",
     "expand_search_details_with_params",
+    "get_refreshed_dependent_params",
+    "get_raw_record_types",
+    "get_raw_searches",
     "get_record_types",
     "get_search_parameters",
     "get_search_parameters_tool",

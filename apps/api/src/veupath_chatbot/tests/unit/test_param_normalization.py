@@ -1,7 +1,5 @@
 """Tests for parameter normalization in strategy compilation."""
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 from typing import cast

@@ -4,8 +4,6 @@ Goal: keep a single, shared definition for how we derive the persisted `steps`
 list (StepData dicts) from various inputs (AST, graph snapshots, etc.).
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.strategy.ast import StrategyAST, from_dict
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONObject

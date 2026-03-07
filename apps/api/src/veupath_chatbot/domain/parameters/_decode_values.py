@@ -1,7 +1,5 @@
 """Shared helpers for decoding parameter values."""
 
-from __future__ import annotations
-
 import csv
 from typing import cast
 

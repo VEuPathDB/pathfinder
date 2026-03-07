@@ -1,10 +1,6 @@
-from __future__ import annotations
-
-from veupath_chatbot.integrations.vectorstore.ingest.utils import extract_search_name
-from veupath_chatbot.integrations.vectorstore.ingest.wdk_transform import (
-    _unwrap_search_data,
-)
+from veupath_chatbot.domain.parameters.specs import unwrap_search_data
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
+from veupath_chatbot.integrations.veupathdb.param_utils import wdk_entity_name
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONObject
 
@@ -31,7 +27,7 @@ async def fetch_record_types_and_searches(
         if isinstance(rt, str):
             rt_name = rt
         elif isinstance(rt, dict):
-            rt_name = extract_search_name(rt)
+            rt_name = wdk_entity_name(rt)
             searches_raw = rt.get("searches")
             searches = searches_raw if isinstance(searches_raw, list) else []
         else:
@@ -85,8 +81,8 @@ async def fetch_search_details(
             details = await client.get_search_details(
                 rt_name, search_name, expand_params=True
             )
-            details_unwrapped = _unwrap_search_data(
-                details if isinstance(details, dict) else {}
+            details_unwrapped = (
+                unwrap_search_data(details if isinstance(details, dict) else {}) or {}
             )
     except Exception as exc:
         details_error = str(exc)

@@ -1,7 +1,5 @@
 """Tests for shared statistical utilities."""
 
-from __future__ import annotations
-
 import math
 
 from veupath_chatbot.services.experiment.stats import hypergeometric_log_sf

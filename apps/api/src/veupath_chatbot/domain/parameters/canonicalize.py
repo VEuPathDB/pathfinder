@@ -7,17 +7,21 @@ This module is the counterpart to ``domain/parameters/normalize``:
   multi-pick values become ``list[str]``, scalars become strings,
   range values become ``{min, max}``, filter values become dict/list.
 
-Used at API boundaries (plan normalization, validation) so the frontend
-can consume stable rules without re-implementing coercion.
-"""
+Delegates validation and decoding to the shared dispatch chain in
+``_value_helpers._process_value()``, then applies canonicalizer-specific
+post-processing (FAKE_ALL_SENTINEL rejection, leaf enforcement).
 
-from __future__ import annotations
+Used at API boundaries (plan normalization, validation) so the frontend
+can consume stable shapes without re-implementing coercion.
+"""
 
 from dataclasses import dataclass
 from typing import cast
 
-from veupath_chatbot.domain.parameters._decode_values import decode_values
-from veupath_chatbot.domain.parameters._value_helpers import ParameterValueMixin
+from veupath_chatbot.domain.parameters._value_helpers import (
+    ParameterValueMixin,
+    ParamKind,
+)
 from veupath_chatbot.domain.parameters.specs import ParamSpecNormalized
 from veupath_chatbot.domain.parameters.vocab_utils import (
     collect_leaf_terms,
@@ -59,6 +63,7 @@ class ParameterCanonicalizer(ParameterValueMixin):
     def _canonicalize_value(
         self, spec: ParamSpecNormalized, value: JSONValue
     ) -> JSONValue:
+        # Reject FAKE_ALL_SENTINEL at top level
         if value == FAKE_ALL_SENTINEL:
             raise ValidationError(
                 title="Invalid parameter value",
@@ -66,85 +71,34 @@ class ParameterCanonicalizer(ParameterValueMixin):
                 errors=[{"param": spec.name, "value": value}],
             )
 
-        param_type = spec.param_type
-        if value is None:
-            return self._handle_empty(spec, value)
-
-        if param_type == "multi-pick-vocabulary":
-            values = [self._stringify(v) for v in decode_values(value, spec.name)]
-            if any(v == FAKE_ALL_SENTINEL for v in values):
-                raise ValidationError(
-                    title="Invalid parameter value",
-                    detail=f"Parameter '{spec.name}' does not accept '{FAKE_ALL_SENTINEL}'.",
-                    errors=[{"param": spec.name, "value": value}],
-                )
-            values = [self._match_vocab_value(spec, v) for v in values]
-            values = self._enforce_leaf_values(spec, values)
-            self._validate_multi_count(spec, values)
-            return cast(JSONValue, values)
-
-        if param_type == "single-pick-vocabulary":
-            decoded = decode_values(value, spec.name)
-            if len(decoded) > 1:
-                raise ValidationError(
-                    title="Invalid parameter value",
-                    detail=f"Parameter '{spec.name}' allows only one value.",
-                    errors=[{"param": spec.name, "value": value}],
-                )
-            selected = self._stringify(decoded[0]) if decoded else ""
-            if selected == FAKE_ALL_SENTINEL:
-                raise ValidationError(
-                    title="Invalid parameter value",
-                    detail=f"Parameter '{spec.name}' does not accept '{FAKE_ALL_SENTINEL}'.",
-                    errors=[{"param": spec.name, "value": value}],
-                )
-            if not selected:
-                self._validate_single_required(spec)
-                return ""
-            selected = self._match_vocab_value(spec, selected)
-            selected = self._enforce_leaf_value(spec, selected)
-            if not selected:
-                self._validate_single_required(spec)
-            return self._stringify(selected)
-
-        if param_type in {"number", "date", "timestamp", "string"}:
-            if isinstance(value, (list, dict, tuple, set)):
-                raise ValidationError(
-                    title="Invalid parameter value",
-                    detail=f"Parameter '{spec.name}' must be a scalar value.",
-                    errors=[{"param": spec.name, "value": value}],
-                )
-            return self._stringify(value)
-
-        if param_type in {"number-range", "date-range"}:
-            if isinstance(value, dict):
-                return value
-            if isinstance(value, (list, tuple)) and len(value) == 2:
-                return {"min": value[0], "max": value[1]}
+        # Reject sentinel inside list/tuple/set values before dispatch
+        if isinstance(value, (list, tuple, set)) and any(
+            v == FAKE_ALL_SENTINEL for v in value
+        ):
             raise ValidationError(
                 title="Invalid parameter value",
-                detail=f"Parameter '{spec.name}' must be a range.",
+                detail=f"Parameter '{spec.name}' does not accept '{FAKE_ALL_SENTINEL}'.",
                 errors=[{"param": spec.name, "value": value}],
             )
 
-        if param_type == "filter":
-            if isinstance(value, (dict, list)):
-                return value
-            return self._stringify(value)
+        # Use shared dispatch for common param-type routing
+        result = self._process_value(spec, value)
 
-        if param_type in {"input-dataset"}:
-            if isinstance(value, list):
-                if len(value) != 1:
-                    raise ValidationError(
-                        title="Invalid parameter value",
-                        detail=f"Parameter '{spec.name}' must be a single value.",
-                        errors=[{"param": spec.name, "value": value}],
-                    )
-                return self._stringify(value[0])
-            return self._stringify(value)
+        # Canonicalizer-specific post-processing: leaf enforcement
+        if result.kind is ParamKind.MULTI_PICK and isinstance(result.value, list):
+            values = cast(list[str], result.value)
+            return cast(JSONValue, self._enforce_leaf_values(spec, values))
 
-        # Unknown param type: preserve value as-is (best-effort).
-        return value
+        if (
+            result.kind is ParamKind.SINGLE_PICK
+            and isinstance(result.value, str)
+            and result.value
+        ):
+            return self._enforce_leaf_value(spec, result.value)
+
+        return result.value
+
+    # -- leaf enforcement (canonicalizer-only) --------------------------------
 
     def _enforce_leaf_values(
         self, spec: ParamSpecNormalized, values: list[str]

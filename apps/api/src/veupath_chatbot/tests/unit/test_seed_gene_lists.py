@@ -1,7 +1,5 @@
 """Extended tests for seed gene lists — cross-list integrity and edge cases."""
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.services.experiment.seed.definitions import SEEDS

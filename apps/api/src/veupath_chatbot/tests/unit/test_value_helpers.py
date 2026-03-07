@@ -1,10 +1,9 @@
 """Tests for domain/parameters/_value_helpers.py."""
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.domain.parameters._value_helpers import ParameterValueMixin
+from veupath_chatbot.domain.parameters.vocab_utils import match_vocab_value
 from veupath_chatbot.platform.errors import ValidationError
 from veupath_chatbot.tests.fixtures.builders import make_param_spec
 
@@ -65,13 +64,35 @@ class TestHandleEmpty:
             self.m._handle_empty(spec, None)
         assert "requires a value" in (exc_info.value.detail or "")
 
-    def test_non_vocab_type_returns_value(self) -> None:
-        spec = make_param_spec(param_type="string", allow_empty=False)
-        assert self.m._handle_empty(spec, "some_val") == "some_val"
-
-    def test_non_vocab_type_returns_none(self) -> None:
+    def test_number_not_allow_empty_raises(self) -> None:
         spec = make_param_spec(param_type="number", allow_empty=False)
-        assert self.m._handle_empty(spec, None) is None
+        with pytest.raises(ValidationError) as exc_info:
+            self.m._handle_empty(spec, None)
+        assert "requires a value" in (exc_info.value.detail or "")
+
+    def test_string_not_allow_empty_raises(self) -> None:
+        spec = make_param_spec(param_type="string", allow_empty=False)
+        with pytest.raises(ValidationError) as exc_info:
+            self.m._handle_empty(spec, None)
+        assert "requires a value" in (exc_info.value.detail or "")
+
+    def test_date_not_allow_empty_raises(self) -> None:
+        spec = make_param_spec(param_type="date", allow_empty=False)
+        with pytest.raises(ValidationError) as exc_info:
+            self.m._handle_empty(spec, None)
+        assert "requires a value" in (exc_info.value.detail or "")
+
+    def test_number_range_not_allow_empty_raises(self) -> None:
+        spec = make_param_spec(param_type="number-range", allow_empty=False)
+        with pytest.raises(ValidationError) as exc_info:
+            self.m._handle_empty(spec, None)
+        assert "requires a value" in (exc_info.value.detail or "")
+
+    def test_filter_not_allow_empty_raises(self) -> None:
+        spec = make_param_spec(param_type="filter", allow_empty=False)
+        with pytest.raises(ValidationError) as exc_info:
+            self.m._handle_empty(spec, None)
+        assert "requires a value" in (exc_info.value.detail or "")
 
 
 class TestValidateMultiCount:
@@ -141,21 +162,43 @@ class TestValidateSingleRequired:
 
 
 class TestMatchVocabValue:
-    def setup_method(self) -> None:
-        self.m = Mixin()
-
     def test_with_list_vocab(self) -> None:
-        spec = make_param_spec(
-            vocabulary=[["val1", "Display 1"], ["val2", "Display 2"]]
+        assert (
+            match_vocab_value(
+                vocab=[["val1", "Display 1"], ["val2", "Display 2"]],
+                param_name="test_param",
+                value="Display 1",
+            )
+            == "val1"
         )
-        assert self.m._match_vocab_value(spec, "Display 1") == "val1"
 
     def test_no_vocab_passthrough(self) -> None:
-        spec = make_param_spec(vocabulary=None)
-        assert self.m._match_vocab_value(spec, "anything") == "anything"
+        assert (
+            match_vocab_value(vocab=None, param_name="test_param", value="anything")
+            == "anything"
+        )
+
+    def test_empty_string_vocab_value_matches(self) -> None:
+        """Vocabulary entries where the term value is '' should match correctly."""
+        result = match_vocab_value(
+            vocab=[["", "No selection"], ["yes", "Yes"]],
+            param_name="test_param",
+            value="No selection",
+        )
+        assert result == ""
+
+    def test_empty_string_vocab_value_direct_match(self) -> None:
+        """Matching the empty string directly against a vocab entry with term ''."""
+        result = match_vocab_value(
+            vocab=[["", "No selection"], ["yes", "Yes"]],
+            param_name="test_param",
+            value="",
+        )
+        assert result == ""
 
     def test_invalid_value_raises(self) -> None:
-        spec = make_param_spec(vocabulary=[["a", "A"]])
         with pytest.raises(ValidationError) as exc_info:
-            self.m._match_vocab_value(spec, "nonexistent")
+            match_vocab_value(
+                vocab=[["a", "A"]], param_name="test_param", value="nonexistent"
+            )
         assert "does not accept" in (exc_info.value.detail or "")

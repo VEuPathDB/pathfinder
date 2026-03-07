@@ -4,8 +4,6 @@ Defines the parameter specification, optimization config, trial result,
 and optimization result dataclasses, as well as type aliases for callbacks.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal

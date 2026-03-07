@@ -12,8 +12,6 @@ All WDK calls are mocked. These tests validate:
 - dataset creation path for input-dataset params
 """
 
-from __future__ import annotations
-
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 

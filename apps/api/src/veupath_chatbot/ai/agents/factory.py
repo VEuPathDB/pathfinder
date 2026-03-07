@@ -1,7 +1,5 @@
 """Factory helpers for constructing the agent and its engine."""
 
-from __future__ import annotations
-
 from typing import cast
 from uuid import UUID
 

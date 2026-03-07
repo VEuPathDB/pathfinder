@@ -1,7 +1,5 @@
 """Sites and record types catalog functions."""
 
-from __future__ import annotations
-
 from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
 from veupath_chatbot.integrations.veupathdb.factory import list_sites as list_wdk_sites
 from veupath_chatbot.integrations.veupathdb.param_utils import wdk_entity_name

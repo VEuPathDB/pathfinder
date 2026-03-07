@@ -4,7 +4,6 @@ All gene IDs are real VEuPathDB identifiers used as positive/negative controls
 in seeded experiments.
 """
 
-from __future__ import annotations
 
 # ---------------------------------------------------------------------------
 # Organisms

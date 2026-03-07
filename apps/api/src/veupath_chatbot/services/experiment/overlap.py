@@ -1,7 +1,5 @@
 """Gene set overlap analysis across experiments."""
 
-from __future__ import annotations
-
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.experiment.types import Experiment
 

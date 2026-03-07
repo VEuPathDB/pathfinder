@@ -6,8 +6,6 @@ This is a transport-layer adapter: it converts the HTTP-specific
 it depends on transport schemas.
 """
 
-from __future__ import annotations
-
 from typing import cast
 
 from veupath_chatbot.services.experiment.types import (

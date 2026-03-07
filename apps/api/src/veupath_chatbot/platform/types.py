@@ -1,6 +1,6 @@
 """Common type aliases for the codebase."""
 
-from __future__ import annotations
+from typing import Literal
 
 from pydantic import JsonValue
 
@@ -14,6 +14,17 @@ type JSONObject = dict[str, JSONValue]
 
 type JSONArray = list[JSONValue]
 """Type alias for JSON arrays."""
+
+# ── Model types ──────────────────────────────────────────────────────
+# Shared Literal types for LLM provider and reasoning effort.
+# Defined here (platform layer) so both AI and service layers can use
+# them without creating a circular dependency.
+
+ModelProvider = Literal["openai", "anthropic", "google"]
+"""Supported LLM provider identifiers."""
+
+ReasoningEffort = Literal["none", "low", "medium", "high"]
+"""Reasoning effort level for models that support it."""
 
 
 def as_json_object(value: JSONValue) -> JSONObject:

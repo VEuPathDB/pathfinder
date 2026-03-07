@@ -9,8 +9,6 @@ Run::
     pytest src/veupath_chatbot/tests/unit/test_wdk_fixture_shapes.py -v
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.tests.fixtures.wdk_responses import (
     record_types_expanded_response,
     record_types_response,

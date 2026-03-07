@@ -1,20 +1,19 @@
 """Catalog tool methods (RAG + WDK combined lookups)."""
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from kani import AIParam, ai_function
 
 from veupath_chatbot.ai.tools.catalog_rag_tools import CatalogRagTools
 from veupath_chatbot.ai.tools.catalog_tools import CatalogTools
+from veupath_chatbot.ai.tools.combined_result import combined_result
 from veupath_chatbot.ai.tools.example_plans_rag_tools import ExamplePlansRagTools
 from veupath_chatbot.ai.tools.query_validation import (
     record_type_query_error,
     search_query_error,
 )
-from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
-from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.catalog.rag_search import RagSearchService
 
 
 class CatalogToolsMixin:
@@ -32,35 +31,11 @@ class CatalogToolsMixin:
     catalog_rag_tools: CatalogRagTools
     example_plans_rag_tools: ExamplePlansRagTools
 
-    def _combined_result(
-        self,
-        *,
-        rag: JSONValue,
-        wdk: JSONValue,
-        rag_note: str | None = None,
-        wdk_note: str | None = None,
-    ) -> JSONObject:
-        """Standardize combined (rag + wdk) tool outputs.
-
-        This keeps the tool surface stable: callers always receive both data sources and can
-        decide which to trust based on availability/staleness.
-
-        :param rag: RAG context.
-        :param wdk: WDK context.
-        :param rag_note: RAG note (default: None).
-        :param wdk_note: WDK note (default: None).
-
-        """
-        return {
-            "rag": {"data": rag, "note": rag_note or ""},
-            "wdk": {"data": wdk, "note": wdk_note or ""},
-        }
-
     @ai_function()
     async def list_sites(self) -> JSONObject:
         """List all available VEuPathDB sites."""
         sites = await self.catalog_tools.list_sites()
-        return self._combined_result(
+        return combined_result(
             rag=[],
             wdk=sites,
             rag_note="No RAG source for sites list.",
@@ -82,7 +57,7 @@ class CatalogToolsMixin:
         q = (query or "").strip()
         err = record_type_query_error(q) if q else None
         if err is not None:
-            return self._combined_result(
+            return combined_result(
                 rag=[],
                 wdk=[],
                 rag_note=f"Rejected vague query: {err.get('message')}",
@@ -91,7 +66,7 @@ class CatalogToolsMixin:
 
         rag = await self.catalog_rag_tools.rag_get_record_types(q or None, limit)
         wdk = None if q else await self.catalog_tools.get_record_types(self.site_id)
-        return self._combined_result(
+        return combined_result(
             rag=rag,
             wdk=wdk,
             rag_note="Qdrant semantic retrieval (requires a specific multi-keyword query; results include score and are thresholded).",
@@ -114,7 +89,7 @@ class CatalogToolsMixin:
     ) -> JSONObject:
         """Get full record-type details from RAG (Qdrant payload)."""
         rag = await self.catalog_rag_tools.rag_get_record_type_details(record_type_id)
-        return self._combined_result(
+        return combined_result(
             rag=rag,
             wdk=None,
             rag_note="Qdrant record-type payload for a specific id (includes formats/attributes/tables).",
@@ -128,7 +103,7 @@ class CatalogToolsMixin:
     ) -> JSONObject:
         """List available searches for a record type on the current site (returns both RAG and live WDK)."""
         wdk = await self.catalog_tools.list_searches(self.site_id, record_type)
-        return self._combined_result(
+        return combined_result(
             rag=[],
             wdk=wdk,
             rag_note="Not applicable: Qdrant retrieval is query-driven; use search_for_searches(query, record_type=...) for RAG.",
@@ -148,7 +123,7 @@ class CatalogToolsMixin:
         wdk = await self.catalog_tools.get_search_parameters(
             self.site_id, record_type, search_name
         )
-        return self._combined_result(
+        return combined_result(
             rag=rag,
             wdk=wdk,
             rag_note="Qdrant cached search metadata (may be stale / incomplete if ingestion failed).",
@@ -172,7 +147,7 @@ class CatalogToolsMixin:
         """Find searches matching a query term (returns both RAG and live WDK)."""
         err = search_query_error(query)
         if err is not None:
-            return self._combined_result(
+            return combined_result(
                 rag=[],
                 wdk=[],
                 rag_note=f"Rejected vague query: {err.get('message')}",
@@ -182,7 +157,7 @@ class CatalogToolsMixin:
             query, record_type, limit
         )
         wdk = await self.catalog_tools.search_for_searches(self.site_id, query)
-        return self._combined_result(
+        return combined_result(
             rag=rag,
             wdk=wdk,
             rag_note="Qdrant semantic retrieval (fast, may be stale; results include score and are thresholded).",
@@ -211,9 +186,9 @@ class CatalogToolsMixin:
         """
 
         async def _fallback_from_search_details() -> JSONObject | None:
-            discovery = get_discovery_service()
-            details = await discovery.get_search_details(
-                self.site_id, record_type, search_name, expand_params=True
+            rag_svc = RagSearchService(site_id=self.site_id)
+            details = await rag_svc.get_search_details(
+                record_type, search_name, expand_params=True
             )
             search_data = (
                 details.get("searchData")
@@ -246,7 +221,7 @@ class CatalogToolsMixin:
         changed_value = ctx.get(param_name)
         if changed_value is None or changed_value == "":
             wdk_fallback = await _fallback_from_search_details()
-            return self._combined_result(
+            return combined_result(
                 rag=None,
                 wdk=wdk_fallback,
                 rag_note="Skipped dependent vocab cache: missing changed param value in context_values.",
@@ -258,7 +233,7 @@ class CatalogToolsMixin:
                 record_type, search_name, param_name, context_values
             )
             wdk_resp = res.get("wdkResponse") if isinstance(res, dict) else None
-            return self._combined_result(
+            return combined_result(
                 rag=res,
                 wdk=wdk_resp,
                 rag_note="Qdrant-backed cache keyed by context hash; will call WDK on cache miss.",
@@ -266,7 +241,7 @@ class CatalogToolsMixin:
             )
         except Exception as exc:
             wdk_fallback = await _fallback_from_search_details()
-            return self._combined_result(
+            return combined_result(
                 rag={"error": "dependent_vocab_failed", "detail": str(exc)},
                 wdk=wdk_fallback,
                 rag_note="Dependent vocab lookup failed; returning error payload.",
@@ -283,7 +258,7 @@ class CatalogToolsMixin:
     ) -> JSONObject:
         """Retrieve relevant public example plans (returns both RAG and live WDK availability note)."""
         rag = await self.example_plans_rag_tools.rag_search_example_plans(query, limit)
-        return self._combined_result(
+        return combined_result(
             rag=rag,
             wdk=None,
             rag_note="Qdrant semantic retrieval over ingested public strategies (includes full stepTree/steps).",

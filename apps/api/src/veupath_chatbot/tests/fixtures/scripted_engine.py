@@ -5,8 +5,6 @@ event processing, and persistence all run real code while only the
 LLM decisions are pre-scripted.
 """
 
-from __future__ import annotations
-
 import json
 from collections.abc import AsyncIterable, Callable
 from contextlib import AbstractContextManager

@@ -1,15 +1,15 @@
 """Unit tests for services/catalog/searches.py.
 
 Covers list_searches(), search_for_searches(), _search_for_searches_via_site_search(),
-_resolve_record_type_for_search(), and the term_variants helper.
+find_record_type_for_search(), and the term_variants helper.
 """
 
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from veupath_chatbot.services.catalog.searches import (
-    _resolve_record_type_for_search,
     _search_for_searches_via_site_search,
+    find_record_type_for_search,
     list_searches,
     search_for_searches,
 )
@@ -647,135 +647,79 @@ class TestSearchForSearches:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_record_type_for_search
+# find_record_type_for_search
 # ---------------------------------------------------------------------------
 
 
 class TestResolveRecordTypeForSearch:
-    """Test the _resolve_record_type_for_search() function."""
+    """Test the find_record_type_for_search() function.
 
-    async def test_finds_search_in_given_record_type(self) -> None:
-        client = _mock_client(
-            record_types=[
-                {"urlSegment": "gene", "name": "Genes"},
-                {"urlSegment": "transcript", "name": "Transcripts"},
-            ],
-            searches_by_rt={
-                "gene": [{"urlSegment": "GenesByTaxon"}],
-                "transcript": [],
-            },
-        )
-        result = await _resolve_record_type_for_search(client, "gene", "GenesByTaxon")
-        assert result == "gene"
+    The implementation delegates to SearchCatalog.find_record_type_for_search()
+    (a synchronous in-memory lookup on pre-cached data) and falls back to the
+    caller-supplied *record_type* when the catalog returns None.
+    """
 
-    async def test_finds_search_in_different_record_type(self) -> None:
-        """Should search other record types if not found in the given one."""
-        client = _mock_client(
-            record_types=[
-                {"urlSegment": "gene", "name": "Genes"},
-                {"urlSegment": "transcript", "name": "Transcripts"},
-            ],
-            searches_by_rt={
-                "gene": [],
-                "transcript": [{"urlSegment": "TranscriptsByTaxon"}],
-            },
+    def _patch_catalog(self, resolved: str | None) -> Any:
+        """Return a context manager that patches get_discovery_service.
+
+        The mock DiscoveryService.get_catalog() returns a mock SearchCatalog
+        whose find_record_type_for_search() returns *resolved*.
+        """
+        catalog = MagicMock()
+        catalog.find_record_type_for_search = MagicMock(return_value=resolved)
+        discovery = MagicMock()
+        discovery.get_catalog = AsyncMock(return_value=catalog)
+        return patch(
+            "veupath_chatbot.services.catalog.searches.get_discovery_service",
+            return_value=discovery,
         )
-        result = await _resolve_record_type_for_search(
-            client, "gene", "TranscriptsByTaxon"
-        )
+
+    async def test_returns_resolved_type_when_found(self) -> None:
+        with self._patch_catalog("transcript"):
+            result = await find_record_type_for_search(
+                "plasmodb", "gene", "TranscriptsByTaxon"
+            )
         assert result == "transcript"
 
-    async def test_returns_original_when_not_found_anywhere(self) -> None:
-        client = _mock_client(
-            record_types=[{"urlSegment": "gene"}],
-            searches_by_rt={"gene": []},
-        )
-        result = await _resolve_record_type_for_search(
-            client, "gene", "NonexistentSearch"
-        )
+    async def test_returns_same_type_when_search_belongs_to_it(self) -> None:
+        with self._patch_catalog("gene"):
+            result = await find_record_type_for_search(
+                "plasmodb", "gene", "GenesByTaxon"
+            )
         assert result == "gene"
 
-    async def test_returns_original_on_get_record_types_error(self) -> None:
-        client = MagicMock()
-        client.get_record_types = AsyncMock(side_effect=RuntimeError("fail"))
-        result = await _resolve_record_type_for_search(client, "gene", "GenesByTaxon")
+    async def test_falls_back_to_record_type_when_not_found(self) -> None:
+        with self._patch_catalog(None):
+            result = await find_record_type_for_search(
+                "plasmodb", "gene", "NonexistentSearch"
+            )
         assert result == "gene"
 
-    async def test_continues_when_get_searches_fails_for_one_rt(self) -> None:
-        async def _get_searches(rt: str) -> list[Any]:
-            if rt == "gene":
-                raise RuntimeError("fail")
-            return [{"urlSegment": "TranscriptsByTaxon"}]
-
-        client = MagicMock()
-        client.get_record_types = AsyncMock(
-            return_value=[
-                {"urlSegment": "gene"},
-                {"urlSegment": "transcript"},
-            ]
-        )
-        client.get_searches = AsyncMock(side_effect=_get_searches)
-
-        result = await _resolve_record_type_for_search(
-            client, "gene", "TranscriptsByTaxon"
-        )
-        assert result == "transcript"
-
-    async def test_handles_string_record_types(self) -> None:
-        client = _mock_client(
-            record_types=["gene", "transcript"],
-            searches_by_rt={
-                "gene": [{"urlSegment": "GenesByTaxon"}],
-                "transcript": [],
-            },
-        )
-        result = await _resolve_record_type_for_search(client, "gene", "GenesByTaxon")
+    async def test_falls_back_to_record_type_on_empty_string(self) -> None:
+        with self._patch_catalog(""):
+            result = await find_record_type_for_search("plasmodb", "gene", "SomeSearch")
         assert result == "gene"
 
-    async def test_prioritizes_given_record_type(self) -> None:
-        """The given record type should be checked first (ordered.insert(0, ...))."""
-        client = _mock_client(
-            record_types=[
-                {"urlSegment": "transcript"},
-                {"urlSegment": "gene"},
-            ],
-            searches_by_rt={
-                "gene": [{"urlSegment": "SharedSearch"}],
-                "transcript": [{"urlSegment": "SharedSearch"}],
-            },
-        )
-        result = await _resolve_record_type_for_search(client, "gene", "SharedSearch")
-        # gene should be checked first since it was the given record_type
-        assert result == "gene"
+    async def test_passes_site_id_to_get_catalog(self) -> None:
+        catalog = MagicMock()
+        catalog.find_record_type_for_search = MagicMock(return_value="gene")
+        discovery = MagicMock()
+        discovery.get_catalog = AsyncMock(return_value=catalog)
+        with patch(
+            "veupath_chatbot.services.catalog.searches.get_discovery_service",
+            return_value=discovery,
+        ):
+            await find_record_type_for_search("toxodb", "gene", "GenesByTaxon")
+        discovery.get_catalog.assert_awaited_once_with("toxodb")
 
-    async def test_matches_by_name_fallback(self) -> None:
-        """Should match search by 'name' field when urlSegment is not present."""
-        client = _mock_client(
-            record_types=[{"urlSegment": "gene"}],
-            searches_by_rt={
-                "gene": [{"name": "GenesByTaxon"}],
-            },
-        )
-        result = await _resolve_record_type_for_search(client, "gene", "GenesByTaxon")
-        assert result == "gene"
-
-    async def test_skips_non_dict_non_str_record_types(self) -> None:
-        client = _mock_client(
-            record_types=[42, None, {"urlSegment": "gene"}],
-            searches_by_rt={"gene": [{"urlSegment": "GenesByTaxon"}]},
-        )
-        result = await _resolve_record_type_for_search(client, "gene", "GenesByTaxon")
-        assert result == "gene"
-
-    async def test_skips_non_dict_search_entries(self) -> None:
-        client = _mock_client(
-            record_types=[{"urlSegment": "gene"}],
-            searches_by_rt={
-                "gene": [
-                    "not_a_dict",
-                    {"urlSegment": "GenesByTaxon"},
-                ],
-            },
-        )
-        result = await _resolve_record_type_for_search(client, "gene", "GenesByTaxon")
-        assert result == "gene"
+    async def test_passes_search_name_to_catalog(self) -> None:
+        catalog = MagicMock()
+        catalog.find_record_type_for_search = MagicMock(return_value="gene")
+        discovery = MagicMock()
+        discovery.get_catalog = AsyncMock(return_value=catalog)
+        with patch(
+            "veupath_chatbot.services.catalog.searches.get_discovery_service",
+            return_value=discovery,
+        ):
+            await find_record_type_for_search("plasmodb", "gene", "GenesByTaxon")
+        catalog.find_record_type_for_search.assert_called_once_with("GenesByTaxon")

@@ -1,7 +1,5 @@
 """HTTP streaming helpers (SSE event generation) for chat."""
 
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import json
@@ -132,8 +130,10 @@ async def stream_chat(agent: Kani, message: str) -> AsyncIterator[JSONObject]:
 
                         # tool_result_to_events expects JSONObject, not JSONArray
                         if isinstance(result, dict):
+                            session = getattr(agent, "strategy_session", None)
+                            get_graph = session.get_graph if session else None
                             for event in tool_result_to_events(
-                                result, get_graph=agent.strategy_session.get_graph
+                                result, get_graph=get_graph
                             ):
                                 await queue.put(event)
                     except Exception as e:  # pragma: no cover

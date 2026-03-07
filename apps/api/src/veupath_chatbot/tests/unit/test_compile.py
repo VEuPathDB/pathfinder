@@ -1,7 +1,5 @@
 """Tests for strategy compiler (domain/strategy/compile.py)."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock
 
 import pytest
@@ -11,6 +9,7 @@ from veupath_chatbot.domain.strategy.ast import (
     StepAnalysis,
     StepFilter,
     StepReport,
+    StepTreeNode,
     StrategyAST,
 )
 from veupath_chatbot.domain.strategy.compile import (
@@ -22,7 +21,6 @@ from veupath_chatbot.domain.strategy.compile import (
     compile_strategy,
 )
 from veupath_chatbot.domain.strategy.ops import ColocationParams, CombineOp
-from veupath_chatbot.integrations.veupathdb.strategy_api.helpers import StepTreeNode
 from veupath_chatbot.platform.errors import InternalError, ValidationError
 
 # ---------------------------------------------------------------------------
@@ -371,22 +369,20 @@ class TestCompileColocation:
 
 class TestResolveRecordType:
     async def test_resolves_when_single_match(self) -> None:
+        """Callback resolves search to a different record type."""
         api = _mock_api()
-        api.client.get_record_types.return_value = [
-            {"urlSegment": "gene", "name": "Gene"},
-        ]
-        api.client.get_searches.return_value = [
-            {"urlSegment": "GenesByTextSearch", "name": "GenesByTextSearch"},
-        ]
         api.create_step.return_value = {"id": 100}
+
+        async def resolver(search_name: str) -> str | None:
+            return "gene" if search_name == "GenesByTextSearch" else None
 
         step = _search_node()
         strategy = StrategyAST(record_type="transcript", root=step)
 
-        compiler = StrategyCompiler(api, resolve_record_type=True)
+        compiler = StrategyCompiler(
+            api, resolve_record_type=True, resolve_search_record_type=resolver
+        )
         await compiler.compile(strategy)
-
-        # record_type should have been resolved to "gene"
         assert strategy.record_type == "gene"
 
     async def test_skips_resolution_when_disabled(self) -> None:
@@ -401,45 +397,30 @@ class TestResolveRecordType:
 
         assert strategy.record_type == "transcript"
 
-    async def test_mixed_record_types_raises(self) -> None:
+    async def test_resolves_to_common_record_type(self) -> None:
+        """When all leaf searches resolve to the same type, use it."""
         api = _mock_api()
-        api.client.get_record_types.return_value = [
-            {"urlSegment": "gene"},
-            {"urlSegment": "transcript"},
-        ]
-
-        async def fake_get_searches(rt: str) -> list:
-            if rt == "gene":
-                return [{"urlSegment": "GenesByTextSearch"}]
-            if rt == "transcript":
-                return [
-                    {"urlSegment": "GenesByTextSearch"},
-                    {"urlSegment": "GenesByGoTerm"},
-                ]
-            return []
-
-        api.client.get_searches.side_effect = fake_get_searches
         api.create_step.return_value = {"id": 100}
+        api.create_combined_step.return_value = {"id": 200}
+
+        async def resolver(search_name: str) -> str | None:
+            # Both searches are on transcript
+            return "transcript"
 
         left = _search_node(step_id="s1", search_name="GenesByTextSearch")
         right = _search_node(step_id="s2", search_name="GenesByGoTerm")
         root = _combine_node(left, right, step_id="c1")
         strategy = StrategyAST(record_type="gene", root=root)
 
-        compiler = StrategyCompiler(api, resolve_record_type=True)
-        # GenesByTextSearch matches both gene + transcript
-        # GenesByGoTerm matches only transcript
-        # Intersection = {transcript} -> single match, no error, resolves to transcript
-        # Actually we need to think carefully:
-        # - GenesByTextSearch: matches gene AND transcript -> {gene, transcript}
-        # - GenesByGoTerm: matches transcript only -> {transcript}
-        # - intersection = {transcript} -> 1 element -> resolves
+        compiler = StrategyCompiler(
+            api, resolve_record_type=True, resolve_search_record_type=resolver
+        )
         await compiler.compile(strategy)
         assert strategy.record_type == "transcript"
 
-    async def test_no_record_types_keeps_original(self) -> None:
+    async def test_no_callback_keeps_original(self) -> None:
+        """Without a callback, strategy keeps its original record type."""
         api = _mock_api()
-        api.client.get_record_types.return_value = []
         api.create_step.return_value = {"id": 100}
 
         step = _search_node()
@@ -449,68 +430,53 @@ class TestResolveRecordType:
         await compiler.compile(strategy)
         assert strategy.record_type == "gene"
 
-    async def test_record_type_exception_keeps_original(self) -> None:
+    async def test_callback_returns_none_keeps_original(self) -> None:
+        """When callback can't resolve, strategy keeps original record type."""
         api = _mock_api()
-        api.client.get_record_types.side_effect = Exception("Network error")
         api.create_step.return_value = {"id": 100}
+
+        async def resolver(search_name: str) -> str | None:
+            return None
 
         step = _search_node()
         strategy = StrategyAST(record_type="gene", root=step)
 
-        compiler = StrategyCompiler(api, resolve_record_type=True)
+        compiler = StrategyCompiler(
+            api, resolve_record_type=True, resolve_search_record_type=resolver
+        )
         await compiler.compile(strategy)
         assert strategy.record_type == "gene"
 
-    async def test_ambiguous_record_types_raises_validation(self) -> None:
+    async def test_per_step_resolution_for_transforms(self) -> None:
+        """Transforms can resolve to a different record type than the strategy."""
         api = _mock_api()
-        api.client.get_record_types.return_value = [
-            {"urlSegment": "gene"},
-            {"urlSegment": "transcript"},
-        ]
-
-        async def fake_get_searches(rt: str) -> list:
-            # Both record types have the same search
-            return [{"urlSegment": "GenesByTextSearch"}]
-
-        api.client.get_searches.side_effect = fake_get_searches
         api.create_step.return_value = {"id": 100}
+        api.create_transform_step.return_value = {"id": 300}
 
-        step = _search_node(search_name="GenesByTextSearch")
-        strategy = StrategyAST(record_type="gene", root=step)
+        async def resolver(search_name: str) -> str | None:
+            if search_name == "GenesByTextSearch":
+                return "gene"
+            if search_name == "GenesByOrthologs":
+                return "transcript"
+            return None
 
-        compiler = StrategyCompiler(api, resolve_record_type=True)
-        with pytest.raises(ValidationError, match="mixes record types"):
-            await compiler.compile(strategy)
+        leaf = _search_node(step_id="s1", search_name="GenesByTextSearch")
+        transform = PlanStepNode(
+            search_name="GenesByOrthologs",
+            parameters={"organism": "Pf3D7"},
+            primary_input=leaf,
+            id="t1",
+        )
+        strategy = StrategyAST(record_type="gene", root=transform)
 
-    async def test_search_not_in_any_record_type(self) -> None:
-        api = _mock_api()
-        api.client.get_record_types.return_value = [{"urlSegment": "gene"}]
-        api.client.get_searches.return_value = [{"urlSegment": "OtherSearch"}]
-        api.create_step.return_value = {"id": 100}
-
-        step = _search_node(search_name="GenesByTextSearch")
-        strategy = StrategyAST(record_type="gene", root=step)
-
-        compiler = StrategyCompiler(api, resolve_record_type=True)
+        compiler = StrategyCompiler(
+            api, resolve_record_type=True, resolve_search_record_type=resolver
+        )
         await compiler.compile(strategy)
-        # No match found, keeps original
-        assert strategy.record_type == "gene"
 
-    async def test_record_types_as_strings(self) -> None:
-        """Record types can come as plain strings, not dicts."""
-        api = _mock_api()
-        api.client.get_record_types.return_value = ["gene"]
-        api.client.get_searches.return_value = [
-            {"urlSegment": "GenesByTextSearch"},
-        ]
-        api.create_step.return_value = {"id": 100}
-
-        step = _search_node()
-        strategy = StrategyAST(record_type="transcript", root=step)
-
-        compiler = StrategyCompiler(api, resolve_record_type=True)
-        await compiler.compile(strategy)
-        assert strategy.record_type == "gene"
+        # Transform's create_transform_step should have been called with record_type="transcript"
+        call_kwargs = api.create_transform_step.call_args.kwargs
+        assert call_kwargs["record_type"] == "transcript"
 
 
 # ---------------------------------------------------------------------------
@@ -662,44 +628,6 @@ class TestCompileRootFailure:
         compiler._compile_search = broken_compile_search
         with pytest.raises(InternalError, match="compilation failed"):
             await compiler.compile(strategy)
-
-
-# ---------------------------------------------------------------------------
-# StrategyCompiler — caching
-# ---------------------------------------------------------------------------
-
-
-class TestSearchesCache:
-    async def test_caches_searches(self) -> None:
-        api = _mock_api()
-        api.client.get_searches.return_value = [{"urlSegment": "S1"}]
-
-        compiler = StrategyCompiler(api, resolve_record_type=False)
-        # Call twice
-        result1 = await compiler._get_searches_for_record_type("gene")
-        result2 = await compiler._get_searches_for_record_type("gene")
-
-        assert result1 == result2
-        # Should only call once due to caching
-        api.client.get_searches.assert_awaited_once_with("gene")
-
-    async def test_cache_per_record_type(self) -> None:
-        api = _mock_api()
-        api.client.get_searches.return_value = [{"urlSegment": "S1"}]
-
-        compiler = StrategyCompiler(api, resolve_record_type=False)
-        await compiler._get_searches_for_record_type("gene")
-        await compiler._get_searches_for_record_type("transcript")
-
-        assert api.client.get_searches.await_count == 2
-
-    async def test_cache_handles_exception(self) -> None:
-        api = _mock_api()
-        api.client.get_searches.side_effect = Exception("fail")
-
-        compiler = StrategyCompiler(api, resolve_record_type=False)
-        result = await compiler._get_searches_for_record_type("gene")
-        assert result == []
 
 
 # ---------------------------------------------------------------------------

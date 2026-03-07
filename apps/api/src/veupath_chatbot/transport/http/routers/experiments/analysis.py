@@ -5,8 +5,6 @@ enrichment-compare, ai-assist) are included first so they don't get shadowed
 by /{experiment_id} parametric routes.
 """
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 
 from veupath_chatbot.transport.http.routers.experiments.ai_assist import (

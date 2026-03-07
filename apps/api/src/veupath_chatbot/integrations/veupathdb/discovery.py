@@ -3,7 +3,10 @@
 import asyncio
 
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
-from veupath_chatbot.integrations.veupathdb.param_utils import wdk_entity_name
+from veupath_chatbot.integrations.veupathdb.param_utils import (
+    wdk_entity_name,
+    wdk_search_matches,
+)
 from veupath_chatbot.integrations.veupathdb.site_router import get_site_router
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONObject
@@ -120,6 +123,20 @@ class SearchCatalog:
                 continue
             if wdk_entity_name(search) == search_name:
                 return search
+        return None
+
+    def find_record_type_for_search(self, search_name: str) -> str | None:
+        """Find which record type owns a search (global lookup).
+
+        Mirrors WDK's ``WdkModel.getQuestionByName()`` — iterates all cached
+        record types to find the one containing the given search.
+
+        :param search_name: WDK search name (urlSegment or name).
+        :returns: The record type name, or None if not found.
+        """
+        for rt_name, searches in self._searches.items():
+            if any(wdk_search_matches(s, search_name) for s in searches):
+                return rt_name
         return None
 
     async def get_search_details(

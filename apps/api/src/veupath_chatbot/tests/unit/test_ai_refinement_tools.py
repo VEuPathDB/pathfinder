@@ -4,8 +4,6 @@ Tests the RefinementToolsMixin methods: refine_with_search,
 refine_with_gene_ids, re_evaluate_controls, and _combine_and_update.
 """
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from veupath_chatbot.services.experiment.ai_refinement_tools import RefinementToolsMixin

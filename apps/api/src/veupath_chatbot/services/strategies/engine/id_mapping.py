@@ -1,16 +1,12 @@
 """WDK ID <-> local ID mapping and record-type resolution."""
 
-from __future__ import annotations
-
-from typing import cast
-
 from veupath_chatbot.domain.strategy.ast import PlanStepNode
-from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
-from veupath_chatbot.integrations.veupathdb.param_utils import (
-    wdk_entity_name,
-    wdk_search_matches,
+from veupath_chatbot.integrations.veupathdb.discovery import (
+    SearchCatalog,
+    get_discovery_service,
 )
-from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.integrations.veupathdb.param_utils import wdk_search_matches
+from veupath_chatbot.services.wdk.record_types import resolve_record_type
 
 from .base import StrategyToolsBase
 
@@ -21,55 +17,20 @@ class IdMappingMixin(StrategyToolsBase):
         graph = self._get_graph(None)
         return graph.record_type if graph else None
 
+    async def _get_catalog(self) -> SearchCatalog:
+        """Get the search catalog for the current site."""
+        discovery = get_discovery_service()
+        return await discovery.get_catalog(self.session.site_id)
+
     async def _resolve_record_type(self, record_type: str | None) -> str | None:
         if not record_type:
             return record_type
-        discovery = get_discovery_service()
-        record_types = await discovery.get_record_types(self.session.site_id)
+        catalog = await self._get_catalog()
+        return (
+            resolve_record_type(catalog.get_record_types(), record_type) or record_type
+        )
 
-        def normalize(value: str) -> str:
-            return value.strip().lower()
-
-        normalized = normalize(record_type)
-        exact: list[JSONValue] = []
-        for rt in record_types:
-            if isinstance(rt, (str, dict)):
-                if normalize(wdk_entity_name(rt)) == normalized:
-                    exact.append(rt)
-                elif isinstance(rt, dict):
-                    name_raw = rt.get("name")
-                    name = name_raw if isinstance(name_raw, str) else ""
-                    if normalize(name) == normalized:
-                        exact.append(rt)
-        if exact:
-            if isinstance(exact[0], str):
-                return exact[0]
-            exact_dict = exact[0] if isinstance(exact[0], dict) else {}
-            return cast(
-                str,
-                exact_dict.get("urlSegment", exact_dict.get("name", record_type)),
-            )
-
-        display_matches: list[JSONObject] = []
-        for rt in record_types:
-            if not isinstance(rt, dict):
-                continue
-            display_name_raw = rt.get("displayName")
-            display_name = display_name_raw if isinstance(display_name_raw, str) else ""
-            if normalize(display_name) == normalized:
-                display_matches.append(rt)
-        if len(display_matches) == 1:
-            match_dict = (
-                display_matches[0] if isinstance(display_matches[0], dict) else {}
-            )
-            return cast(
-                str,
-                match_dict.get("urlSegment", match_dict.get("name", record_type)),
-            )
-
-        return record_type
-
-    async def _resolve_record_type_for_search(
+    async def _find_record_type_for_search(
         self,
         record_type: str | None,
         search_name: str | None,
@@ -79,52 +40,45 @@ class IdMappingMixin(StrategyToolsBase):
         resolved = await self._resolve_record_type(record_type)
         if not search_name:
             return resolved
-        discovery = get_discovery_service()
-        record_types = await discovery.get_record_types(self.session.site_id)
 
+        catalog = await self._get_catalog()
+
+        # Fast path: search exists in the resolved record type.
         if resolved:
-            try:
-                searches = await discovery.get_searches(self.session.site_id, resolved)
-                if any(wdk_search_matches(s, search_name) for s in searches):
-                    return resolved
-            except Exception:
-                pass
+            searches = catalog.get_searches(resolved)
+            if any(wdk_search_matches(s, search_name) for s in searches):
+                return resolved
             if not allow_fallback:
                 return None if require_match else resolved
 
         if not allow_fallback:
             return None if require_match else resolved
 
-        for rt in record_types:
-            rt_name = wdk_entity_name(rt)
-            if not rt_name:
-                continue
-            try:
-                searches = await discovery.get_searches(self.session.site_id, rt_name)
-            except Exception:
-                continue
-            if any(wdk_search_matches(s, search_name) for s in searches):
-                return rt_name
+        # Global lookup across all record types.
+        found = catalog.find_record_type_for_search(search_name)
+        if found:
+            return found
 
         return None if require_match else resolved
 
     async def _find_record_type_hint(
         self, search_name: str, exclude: str | None = None
     ) -> str | None:
-        discovery = get_discovery_service()
         try:
-            record_types = await discovery.get_record_types(self.session.site_id)
+            catalog = await self._get_catalog()
         except Exception:
             return None
 
-        for rt in record_types:
-            rt_name = wdk_entity_name(rt)
-            if not rt_name or (exclude and rt_name == exclude):
-                continue
-            try:
-                searches = await discovery.get_searches(self.session.site_id, rt_name)
-            except Exception:
-                continue
-            if any(wdk_search_matches(s, search_name) for s in searches):
-                return rt_name
-        return None
+        found = catalog.find_record_type_for_search(search_name)
+
+        # If the result matches the excluded record type, fall back to
+        # manual scanning (the catalog only returns the first match).
+        if found and found == exclude:
+            for rt_name, searches in catalog._searches.items():
+                if rt_name == exclude:
+                    continue
+                if any(wdk_search_matches(s, search_name) for s in searches):
+                    return rt_name
+            return None
+
+        return found

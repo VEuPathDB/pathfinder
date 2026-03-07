@@ -1,7 +1,5 @@
 """Tests for gene set overlap analysis."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.overlap import compute_gene_set_overlap
 from veupath_chatbot.services.experiment.types import (
     Experiment,

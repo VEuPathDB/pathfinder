@@ -5,8 +5,6 @@ a much narrower scope: help the user navigate wizard steps (search selection,
 parameter configuration, control gene discovery, run configuration).
 """
 
-from __future__ import annotations
-
 from typing import Annotated, cast
 
 from kani import AIParam, ChatMessage, Kani, ai_function
@@ -42,12 +40,6 @@ class ExperimentAssistantAgent(ResearchToolsMixin, Kani):
         self._catalog = CatalogTools()
         self.web_search_service = WebSearchService()
         self.literature_search_service = LiteratureSearchService()
-
-        # stream_chat() accesses strategy_session.get_graph for tool result
-        # processing; provide a no-op stub so it doesn't raise.
-        self.strategy_session = type(
-            "_Stub", (), {"get_graph": staticmethod(lambda: None)}
-        )()
 
         super().__init__(
             engine=engine,

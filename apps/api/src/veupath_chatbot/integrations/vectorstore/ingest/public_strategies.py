@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import argparse
 import asyncio
 import json
@@ -13,6 +11,9 @@ import httpx
 from veupath_chatbot.integrations.embeddings.openai_embeddings import OpenAIEmbeddings
 from veupath_chatbot.integrations.vectorstore.bootstrap import get_embedding_dim
 from veupath_chatbot.integrations.vectorstore.collections import EXAMPLE_PLANS_V1
+from veupath_chatbot.integrations.vectorstore.ingest.pipeline import (
+    run_concurrent_pipeline,
+)
 from veupath_chatbot.integrations.vectorstore.ingest.public_fetch import (
     _delete_strategy,
     _duplicate_strategy,
@@ -140,131 +141,100 @@ async def ingest_site(
             total_listed=len(summaries),
         )
 
-        sem = asyncio.Semaphore(max(1, int(concurrency)))
-        jobs: asyncio.Queue[JSONObject | None] = asyncio.Queue()
-        docs: asyncio.Queue[tuple[JSONObject, str] | None] = asyncio.Queue()
-
         attempted = 0
         succeeded = 0
         failed = 0
 
-        async def worker() -> None:
-            nonlocal attempted, succeeded, failed
-            while True:
-                item = await jobs.get()
-                if item is None:
-                    jobs.task_done()
-                    break
-                summary = item
-                signature = str(summary.get("signature") or "").strip()
-                if not signature:
-                    jobs.task_done()
-                    continue
-                async with sem:
-                    attempted += 1
-                    tmp_id: int | None = None
-                    try:
-                        tmp_id = await _duplicate_strategy(client, signature)
-                        details = await _get_strategy_details(client, tmp_id)
-                    except Exception as exc:
-                        failed += 1
-                        _write_jsonl(
-                            report_path,
-                            {
-                                "ts": _now_ts(),
-                                "siteId": site_id,
-                                "level": "strategy",
-                                "stage": "duplicate_or_fetch_details",
-                                "sourceSignature": signature,
-                                "sourceStrategyId": summary.get("strategyId"),
-                                "error": repr(exc),
-                                "traceback": traceback.format_exc(),
-                            },
-                        )
-                        jobs.task_done()
-                        continue
-                    finally:
-                        if tmp_id is not None:
-                            await _delete_strategy(client, tmp_id)
+        async def process_strategy(
+            summary: JSONObject,
+        ) -> tuple[JSONObject, str] | None:
+            nonlocal attempted, succeeded
+            signature = str(summary.get("signature") or "").strip()
+            if not signature:
+                return None
 
-                    compact = simplify_strategy_details(details)
-                    try:
-                        gen_name, gen_desc = await _generate_name_and_description(
-                            strategy_compact=compact, model=llm_model
-                        )
-                    except Exception:
-                        gen_name = str(
-                            summary.get("name") or "Public strategy example"
-                        ).strip()
-                        gen_desc = (
-                            str(summary.get("description") or "").strip() or gen_name
-                        )
+            attempted += 1
+            tmp_id: int | None = None
+            try:
+                tmp_id = await _duplicate_strategy(client, signature)
+                details = await _get_strategy_details(client, tmp_id)
+            finally:
+                if tmp_id is not None:
+                    await _delete_strategy(client, tmp_id)
 
-                    payload: JSONObject = {
-                        "siteId": site_id,
-                        "sourceSignature": signature,
-                        "sourceStrategyId": summary.get("strategyId"),
-                        "sourceName": summary.get("name"),
-                        "sourceDescription": summary.get("description"),
-                        "generatedName": gen_name,
-                        "generatedDescription": gen_desc,
-                        "recordClassName": summary.get("recordClassName")
-                        or compact.get("recordClassName"),
-                        "rootStepId": summary.get("rootStepId")
-                        or compact.get("rootStepId"),
-                        "strategyCompact": compact,
-                        "strategyFull": full_strategy_payload(details),
-                        "ingestedAt": int(time.time()),
-                    }
-                    payload["sourceHash"] = sha256_hex(stable_json_dumps(payload))
+            compact = simplify_strategy_details(details)
+            try:
+                gen_name, gen_desc = await _generate_name_and_description(
+                    strategy_compact=compact, model=llm_model
+                )
+            except Exception:
+                gen_name = str(summary.get("name") or "Public strategy example").strip()
+                gen_desc = str(summary.get("description") or "").strip() or gen_name
 
-                    text = embedding_text_for_example(
-                        name=gen_name,
-                        description=gen_desc,
-                        compact=compact,
-                    )
-                    succeeded += 1
-                    await docs.put((payload, text))
-                jobs.task_done()
+            payload: JSONObject = {
+                "siteId": site_id,
+                "sourceSignature": signature,
+                "sourceStrategyId": summary.get("strategyId"),
+                "sourceName": summary.get("name"),
+                "sourceDescription": summary.get("description"),
+                "generatedName": gen_name,
+                "generatedDescription": gen_desc,
+                "recordClassName": summary.get("recordClassName")
+                or compact.get("recordClassName"),
+                "rootStepId": summary.get("rootStepId") or compact.get("rootStepId"),
+                "strategyCompact": compact,
+                "strategyFull": full_strategy_payload(details),
+                "ingestedAt": int(time.time()),
+            }
+            payload["sourceHash"] = sha256_hex(stable_json_dumps(payload))
 
-        async def consumer() -> None:
+            text = embedding_text_for_example(
+                name=gen_name,
+                description=gen_desc,
+                compact=compact,
+            )
+            succeeded += 1
+            return payload, text
+
+        def on_strategy_error(summary: JSONObject, exc: Exception) -> None:
+            nonlocal failed
+            failed += 1
+            signature = str(summary.get("signature") or "").strip()
+            _write_jsonl(
+                report_path,
+                {
+                    "ts": _now_ts(),
+                    "siteId": site_id,
+                    "level": "strategy",
+                    "stage": "duplicate_or_fetch_details",
+                    "sourceSignature": signature,
+                    "sourceStrategyId": summary.get("strategyId"),
+                    "error": repr(exc),
+                    "traceback": traceback.format_exc(),
+                },
+            )
+
+        async def flush_strategies(
+            batch: list[tuple[JSONObject, str]],
+        ) -> None:
             points: JSONArray = []
             texts: list[str] = []
-            while True:
-                item = await docs.get()
-                if item is None:
-                    docs.task_done()
-                    break
-                payload, text = item
-                docs.task_done()
-                point_id = point_uuid(f"{site_id}:{payload['sourceSignature']}")
-                points.append({"id": point_id, "payload": payload})
+            for payload, text in batch:
+                pid = point_uuid(f"{site_id}:{payload['sourceSignature']}")
+                points.append({"id": pid, "payload": payload})
                 texts.append(text)
-                if len(points) >= 10:
-                    await _flush_batch(
-                        store=store, embedder=embedder, points=points, texts=texts
-                    )
+            await _flush_batch(
+                store=store, embedder=embedder, points=points, texts=texts
+            )
 
-            if points:
-                await _flush_batch(
-                    store=store, embedder=embedder, points=points, texts=texts
-                )
-
-        workers = [
-            asyncio.create_task(worker()) for _ in range(max(1, int(concurrency)))
-        ]
-        consumer_task = asyncio.create_task(consumer())
-
-        for s in candidates:
-            await jobs.put(s)
-        for _ in workers:
-            await jobs.put(None)
-
-        await jobs.join()
-        await docs.put(None)
-        await consumer_task
-        for w in workers:
-            await w
+        await run_concurrent_pipeline(
+            items=candidates,
+            process_fn=process_strategy,
+            flush_fn=flush_strategies,
+            concurrency=concurrency,
+            batch_size=10,
+            on_error=on_strategy_error,
+        )
 
         _write_jsonl(
             report_path,

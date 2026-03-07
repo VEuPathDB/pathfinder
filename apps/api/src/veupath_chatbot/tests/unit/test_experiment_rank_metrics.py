@@ -1,7 +1,5 @@
 """Unit tests for rank-based evaluation metrics."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.rank_metrics import compute_rank_metrics
 
 

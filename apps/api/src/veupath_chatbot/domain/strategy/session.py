@@ -4,8 +4,6 @@ These types model the *working* state while a user (or an AI agent) is building 
 VEuPathDB strategy during a chat session.
 """
 
-from __future__ import annotations
-
 from uuid import uuid4
 
 from veupath_chatbot.domain.strategy.ast import (

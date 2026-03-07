@@ -68,9 +68,8 @@ class TestRetryBehavior:
     """
 
     async def test_transport_error_retried_by_tenacity(self) -> None:
-        """ConnectError propagates through to tenacity which retries 3 times."""
-        from tenacity import RetryError
-
+        """ConnectError propagates through to tenacity which retries 3 times,
+        then the wrapper converts RetryError to WDKError(status=502)."""
         client = VEuPathDBClient("https://example.com/service")
 
         with respx.mock(assert_all_called=False) as router:
@@ -89,9 +88,10 @@ class TestRetryBehavior:
         internal.request = failing_request
 
         p1, p2 = _patch_settings_and_ctx()
-        with p1, p2, pytest.raises(RetryError):
+        with p1, p2, pytest.raises(WDKError) as exc_info:
             await client.get("/test")
 
+        assert exc_info.value.status == 502
         assert call_count == 3, (
             "Expected 3 calls (initial + 2 retries) because ConnectError "
             "propagates to tenacity for retry."
@@ -504,9 +504,13 @@ class TestSiteInfoEdgeCases:
 # ===========================================================================
 
 
-def _make_temp_api(user_id: str = "12345") -> tuple[TemporaryResultsAPI, MagicMock]:
+def _make_temp_api(
+    user_id: str = "12345",
+    base_url: str = "https://plasmodb.org/plasmo/service",
+) -> tuple[TemporaryResultsAPI, MagicMock]:
     """Create TemporaryResultsAPI with a mocked client, pre-initialized."""
     client = MagicMock()
+    client.base_url = base_url
     client.get = AsyncMock()
     client.post = AsyncMock()
     api = TemporaryResultsAPI(client)
@@ -518,24 +522,18 @@ def _make_temp_api(user_id: str = "12345") -> tuple[TemporaryResultsAPI, MagicMo
 class TestTemporaryResultsEdgeCases:
     """Edge cases for temporary result download flow."""
 
-    async def test_polls_time_out_after_max_attempts(self) -> None:
-        """If download URL never appears, should raise after 8 polls."""
+    async def test_raises_when_no_id_in_response(self) -> None:
+        """If POST response has no 'id', should raise immediately."""
         api, client = _make_temp_api()
-        # Initial create returns an ID but no URL
-        client.post.return_value = {"id": "result1"}
-        # All polls return pending status with no URL
-        client.get.return_value = {"id": "result1", "status": "PENDING"}
+        client.post.return_value = {}
 
-        with pytest.raises(RuntimeError, match="did not produce a download URL"):
+        with pytest.raises(RuntimeError, match="did not include.*id"):
             await api.get_download_url(step_id=42, format="csv")
-
-        # Should have polled 8 times
-        assert client.get.call_count == 8
 
     async def test_tab_format_uses_standard_reporter(self) -> None:
         """Tab format should use 'standard' reporter like CSV."""
         api, client = _make_temp_api()
-        client.post.return_value = {"url": "https://x/dl"}
+        client.post.return_value = {"id": "r1"}
 
         await api.get_download_url(step_id=42, format="tab")
 
@@ -552,24 +550,17 @@ class TestTemporaryResultsEdgeCases:
         call_path = client.post.call_args.args[0]
         assert "/users/99999/" in call_path
 
-    async def test_extract_download_url_priority(self) -> None:
-        """'url' field takes priority over 'downloadUrl'."""
-        payload = {"url": "https://a", "downloadUrl": "https://b"}
-        assert TemporaryResultsAPI._extract_download_url(payload) == "https://a"
-
-    async def test_result_id_from_alternate_key(self) -> None:
-        """Some WDK deployments use 'resultId' instead of 'id'."""
+    async def test_constructs_url_from_id(self) -> None:
+        """Download URL is constructed from base_url + id, no polling."""
         api, client = _make_temp_api()
-        # Initial create returns resultId, no URL
-        client.post.return_value = {"resultId": "abc123"}
-        # First poll: URL ready
-        client.get.return_value = {"url": "https://x/dl"}
+        client.post.return_value = {"id": "abc123"}
 
         url = await api.get_download_url(step_id=42, format="csv")
-        assert url == "https://x/dl"
-        # Should have used /temporary-results/abc123
-        get_call_path = client.get.call_args.args[0]
-        assert "abc123" in get_call_path
+
+        assert (
+            url == "https://plasmodb.org/plasmo/service/temporary-results/abc123/result"
+        )
+        client.get.assert_not_awaited()
 
 
 # ===========================================================================
@@ -580,21 +571,29 @@ class TestTemporaryResultsEdgeCases:
 class TestConvenienceMethodEdgeCases:
     """Edge cases for the client's high-level WDK methods."""
 
-    async def test_list_step_filters_correct_path(self) -> None:
-        """Filters endpoint uses /users/{uid}/steps/{sid}/filter (no trailing s)."""
+    async def test_get_step_view_filters_correct_path(self) -> None:
+        """View filters are extracted from step GET /users/{uid}/steps/{sid}."""
         client = VEuPathDBClient("https://example.com/service")
 
         with respx.mock(assert_all_called=False) as router:
-            # WDK uses /filter (singular), not /filters (plural)
             route = router.get(
-                "https://example.com/service/users/12345/steps/42/filter"
-            ).respond(json=[])
+                "https://example.com/service/users/12345/steps/42"
+            ).respond(
+                json={
+                    "id": 42,
+                    "answerSpec": {
+                        "searchName": "GenesByTextSearch",
+                        "searchConfig": {"parameters": {}},
+                        "viewFilters": [{"name": "f1", "value": {}, "disabled": False}],
+                    },
+                }
+            )
             p1, p2 = _patch_settings_and_ctx()
             with p1, p2:
-                result = await client.list_step_filters("12345", 42)
+                result = await client.get_step_view_filters("12345", 42)
 
         assert route.called
-        assert result == []
+        assert result == [{"name": "f1", "value": {}, "disabled": False}]
         await client.close()
 
     async def test_get_search_details_with_params_encodes_context(self) -> None:

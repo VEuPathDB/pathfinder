@@ -1,7 +1,5 @@
 """Event sourcing core: emit events to Redis + project to PostgreSQL."""
 
-from __future__ import annotations
-
 import json
 from datetime import UTC, datetime
 
@@ -14,6 +12,33 @@ from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
 
 logger = get_logger(__name__)
+
+
+def _count_plan_nodes(plan: JSONObject) -> int:
+    """Count step nodes in a plan dict by walking the tree.
+
+    The plan dict has ``{"root": {..., "primaryInput": ..., "secondaryInput": ...}}``.
+    Each node with a ``searchName`` key counts as a step.
+    """
+    root = plan.get("root")
+    if not isinstance(root, dict):
+        return 0
+
+    count = 0
+
+    def visit(node: JSONObject) -> None:
+        nonlocal count
+        if node.get("searchName"):
+            count += 1
+        primary = node.get("primaryInput")
+        if isinstance(primary, dict):
+            visit(primary)
+        secondary = node.get("secondaryInput")
+        if isinstance(secondary, dict):
+            visit(secondary)
+
+    visit(root)
+    return count
 
 
 def _parse_arguments(raw: object) -> JSONObject:
@@ -138,11 +163,7 @@ async def _project_event(
             plan = event_data.get("plan")
             if isinstance(plan, dict):
                 updates["plan"] = plan
-                from veupath_chatbot.services.strategies.serialization import (
-                    count_steps_in_plan,
-                )
-
-                updates["step_count"] = count_steps_in_plan(plan)
+                updates["step_count"] = _count_plan_nodes(plan)
             name = event_data.get("name")
             if isinstance(name, str) and name:
                 updates["name"] = name

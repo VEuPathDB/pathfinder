@@ -1,7 +1,5 @@
 """Enrich sparse gene results with WDK metadata."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 
 from veupath_chatbot.integrations.veupathdb.site_search import strip_html_tags

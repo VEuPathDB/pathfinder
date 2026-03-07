@@ -4,8 +4,6 @@ Used by both `PlannerToolRegistryMixin` and `AgentToolRegistryMixin` so that
 web and literature search are available regardless of conversation mode.
 """
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from kani import AIParam, ai_function

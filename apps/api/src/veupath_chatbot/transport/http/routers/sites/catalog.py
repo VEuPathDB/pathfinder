@@ -1,15 +1,13 @@
 """Site listing, record types, and search catalog endpoints."""
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
 from veupath_chatbot.platform.errors import ErrorCode, NotFoundError
 from veupath_chatbot.platform.types import JSONValue
 from veupath_chatbot.services import catalog
+from veupath_chatbot.services.wdk import get_discovery_service
 from veupath_chatbot.transport.http.schemas import (
     RecordTypeResponse,
     SearchDetailsResponse,

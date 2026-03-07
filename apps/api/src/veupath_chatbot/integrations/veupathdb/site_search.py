@@ -41,6 +41,14 @@ def _get_site_search_client() -> httpx.AsyncClient:
     return _site_search_client
 
 
+async def close_site_search_client() -> None:
+    """Close the shared site-search HTTP client (call during app shutdown)."""
+    global _site_search_client
+    if _site_search_client is not None and not _site_search_client.is_closed:
+        await _site_search_client.aclose()
+    _site_search_client = None
+
+
 def strip_html_tags(value: str) -> str:
     # site-search highlights matches with <em> tags.
     return re.sub(r"</?[^>]+>", "", value or "").strip()

@@ -1,15 +1,12 @@
 """Search listing and searching functions."""
 
-from __future__ import annotations
-
 import re
 
-from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
+from veupath_chatbot.domain.strategy.ast import PlanStepNode
+from veupath_chatbot.domain.strategy.compile import ResolveRecordType
+from veupath_chatbot.domain.strategy.tree import collect_plan_leaves
 from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
-from veupath_chatbot.integrations.veupathdb.param_utils import (
-    wdk_entity_name,
-    wdk_search_matches,
-)
+from veupath_chatbot.integrations.veupathdb.param_utils import wdk_entity_name
 from veupath_chatbot.integrations.veupathdb.site_search import (
     query_site_search,
     strip_html_tags,
@@ -18,6 +15,28 @@ from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONValue
 
 logger = get_logger(__name__)
+
+
+async def get_raw_record_types(site_id: str) -> JSONArray:
+    """Return raw WDK record type objects for a site.
+
+    Unlike :func:`services.catalog.sites.get_record_types`, this preserves the
+    full WDK payloads (``urlSegment``, ``name``, ``displayName``, etc.) so that
+    callers needing the original structure don't have to go through the
+    integrations layer directly.
+    """
+    discovery = get_discovery_service()
+    return await discovery.get_record_types(site_id)
+
+
+async def get_raw_searches(site_id: str, record_type: str) -> JSONArray:
+    """Return raw WDK search objects for a record type.
+
+    Thin service-level wrapper over the discovery integration so that AI tools
+    and other service consumers never import from ``integrations/`` directly.
+    """
+    discovery = get_discovery_service()
+    return await discovery.get_searches(site_id, record_type)
 
 
 async def list_searches(site_id: str, record_type: str) -> list[dict[str, str]]:
@@ -145,7 +164,7 @@ async def search_for_searches(
     if not record_types:
         record_types_raw = await discovery.get_record_types(site_id)
         record_types = [
-            wdk_entity_name(rt) for rt in record_types_raw if wdk_entity_name(rt)
+            name for rt in record_types_raw if (name := wdk_entity_name(rt))
         ]
 
     raw_terms = re.findall(r"[A-Za-z0-9]+", query or "")
@@ -255,28 +274,48 @@ async def search_for_searches(
     return result[:20]
 
 
-async def _resolve_record_type_for_search(
-    client: VEuPathDBClient, record_type: str, search_name: str
+async def find_record_type_for_search(
+    site_id: str, record_type: str, search_name: str
 ) -> str:
-    """Resolve which record type actually contains a search name."""
-    try:
-        record_types = await client.get_record_types()
-    except Exception:
-        return record_type
-    ordered: list[str] = []
-    for rt in record_types:
-        rt_name = wdk_entity_name(rt)
-        if not rt_name:
-            continue
-        if rt_name == record_type:
-            ordered.insert(0, rt_name)
-        else:
-            ordered.append(rt_name)
-    for rt_name in ordered:
-        try:
-            searches = await client.get_searches(rt_name)
-        except Exception:
-            continue
-        if any(wdk_search_matches(s, search_name) for s in searches):
-            return rt_name
-    return record_type
+    """Resolve which record type actually contains a search name.
+
+    Uses the pre-cached SearchCatalog (mirrors WDK's global
+    ``getQuestionByName()`` lookup) — no HTTP calls at resolve time.
+    Falls back to *record_type* when the search isn't found.
+    """
+    discovery = get_discovery_service()
+    catalog = await discovery.get_catalog(site_id)
+    resolved = catalog.find_record_type_for_search(search_name)
+    return resolved or record_type
+
+
+async def make_record_type_resolver(site_id: str) -> ResolveRecordType:
+    """Create a record type resolver backed by the pre-cached SearchCatalog.
+
+    Mirrors WDK's ``WdkModel.getQuestionByName()`` — a global lookup that
+    finds which record type owns a given search name, using the already-cached
+    catalog data (no HTTP calls at resolve time).
+    """
+    discovery = get_discovery_service()
+    catalog = await discovery.get_catalog(site_id)
+
+    async def resolve(search_name: str) -> str | None:
+        return catalog.find_record_type_for_search(search_name)
+
+    return resolve
+
+
+async def resolve_record_type_from_steps(
+    root_step: PlanStepNode,
+    resolver: ResolveRecordType,
+) -> str | None:
+    """Resolve record type from the first resolvable leaf search in a step tree.
+
+    Uses :func:`collect_plan_leaves` to find leaf (search) nodes, then calls
+    the resolver to find the owning record type for the first one that resolves.
+    """
+    for leaf in collect_plan_leaves(root_step):
+        resolved = await resolver(leaf.search_name)
+        if resolved:
+            return resolved
+    return None

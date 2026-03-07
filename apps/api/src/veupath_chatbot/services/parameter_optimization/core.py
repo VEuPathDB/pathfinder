@@ -6,8 +6,6 @@ search.  Each "trial" runs a temporary WDK strategy via
 :func:`run_positive_negative_controls` and scores the result.
 """
 
-from __future__ import annotations
-
 import time
 from typing import cast
 

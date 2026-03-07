@@ -5,8 +5,6 @@ The existing test_param_normalization.py tests the normalizer indirectly through
 compilation with WDK fixtures.
 """
 
-from __future__ import annotations
-
 import json
 
 import pytest

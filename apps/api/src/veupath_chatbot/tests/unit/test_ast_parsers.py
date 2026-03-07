@@ -1,7 +1,5 @@
 """Tests for shared AST parsing helpers (filters, analyses, reports, colocation)."""
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.strategy.ast import (
     parse_analyses,
     parse_colocation_params,

@@ -1,7 +1,5 @@
 """Gene-specific relevance scoring for text search results."""
 
-from __future__ import annotations
-
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.search_rerank import (
     score_field_quality,

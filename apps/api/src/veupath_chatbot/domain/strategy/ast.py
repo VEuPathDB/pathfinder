@@ -1,13 +1,39 @@
 """AST node types for strategy representation (WDK-aligned, untyped tree)."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import Literal, cast
 from uuid import uuid4
 
 from veupath_chatbot.domain.strategy.ops import ColocationParams, CombineOp
 from veupath_chatbot.platform.types import JSONObject, JSONValue
+
+
+class StepTreeNode:
+    """Node in a WDK step tree.
+
+    Represents a single step with optional primary (and for combines, secondary)
+    input references. Used to build the ``stepTree`` payload for WDK strategy
+    creation. Pure data structure with no I/O.
+    """
+
+    def __init__(
+        self,
+        step_id: int,
+        primary_input: StepTreeNode | None = None,
+        secondary_input: StepTreeNode | None = None,
+    ) -> None:
+        self.step_id = step_id
+        self.primary_input = primary_input
+        self.secondary_input = secondary_input
+
+    def to_dict(self) -> JSONObject:
+        """Convert to WDK stepTree format."""
+        result: JSONObject = {"stepId": self.step_id}
+        if self.primary_input:
+            result["primaryInput"] = self.primary_input.to_dict()
+        if self.secondary_input:
+            result["secondaryInput"] = self.secondary_input.to_dict()
+        return result
 
 
 def generate_step_id() -> str:
@@ -174,6 +200,7 @@ class PlanStepNode:
     filters: list[StepFilter] = field(default_factory=list)
     analyses: list[StepAnalysis] = field(default_factory=list)
     reports: list[StepReport] = field(default_factory=list)
+    wdk_weight: int | None = None
     id: str = field(default_factory=generate_step_id)
 
     def infer_kind(self) -> str:
@@ -209,6 +236,8 @@ class PlanStepNode:
             result["analyses"] = [a.to_dict() for a in self.analyses]
         if self.reports:
             result["reports"] = [r.to_dict() for r in self.reports]
+        if self.wdk_weight is not None:
+            result["wdkWeight"] = self.wdk_weight
         return result
 
 
@@ -306,6 +335,10 @@ def from_dict(data: JSONObject) -> StrategyAST:
         display_name = display_name_raw if isinstance(display_name_raw, str) else None
         id_raw = node_data.get("id")
         step_id = id_raw if isinstance(id_raw, str) else generate_step_id()
+        wdk_weight_raw = node_data.get("wdkWeight")
+        wdk_weight = (
+            int(wdk_weight_raw) if isinstance(wdk_weight_raw, (int, float)) else None
+        )
         return PlanStepNode(
             search_name=search_name,
             parameters=params,
@@ -317,6 +350,7 @@ def from_dict(data: JSONObject) -> StrategyAST:
             filters=parse_filters(node_data.get("filters")),
             analyses=parse_analyses(node_data.get("analyses")),
             reports=parse_reports(node_data.get("reports")),
+            wdk_weight=wdk_weight,
             id=step_id,
         )
 

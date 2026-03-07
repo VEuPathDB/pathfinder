@@ -147,6 +147,7 @@ class StepsMixin(StrategyAPIBase):
         search_name: str,
         parameters: JSONObject,
         custom_name: str | None = None,
+        wdk_weight: int | None = None,
     ) -> JSONObject:
         """Create an unattached step.
 
@@ -154,14 +155,18 @@ class StepsMixin(StrategyAPIBase):
         :param search_name: Name of the search question.
         :param parameters: Search parameters.
         :param custom_name: Optional custom name for the step.
+        :param wdk_weight: Optional WDK weight for result ranking in combined strategies.
         :returns: Created step data with stepId.
         """
         normalized_params = self._normalize_parameters(parameters)
+        search_config: JSONObject = {
+            "parameters": cast(JSONObject, normalized_params),
+        }
+        if wdk_weight is not None:
+            search_config["wdkWeight"] = wdk_weight
         payload: JSONObject = {
             "searchName": search_name,
-            "searchConfig": {
-                "parameters": cast(JSONObject, normalized_params),
-            },
+            "searchConfig": search_config,
         }
         if custom_name:
             payload["customName"] = custom_name
@@ -188,6 +193,7 @@ class StepsMixin(StrategyAPIBase):
         boolean_operator: str,
         record_type: str,
         custom_name: str | None = None,
+        wdk_weight: int | None = None,
     ) -> JSONObject:
         """Create a combined step (boolean operation).
 
@@ -196,6 +202,7 @@ class StepsMixin(StrategyAPIBase):
         :param boolean_operator: One of INTERSECT, UNION, MINUS, RMINUS, LONLY, RONLY.
         :param record_type: WDK record type.
         :param custom_name: Optional custom name.
+        :param wdk_weight: Optional WDK weight for result ranking in combined strategies.
         :returns: Created step data.
         """
         await self._ensure_session()
@@ -204,16 +211,19 @@ class StepsMixin(StrategyAPIBase):
             record_type
         )
 
+        search_config: JSONObject = {
+            "parameters": {
+                # WDK requires empty inputs here; inputs are wired via stepTree
+                left_param: "",
+                right_param: "",
+                op_param: boolean_operator,
+            },
+        }
+        if wdk_weight is not None:
+            search_config["wdkWeight"] = wdk_weight
         payload: JSONObject = {
             "searchName": boolean_search,
-            "searchConfig": {
-                "parameters": {
-                    # WDK requires empty inputs here; inputs are wired via stepTree
-                    left_param: "",
-                    right_param: "",
-                    op_param: boolean_operator,
-                },
-            },
+            "searchConfig": search_config,
         }
         if custom_name:
             payload["customName"] = custom_name
@@ -240,6 +250,7 @@ class StepsMixin(StrategyAPIBase):
         parameters: JSONObject,
         record_type: str = "transcript",
         custom_name: str | None = None,
+        wdk_weight: int | None = None,
     ) -> JSONObject:
         """Create a transform step.
 
@@ -256,6 +267,7 @@ class StepsMixin(StrategyAPIBase):
         :param parameters: Transform parameters.
         :param record_type: WDK record type for the search details lookup.
         :param custom_name: Optional custom name.
+        :param wdk_weight: Optional WDK weight for result ranking in combined strategies.
         :returns: Created step data.
         """
         answer_param_names = await self._get_answer_param_names(
@@ -268,11 +280,14 @@ class StepsMixin(StrategyAPIBase):
         normalized_params = self._normalize_parameters(
             clean_params, keep_empty=answer_param_names
         )
+        search_config: JSONObject = {
+            "parameters": cast(JSONObject, normalized_params),
+        }
+        if wdk_weight is not None:
+            search_config["wdkWeight"] = wdk_weight
         payload: JSONObject = {
             "searchName": transform_name,
-            "searchConfig": {
-                "parameters": cast(JSONObject, normalized_params),
-            },
+            "searchConfig": search_config,
         }
         if custom_name:
             payload["customName"] = custom_name

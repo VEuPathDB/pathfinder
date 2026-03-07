@@ -1,7 +1,5 @@
 """Health-check probes for external dependencies."""
 
-from __future__ import annotations
-
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 

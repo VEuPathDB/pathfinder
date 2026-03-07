@@ -6,6 +6,7 @@ from typing import cast
 
 import httpx
 from tenacity import (
+    RetryError,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -128,14 +129,14 @@ class VEuPathDBClient:
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
     )
-    async def _request(
+    async def _request_attempt(
         self,
         method: str,
         path: str,
         params: JSONObject | None = None,
         json: JSONObject | None = None,
     ) -> JSONValue:
-        """Make HTTP request with retry logic.
+        """Single HTTP request attempt (tenacity handles retries).
 
         Retries on transient transport errors (timeouts, connection failures).
         HTTP status errors (4xx/5xx) and other request errors are not retried.
@@ -195,6 +196,33 @@ class VEuPathDBClient:
         except httpx.RequestError as e:
             logger.error("VEuPathDB request error", error=str(e), path=path)
             raise WDKError(f"Request failed: {e}", status=502) from e
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        params: JSONObject | None = None,
+        json: JSONObject | None = None,
+    ) -> JSONValue:
+        """Make HTTP request with retry logic.
+
+        Wraps :meth:`_request_attempt` and converts tenacity ``RetryError``
+        (raised when all retry attempts are exhausted) into ``WDKError``
+        so callers only need to handle domain errors.
+        """
+        try:
+            return await self._request_attempt(method, path, params=params, json=json)
+        except RetryError as e:
+            last = e.last_attempt.exception()
+            logger.error(
+                "VEuPathDB request failed after retries",
+                method=method,
+                path=path,
+                error=str(last),
+            )
+            raise WDKError(
+                f"Request failed after retries: {last}", status=502
+            ) from last
 
     async def get(self, path: str, params: JSONObject | None = None) -> JSONValue:
         """GET request."""
@@ -288,31 +316,34 @@ class VEuPathDBClient:
             ),
         )
 
-    async def list_step_filters(self, user_id: str, step_id: int) -> JSONArray:
-        """List filters applied to a step."""
-        return cast(
-            JSONArray, await self.get(f"/users/{user_id}/steps/{step_id}/filter")
-        )
+    async def get_step_view_filters(self, user_id: str, step_id: int) -> JSONArray:
+        """Get viewFilters from a step's answerSpec.
 
-    async def set_step_filter(
-        self,
-        user_id: str,
-        step_id: int,
-        filter_name: str,
-        payload: JSONObject,
-    ) -> JSONValue:
-        """Create or update a filter on a step."""
-        return await self.put(
-            f"/users/{user_id}/steps/{step_id}/filter/{filter_name}",
-            json=payload,
-        )
+        WDK stores filters as ``answerSpec.viewFilters`` on the step resource.
+        There is no dedicated ``/filter`` endpoint.
+        """
+        step = await self.get(f"/users/{user_id}/steps/{step_id}")
+        if not isinstance(step, dict):
+            return []
+        answer_spec = step.get("answerSpec")
+        if not isinstance(answer_spec, dict):
+            return []
+        view_filters = answer_spec.get("viewFilters")
+        if not isinstance(view_filters, list):
+            return []
+        return view_filters
 
-    async def delete_step_filter(
-        self, user_id: str, step_id: int, filter_name: str
+    async def update_step_view_filters(
+        self, user_id: str, step_id: int, filters: JSONArray
     ) -> JSONValue:
-        """Remove a filter from a step."""
-        return await self.delete(
-            f"/users/{user_id}/steps/{step_id}/filter/{filter_name}"
+        """Update a step's viewFilters via PATCH on the step resource.
+
+        WDK manages filters through ``answerSpec.viewFilters``. The PATCH
+        body is ``{"answerSpec": {"viewFilters": [...]}}``.
+        """
+        return await self.patch(
+            f"/users/{user_id}/steps/{step_id}",
+            json={"answerSpec": {"viewFilters": filters}},
         )
 
     async def list_analysis_types(self, user_id: str, step_id: int) -> JSONArray:

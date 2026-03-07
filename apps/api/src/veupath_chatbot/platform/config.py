@@ -12,7 +12,7 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from veupath_chatbot.ai.models.catalog import ReasoningEffort
+from veupath_chatbot.platform.types import ReasoningEffort
 
 
 class TomlConfigSettingsSource(PydanticBaseSettingsSource):

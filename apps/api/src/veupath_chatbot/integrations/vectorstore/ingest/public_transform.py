@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 
 from veupath_chatbot.platform.config import get_settings

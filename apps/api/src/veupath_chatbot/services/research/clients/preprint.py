@@ -1,14 +1,12 @@
 """Preprint site search client (bioRxiv, medRxiv)."""
 
-from __future__ import annotations
-
 import asyncio
 import re
 from typing import Literal
 
 import httpx
 
-from veupath_chatbot.platform.types import JSONArray, JSONObject
+from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.research.clients._base import (
     BaseClient,
     build_response,
@@ -23,7 +21,13 @@ from veupath_chatbot.services.research.utils import (
 
 
 class PreprintClient(BaseClient):
-    """Client for preprint site searches via DuckDuckGo."""
+    """Client for preprint site searches via DuckDuckGo.
+
+    Preprint search has a unique signature (``site``, ``source``,
+    ``include_abstract``) and a post-processing step that fetches page
+    summaries, so it keeps a custom ``search`` method.  Per-item parsing
+    still goes through ``_parse_item`` / ``_build_results``.
+    """
 
     async def search(
         self,
@@ -36,41 +40,12 @@ class PreprintClient(BaseClient):
         abstract_max_chars: int,
     ) -> JSONObject:
         """Search preprint sites using DuckDuckGo."""
-        # Use DDG HTML endpoint (tests mock duckduckgo.com/html/ for preprints).
-        ddg_url = "https://duckduckgo.com/html/"
-        params = {"q": f"site:{site} {query}"}
-        headers = {
-            "User-Agent": "pathfinder-planner/1.0 (+https://pathfinder.veupathdb.org)"
-        }
-        async with httpx.AsyncClient(timeout=self._timeout, headers=headers) as client:
-            resp = await client.get(ddg_url, params=params, follow_redirects=True)
-            resp.raise_for_status()
-            html = resp.text or ""
+        raw_items = await self._fetch_raw(query, site=site, limit=limit)
+        self._current_source: Literal["biorxiv", "medrxiv"] = source
+        results, citations = self._build_results(
+            raw_items, abstract_max_chars=abstract_max_chars
+        )
 
-        # Reuse the simple result parser shape.
-        results: JSONArray = []
-        citations: list[JSONObject] = []
-        for m in re.finditer(
-            r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
-            html,
-            flags=re.IGNORECASE,
-        ):
-            if len(results) >= limit:
-                break
-            href = m.group(1)
-            title = strip_tags(m.group(2))
-            url_item = decode_ddg_redirect(href)
-            results.append({"title": title, "url": url_item, "snippet": None})
-            citations.append(
-                make_citation(
-                    source=source,
-                    id_prefix=source,
-                    title=title or (url_item or f"{source} result"),
-                    url=url_item,
-                )
-            )
-
-        # Optional: fetch a summary if requested (best-effort).
         if include_abstract and results:
             dict_results = [r for r in results if isinstance(r, dict)]
             async with httpx.AsyncClient(
@@ -83,9 +58,7 @@ class PreprintClient(BaseClient):
                 summaries = await asyncio.gather(
                     *[
                         fetch_page_summary(
-                            client,
-                            r.get("url"),
-                            max_chars=abstract_max_chars,
+                            client, r.get("url"), max_chars=abstract_max_chars
                         )
                         for r in dict_results
                     ],
@@ -99,3 +72,53 @@ class PreprintClient(BaseClient):
         return build_response(
             query=query, source=source, results=results, citations=citations
         )
+
+    # -- fetch -------------------------------------------------------------
+
+    async def _fetch_raw(self, query: str, *, site: str, limit: int) -> list[JSONValue]:
+        ddg_url = "https://duckduckgo.com/html/"
+        params = {"q": f"site:{site} {query}"}
+        headers = {
+            "User-Agent": "pathfinder-planner/1.0 (+https://pathfinder.veupathdb.org)"
+        }
+        async with httpx.AsyncClient(timeout=self._timeout, headers=headers) as client:
+            resp = await client.get(ddg_url, params=params, follow_redirects=True)
+            resp.raise_for_status()
+            html = resp.text or ""
+
+        items: list[JSONValue] = []
+        for m in re.finditer(
+            r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+            html,
+            flags=re.IGNORECASE,
+        ):
+            if len(items) >= limit:
+                break
+            items.append(
+                {
+                    "_title": strip_tags(m.group(2)),
+                    "_url": decode_ddg_redirect(m.group(1)),
+                }
+            )
+        return items
+
+    # -- parse -------------------------------------------------------------
+
+    def _parse_item(
+        self, raw: JSONValue, *, abstract_max_chars: int
+    ) -> tuple[JSONObject, JSONObject] | None:
+        if not isinstance(raw, dict):
+            return None
+        title = str(raw.get("_title") or "")
+        url_str = raw.get("_url")
+        url_str = url_str if isinstance(url_str, str) else None
+        source = self._current_source
+
+        result: JSONObject = {"title": title, "url": url_str, "snippet": None}
+        citation = make_citation(
+            source=source,
+            id_prefix=source,
+            title=title or (url_str or f"{source} result"),
+            url=url_str,
+        )
+        return result, citation

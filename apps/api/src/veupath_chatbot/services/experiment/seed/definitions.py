@@ -4,8 +4,6 @@ Defines :class:`SeedDef` and :class:`ControlSetDef` dataclasses plus the
 master :data:`SEEDS` list that drives :func:`run_seed`.
 """
 
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass, field
 from typing import Any

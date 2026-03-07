@@ -19,19 +19,15 @@ Parameters are fetched from the WDK analysis form defaults so required
 fields like ``organism`` and ``pValueCutoff`` are always populated.
 """
 
-from __future__ import annotations
-
 import json
 import re
 
+from veupath_chatbot.domain.parameters.specs import unwrap_search_data
+from veupath_chatbot.domain.strategy.ast import StepTreeNode
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-from veupath_chatbot.integrations.veupathdb.strategy_api import (
-    StepTreeNode,
-    StrategyAPI,
-)
+from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject, JSONValue
-from veupath_chatbot.services.catalog.param_resolution import _unwrap_search_data
 from veupath_chatbot.services.control_helpers import delete_temp_strategy
 from veupath_chatbot.services.experiment.helpers import (
     coerce_step_id,
@@ -310,7 +306,7 @@ def _extract_param_specs(form_meta: JSONValue) -> list[JSONObject]:
     """
     if not isinstance(form_meta, dict):
         return []
-    container = _unwrap_search_data(form_meta) or form_meta
+    container = unwrap_search_data(form_meta) or form_meta
     params_raw = container.get("parameters")
     if not isinstance(params_raw, list):
         return []
@@ -386,7 +382,7 @@ def _extract_default_params(form_meta: JSONValue) -> JSONObject:
 
         { "searchData": { "parameters": [ {name, initialDisplayValue, ...}, ... ] } }
 
-    Uses :func:`_unwrap_search_data` to normalize the nesting, then
+    Uses :func:`unwrap_search_data` to normalize the nesting, then
     extracts ``name``/``initialDisplayValue`` from each parameter spec.
 
     WDK's ``ParamFormatter.java`` emits ``initialDisplayValue`` (via

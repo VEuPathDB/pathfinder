@@ -1,7 +1,5 @@
 """Prompt builders for sub-kani execution."""
 
-from __future__ import annotations
-
 
 def build_subkani_round_prompt(
     *,

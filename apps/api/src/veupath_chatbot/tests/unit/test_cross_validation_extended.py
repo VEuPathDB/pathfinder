@@ -9,8 +9,6 @@ Extends test_cross_validation.py with:
 - _run_kfold fold evaluator that raises
 """
 
-from __future__ import annotations
-
 import math
 
 import pytest

@@ -1,22 +1,11 @@
 """WDK-backed strategy endpoints (open/import/sync/list)."""
 
-from __future__ import annotations
-
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Response
 from shared_py.defaults import DEFAULT_STREAM_NAME
 
-from veupath_chatbot.integrations.veupathdb.factory import (
-    get_site,
-    get_strategy_api,
-    list_sites,
-)
-from veupath_chatbot.integrations.veupathdb.strategy_api import (
-    is_internal_wdk_strategy_name,
-    strip_internal_wdk_strategy_name,
-)
 from veupath_chatbot.platform.errors import (
     ErrorCode,
     NotFoundError,
@@ -34,6 +23,13 @@ from veupath_chatbot.services.strategies.wdk_bridge import (
     sync_to_projection,
     upsert_projection,
     wdk_error_boundary,
+)
+from veupath_chatbot.services.wdk import (
+    get_site,
+    get_strategy_api,
+    is_internal_wdk_strategy_name,
+    list_sites,
+    strip_internal_wdk_strategy_name,
 )
 from veupath_chatbot.transport.http.deps import (
     CurrentUser,

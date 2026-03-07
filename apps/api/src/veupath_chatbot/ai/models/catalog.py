@@ -4,13 +4,9 @@ Each entry carries enough metadata for the frontend to render a grouped
 dropdown and for the backend to validate per-request overrides.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import Literal
 
-ModelProvider = Literal["openai", "anthropic", "google"]
-ReasoningEffort = Literal["none", "low", "medium", "high"]
+from veupath_chatbot.platform.types import ModelProvider, ReasoningEffort
 
 # OpenAI reasoning models (gpt-5*, o1, o3, o4) use the flat
 # ``reasoning_effort`` param accepted by ``chat.completions.create()``.

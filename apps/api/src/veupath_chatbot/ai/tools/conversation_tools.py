@@ -9,7 +9,7 @@ from veupath_chatbot.domain.strategy.session import StrategySession
 from veupath_chatbot.platform.errors import ErrorCode
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.tool_errors import tool_error
-from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.platform.types import JSONObject
 
 logger = get_logger(__name__)
 
@@ -25,11 +25,6 @@ class ConversationTools:
         self.session = session
         self.user_id = user_id
 
-    def _tool_error(
-        self, code: ErrorCode | str, message: str, **details: JSONValue
-    ) -> JSONObject:
-        return tool_error(code, message, **details)
-
     @ai_function()
     async def save_strategy(
         self,
@@ -44,11 +39,9 @@ class ConversationTools:
         """
         graph = self.session.get_graph(graph_id)
         if not graph:
-            return self._tool_error(
-                ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id
-            )
+            return tool_error(ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id)
         if not graph.current_strategy:
-            return self._tool_error(
+            return tool_error(
                 ErrorCode.INVALID_STRATEGY,
                 "No strategy to save. Build a strategy first.",
             )
@@ -83,13 +76,9 @@ class ConversationTools:
         """Rename the current strategy."""
         graph = self.session.get_graph(graph_id)
         if not graph:
-            return self._tool_error(
-                ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id
-            )
+            return tool_error(ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id)
         if not graph.current_strategy:
-            return self._tool_error(
-                ErrorCode.INVALID_STRATEGY, "No strategy to rename."
-            )
+            return tool_error(ErrorCode.INVALID_STRATEGY, "No strategy to rename.")
 
         old_name = graph.current_strategy.name
         graph.current_strategy.name = new_name
@@ -123,11 +112,9 @@ class ConversationTools:
         """
         graph = self.session.get_graph(graph_id)
         if not graph:
-            return self._tool_error(
-                ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id
-            )
+            return tool_error(ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id)
         if not confirm:
-            return self._tool_error(
+            return tool_error(
                 ErrorCode.VALIDATION_ERROR,
                 "Refusing to clear the strategy without confirmation. Use confirm=true.",
                 graphId=graph.id,
@@ -161,9 +148,7 @@ class ConversationTools:
         """
         graph = self.session.get_graph(graph_id)
         if not graph:
-            return self._tool_error(
-                ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id
-            )
+            return tool_error(ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id)
         if not graph.current_strategy:
             return {
                 "hasStrategy": False,

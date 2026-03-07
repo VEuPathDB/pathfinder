@@ -5,21 +5,17 @@ experiment strategy: add new search steps, combine with gene ID lists,
 and re-evaluate control metrics after refinement.
 """
 
-from __future__ import annotations
-
 from typing import Annotated, cast
 
 from kani import AIParam, ai_function
 
+from veupath_chatbot.domain.strategy.ast import StepTreeNode
 from veupath_chatbot.domain.strategy.ops import (
     BOOLEAN_OPERATOR_OPTIONS_DESC,
     DEFAULT_COMBINE_OPERATOR,
 )
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-from veupath_chatbot.integrations.veupathdb.strategy_api import (
-    StepTreeNode,
-    StrategyAPI,
-)
+from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.control_tests import resolve_controls_param_type
 from veupath_chatbot.services.experiment.ai_analysis_helpers import (

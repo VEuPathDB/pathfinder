@@ -5,8 +5,6 @@ endpoints to work with WDK record types, primary keys, and analysis
 parameters. Previously duplicated across multiple router modules.
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 
 # ---------------------------------------------------------------------------
@@ -106,48 +104,6 @@ def extract_record_ids(
         if extracted:
             ids.append(extracted)
     return ids
-
-
-# ---------------------------------------------------------------------------
-# Attribute name extraction
-# ---------------------------------------------------------------------------
-
-
-def extract_displayable_attr_names(attrs_raw: object) -> list[str]:
-    """Extract displayable attribute names from WDK record type info.
-
-    WDK record type info can return attributes in two formats:
-
-    * **dict** (``attributesMap``): ``{name: {isDisplayable, ...}, ...}``
-    * **list** (expanded): ``[{name, isDisplayable, ...}, ...]``
-
-    Empty or missing attribute names are filtered out because WDK's
-    ``RecordRequest.parseAttributeNames`` rejects names not in the
-    record class attribute field map.
-
-    :param attrs_raw: Raw attributes value from the record type info.
-    :returns: List of valid displayable attribute names.
-    """
-    attr_names: list[str] = []
-    if isinstance(attrs_raw, dict):
-        for name, meta in attrs_raw.items():
-            if not name or not isinstance(name, str):
-                continue
-            if isinstance(meta, dict) and meta.get("isDisplayable", True):
-                attr_names.append(str(name))
-    elif isinstance(attrs_raw, list):
-        for meta in attrs_raw:
-            if not isinstance(meta, dict):
-                continue
-            if not meta.get("isDisplayable", True):
-                continue
-            raw_name = meta.get("name")
-            if raw_name is None:
-                continue
-            name = str(raw_name).strip()
-            if name:
-                attr_names.append(name)
-    return attr_names
 
 
 # ---------------------------------------------------------------------------

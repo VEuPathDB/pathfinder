@@ -1,7 +1,5 @@
 """Strategy counts endpoints (WDK-backed)."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 
 from veupath_chatbot.platform.errors import WDKError

@@ -1,7 +1,5 @@
 """Redis connection management for event sourcing."""
 
-from __future__ import annotations
-
 from redis.asyncio import Redis
 
 from veupath_chatbot.platform.config import get_settings

@@ -2,6 +2,7 @@
 
 Covers:
   - QdrantStore helper functions with unusual inputs
+  - QdrantStore._get_with_client dense vector handling
   - Bootstrap _known_embedding_dims gap analysis
   - Ingest utils edge cases
   - Public strategies helpers edge cases
@@ -12,6 +13,10 @@ Covers:
 
 import json
 import uuid
+from dataclasses import dataclass
+from unittest.mock import AsyncMock
+
+import pytest
 
 from veupath_chatbot.integrations.embeddings.openai_embeddings import _chunks
 from veupath_chatbot.integrations.vectorstore.bootstrap import _known_embedding_dims
@@ -28,10 +33,7 @@ from veupath_chatbot.integrations.vectorstore.ingest.public_strategies_helpers i
     simplify_strategy_details,
     truncate,
 )
-from veupath_chatbot.integrations.vectorstore.ingest.utils import (
-    extract_search_name,
-    parse_sites,
-)
+from veupath_chatbot.integrations.vectorstore.ingest.utils import parse_sites
 from veupath_chatbot.integrations.vectorstore.ingest.wdk_transform import (
     _preview_vocab,
     build_record_type_doc,
@@ -127,6 +129,95 @@ class TestContextHashEdgeCases:
 
 
 # ===========================================================================
+# QdrantStore._get_with_client dense vector handling
+# ===========================================================================
+
+
+@dataclass
+class _FakePoint:
+    """Minimal stand-in for a qdrant_client Record/ScoredPoint."""
+
+    id: str
+    payload: dict[str, object] | None
+    vector: list[float] | None
+
+
+class TestGetWithClientDenseVector:
+    """Verify _get_with_client returns correct JSON for dense vectors."""
+
+    async def _call(
+        self, vector: list[float] | None, payload: dict[str, object] | None = None
+    ) -> dict[str, object] | None:
+        from veupath_chatbot.integrations.vectorstore.qdrant_store import QdrantStore
+
+        store = QdrantStore(url="http://localhost:6333")
+        fake_client = AsyncMock()
+        fake_client.retrieve = AsyncMock(
+            return_value=[_FakePoint(id="pt-1", payload=payload or {}, vector=vector)]
+        )
+        return await store._get_with_client(fake_client, "test_col", "pt-1")
+
+    @pytest.mark.asyncio
+    async def test_dense_vector_returned_as_float_list(self) -> None:
+        result = await self._call([0.1, 0.2, 0.3])
+        assert result is not None
+        assert result["id"] == "pt-1"
+        assert result["vector"] == [0.1, 0.2, 0.3]
+        assert all(isinstance(v, float) for v in result["vector"])
+
+    @pytest.mark.asyncio
+    async def test_none_vector_returned_as_none(self) -> None:
+        result = await self._call(None)
+        assert result is not None
+        assert result["vector"] is None
+
+    @pytest.mark.asyncio
+    async def test_empty_vector_returned_as_empty_list(self) -> None:
+        result = await self._call([])
+        assert result is not None
+        assert result["vector"] == []
+
+    @pytest.mark.asyncio
+    async def test_payload_preserved(self) -> None:
+        result = await self._call([1.0], payload={"site": "PlasmoDB"})
+        assert result is not None
+        assert result["payload"] == {"site": "PlasmoDB"}
+
+    @pytest.mark.asyncio
+    async def test_null_payload_becomes_empty_dict(self) -> None:
+        result = await self._call([1.0], payload=None)
+        assert result is not None
+        assert result["payload"] == {}
+
+    @pytest.mark.asyncio
+    async def test_empty_result_returns_none(self) -> None:
+        from veupath_chatbot.integrations.vectorstore.qdrant_store import QdrantStore
+
+        store = QdrantStore(url="http://localhost:6333")
+        fake_client = AsyncMock()
+        fake_client.retrieve = AsyncMock(return_value=[])
+        result = await store._get_with_client(fake_client, "test_col", "missing")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_qdrant_error_returns_none(self) -> None:
+        from veupath_chatbot.integrations.vectorstore.qdrant_store import QdrantStore
+
+        store = QdrantStore(url="http://localhost:6333")
+        fake_client = AsyncMock()
+        fake_client.retrieve = AsyncMock(side_effect=RuntimeError("connection refused"))
+        result = await store._get_with_client(fake_client, "test_col", "pt-1")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_integer_values_coerced_to_float(self) -> None:
+        result = await self._call([1, 2, 3])
+        assert result is not None
+        assert result["vector"] == [1.0, 2.0, 3.0]
+        assert all(isinstance(v, float) for v in result["vector"])
+
+
+# ===========================================================================
 # Bootstrap
 # ===========================================================================
 
@@ -146,20 +237,6 @@ class TestKnownEmbeddingDimsEdgeCases:
 # ===========================================================================
 # Ingest utilities
 # ===========================================================================
-
-
-class TestExtractSearchNameEdgeCases:
-    def test_numeric_url_segment(self) -> None:
-        """Non-string values should still produce a result."""
-        obj = {"urlSegment": 42}
-        result = extract_search_name(obj)
-        assert result == "42"
-
-    def test_bool_url_segment(self) -> None:
-        obj = {"urlSegment": True}
-        result = extract_search_name(obj)
-        # bool converts to "True"
-        assert result == "True"
 
 
 class TestParseSitesEdgeCases:
@@ -252,16 +329,10 @@ class TestIterCompactStepsEdgeCases:
 
 class TestSimplifyStrategyDetailsEdgeCases:
     def test_missing_step_tree(self) -> None:
-        """When stepTree is absent, details.get("stepTree") or {} returns {},
-        which IS a dict, so simplify_step_node({}) is called. The result
-        is a dict with None/empty values, NOT None itself."""
+        """When stepTree is absent, the result should be None."""
         details = {"recordClassName": "Gene", "rootStepId": 1}
         compact = simplify_strategy_details(details)
-        # BUG: This is arguably incorrect -- when stepTree is absent, the
-        # simplified output should probably be None (matching the input's
-        # intent), but the `or {}` fallback causes an empty-but-present dict.
-        assert isinstance(compact["stepTree"], dict)
-        assert compact["stepTree"]["searchName"] is None
+        assert compact["stepTree"] is None
 
     def test_steps_is_not_dict(self) -> None:
         details = {

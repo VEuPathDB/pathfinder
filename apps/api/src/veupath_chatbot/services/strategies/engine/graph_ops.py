@@ -1,7 +1,5 @@
 """Graph traversal, node/edge operations, serialization, and snapshots."""
 
-from __future__ import annotations
-
 from typing import cast
 
 from veupath_chatbot.domain.strategy.ast import PlanStepNode, StrategyAST
@@ -103,24 +101,17 @@ class GraphOpsMixin(StrategyToolsBase):
             info["searchName"] = step.search_name
 
         # Structural relationships.
+        include_primary = kind in ("combine", "transform") or always_include_inputs
+        include_secondary = kind == "combine" or always_include_inputs
         if kind == "combine":
             info["operator"] = step.operator.value if step.operator else None
+        if include_primary:
             info["primaryInputStepId"] = (
                 step.primary_input.id if step.primary_input else None
             )
+        if include_secondary:
             info["secondaryInputStepId"] = (
                 step.secondary_input.id if step.secondary_input else None
-            )
-        elif always_include_inputs:
-            info["primaryInputStepId"] = (
-                step.primary_input.id if step.primary_input else None
-            )
-            info["secondaryInputStepId"] = (
-                step.secondary_input.id if step.secondary_input else None
-            )
-        elif kind == "transform":
-            info["primaryInputStepId"] = (
-                step.primary_input.id if step.primary_input else None
             )
 
         # WDK-aligned fields (populated after build_strategy).

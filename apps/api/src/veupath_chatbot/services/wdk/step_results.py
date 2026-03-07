@@ -4,8 +4,6 @@ Used by both experiment and gene set endpoints to avoid duplicating
 attribute listing, record browsing, distribution, and analysis logic.
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.integrations.veupathdb.strategy_api.api import StrategyAPI
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject

@@ -1,7 +1,5 @@
 """Shared helpers for step sub-routers."""
 
-from __future__ import annotations
-
 from uuid import UUID
 
 from veupath_chatbot.domain.strategy.ast import (

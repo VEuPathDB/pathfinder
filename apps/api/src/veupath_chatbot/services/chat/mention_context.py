@@ -5,8 +5,6 @@ entity and format a human-readable context block that gets appended to the
 system prompt so the model has complete information from the start.
 """
 
-from __future__ import annotations
-
 import json
 from typing import Literal
 

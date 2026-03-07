@@ -1,7 +1,5 @@
 """Unit tests for auto_push lock eviction safety."""
 
-from __future__ import annotations
-
 from uuid import uuid4
 
 import pytest

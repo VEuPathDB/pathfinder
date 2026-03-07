@@ -1,7 +1,5 @@
 """Phase 1: Per-step evaluation -- evaluate each leaf independently."""
 
-from __future__ import annotations
-
 import asyncio
 
 from veupath_chatbot.platform.logging import get_logger

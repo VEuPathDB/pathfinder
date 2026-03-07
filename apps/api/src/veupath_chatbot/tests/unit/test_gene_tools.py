@@ -1,7 +1,5 @@
 """Tests for GeneToolsMixin — gene lookup and ID resolution."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, patch
 
 from veupath_chatbot.ai.tools.planner.gene_tools import GeneToolsMixin

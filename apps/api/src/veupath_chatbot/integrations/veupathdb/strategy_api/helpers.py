@@ -1,11 +1,12 @@
 """Module-level helpers for WDK strategy operations.
 
-Contains :class:`StepTreeNode` for building step trees, internal strategy
-name tagging utilities, and shared constants.
+Internal strategy name tagging utilities, shared constants, and
+re-export of :class:`StepTreeNode` (canonical definition lives in
+``domain.strategy.ast``).
 """
 
+from veupath_chatbot.domain.strategy.ast import StepTreeNode
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
-from veupath_chatbot.platform.types import JSONObject
 
 # Internal (Pathfinder-created) WDK strategies.
 #
@@ -66,35 +67,12 @@ async def resolve_wdk_user_id(client: VEuPathDBClient) -> str | None:
     return None
 
 
-class StepTreeNode:
-    """Node in a step tree (for building strategy).
-
-    Represents a single step with optional primary (and for combines, secondary)
-    input references. Used to build the ``stepTree`` payload for WDK strategy
-    creation.
-    """
-
-    def __init__(
-        self,
-        step_id: int,
-        primary_input: StepTreeNode | None = None,
-        secondary_input: StepTreeNode | None = None,
-    ) -> None:
-        """Build a step tree node.
-
-        :param step_id: WDK step ID (integer from create_step).
-        :param primary_input: Child node for unary/binary operations.
-        :param secondary_input: Second child for combine (e.g. UNION) steps.
-        """
-        self.step_id = step_id
-        self.primary_input = primary_input
-        self.secondary_input = secondary_input
-
-    def to_dict(self) -> JSONObject:
-        """Convert to WDK stepTree format."""
-        result: JSONObject = {"stepId": self.step_id}
-        if self.primary_input:
-            result["primaryInput"] = self.primary_input.to_dict()
-        if self.secondary_input:
-            result["secondaryInput"] = self.secondary_input.to_dict()
-        return result
+__all__ = [
+    "CURRENT_USER",
+    "PATHFINDER_INTERNAL_STRATEGY_NAME_PREFIX",
+    "StepTreeNode",
+    "is_internal_wdk_strategy_name",
+    "resolve_wdk_user_id",
+    "strip_internal_wdk_strategy_name",
+    "tag_internal_wdk_strategy_name",
+]

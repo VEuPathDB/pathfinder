@@ -1,7 +1,5 @@
 """Helpers for hydrating in-memory strategy session context for agents."""
 
-from __future__ import annotations
-
 from shared_py.defaults import DEFAULT_STREAM_NAME
 
 from veupath_chatbot.domain.strategy.ast import from_dict

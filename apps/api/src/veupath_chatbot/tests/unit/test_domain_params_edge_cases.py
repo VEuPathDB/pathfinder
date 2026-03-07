@@ -1,7 +1,5 @@
 """Edge-case and bug-hunting tests for domain/parameters."""
 
-from __future__ import annotations
-
 import json
 
 import pytest
@@ -356,12 +354,6 @@ class TestExtractParamSpecsEdgeCases:
         specs = extract_param_specs(payload)
         assert specs == []
 
-    def test_non_dict_question(self) -> None:
-        """question that isn't a dict should be handled."""
-        payload = {"question": 42}
-        specs = extract_param_specs(payload)
-        assert specs == []
-
 
 class TestAdaptParamSpecsEdgeCases:
     def test_zero_max_selected(self) -> None:
@@ -413,37 +405,45 @@ class TestAdaptParamSpecsEdgeCases:
 class TestFindMissingRequiredParamsEdgeCases:
     def test_multi_pick_with_non_empty_json_string(self) -> None:
         """Non-empty JSON array string should not be flagged as missing."""
-        specs = [{"name": "p1", "type": "multi-pick-vocabulary", "isRequired": True}]
+        specs = [
+            {"name": "p1", "type": "multi-pick-vocabulary", "allowEmptyValue": False}
+        ]
         missing = find_missing_required_params(specs, {"p1": '["Plasmodium"]'})
         assert missing == []
 
     def test_multi_pick_with_none_value(self) -> None:
-        specs = [{"name": "p1", "type": "multi-pick-vocabulary", "isRequired": True}]
+        specs = [
+            {"name": "p1", "type": "multi-pick-vocabulary", "allowEmptyValue": False}
+        ]
         missing = find_missing_required_params(specs, {"p1": None})
         assert missing == ["p1"]
 
     def test_multi_pick_with_empty_string(self) -> None:
-        specs = [{"name": "p1", "type": "multi-pick-vocabulary", "isRequired": True}]
+        specs = [
+            {"name": "p1", "type": "multi-pick-vocabulary", "allowEmptyValue": False}
+        ]
         missing = find_missing_required_params(specs, {"p1": ""})
         assert missing == ["p1"]
 
     def test_value_is_zero(self) -> None:
         """Zero is falsy but should NOT be treated as missing for non-multi-pick."""
-        specs = [{"name": "p1", "type": "number", "isRequired": True}]
+        specs = [{"name": "p1", "type": "number", "allowEmptyValue": False}]
         missing = find_missing_required_params(specs, {"p1": 0})
         # 0 is not in (None, "", [], {})
         assert missing == []
 
     def test_value_is_false(self) -> None:
         """Boolean False should NOT be treated as missing."""
-        specs = [{"name": "p1", "type": "string", "isRequired": True}]
+        specs = [{"name": "p1", "type": "string", "allowEmptyValue": False}]
         missing = find_missing_required_params(specs, {"p1": False})
         # False is not in (None, "", [], {})
         assert missing == []
 
     def test_type_case_insensitive(self) -> None:
         """Type comparison uses .lower() so 'Multi-Pick-Vocabulary' works."""
-        specs = [{"name": "p1", "type": "Multi-Pick-Vocabulary", "isRequired": True}]
+        specs = [
+            {"name": "p1", "type": "Multi-Pick-Vocabulary", "allowEmptyValue": False}
+        ]
         missing = find_missing_required_params(specs, {"p1": "[]"})
         assert missing == ["p1"]
 
@@ -480,11 +480,12 @@ class TestParameterValueMixinEdgeCases:
         spec = make_param_spec(max_selected=0, min_selected=0)
         self.m._validate_multi_count(spec, [])
 
-    def test_handle_empty_non_vocab_with_none_value(self) -> None:
-        """Non-vocab type with None value should return None when allow_empty is False."""
+    def test_handle_empty_non_vocab_with_none_value_raises(self) -> None:
+        """Non-vocab type with None value should raise when allow_empty is False."""
         spec = make_param_spec(param_type="number", allow_empty=False)
-        result = self.m._handle_empty(spec, None)
-        assert result is None
+        with pytest.raises(ValidationError) as exc_info:
+            self.m._handle_empty(spec, None)
+        assert "requires a value" in (exc_info.value.detail or "")
 
     def test_handle_empty_allows_all_types(self) -> None:
         """When allow_empty is True, always returns '' regardless of param_type."""

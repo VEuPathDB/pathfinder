@@ -1,13 +1,10 @@
 """Strategy CRUD endpoints — CQRS only (streams + stream_projections)."""
 
-from __future__ import annotations
-
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Response
 
-from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.platform.errors import ErrorCode, NotFoundError
 from veupath_chatbot.platform.events import read_stream_messages, read_stream_thinking
 from veupath_chatbot.platform.logging import get_logger
@@ -16,6 +13,7 @@ from veupath_chatbot.platform.tasks import spawn
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.strategies.auto_push import try_auto_push_to_wdk
 from veupath_chatbot.services.strategies.plan_validation import validate_plan_or_raise
+from veupath_chatbot.services.wdk import get_strategy_api
 from veupath_chatbot.transport.http.deps import CurrentUser, StreamRepo
 from veupath_chatbot.transport.http.schemas import (
     CreateStrategyRequest,

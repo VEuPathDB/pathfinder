@@ -16,7 +16,6 @@ from veupath_chatbot.platform.errors import (
     InternalError,
     NotFoundError,
     ProblemDetail,
-    RateLimitedError,
     UnauthorizedError,
     ValidationError,
     WDKError,
@@ -84,11 +83,6 @@ class TestErrorClasses:
         err = ForbiddenError(detail="Not your strategy")
         assert err.code == ErrorCode.FORBIDDEN
         assert err.status == 403
-
-    def test_rate_limited_error(self):
-        err = RateLimitedError(detail="Too many requests")
-        assert err.code == ErrorCode.RATE_LIMITED
-        assert err.status == 429
 
     def test_validation_error(self):
         errors = [{"loc": ["field"], "msg": "required"}]
@@ -166,15 +160,6 @@ class TestAppErrorHandler:
         body = json.loads(resp.body.decode())
         assert body["code"] == "VALIDATION_ERROR"
         assert body["errors"] == errors
-
-    async def test_rate_limited_response(self):
-        req = _make_request()
-        err = RateLimitedError()
-        resp = await app_error_handler(req, err)
-        assert resp.status_code == 429
-
-        body = json.loads(resp.body.decode())
-        assert body["code"] == "RATE_LIMITED"
 
 
 class TestHttpExceptionHandler:

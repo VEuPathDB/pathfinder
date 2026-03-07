@@ -1,7 +1,5 @@
 """Tests for HTML report generation."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.report import (
     _esc,
     _num,

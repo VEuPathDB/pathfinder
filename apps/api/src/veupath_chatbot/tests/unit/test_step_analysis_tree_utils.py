@@ -1,7 +1,5 @@
 """Unit tests for step_analysis._tree_utils -- tree traversal and manipulation."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.step_analysis._tree_utils import (
     _build_subtree_with_operator,
     _collect_combine_nodes,

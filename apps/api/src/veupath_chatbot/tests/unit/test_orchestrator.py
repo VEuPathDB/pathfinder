@@ -1,10 +1,8 @@
 """Unit tests for the CQRS chat orchestrator module.
 
-Covers the mock stream provider, mock chat provider detection, and the
-start_chat_stream entry point with mocked dependencies.
+Covers the mock stream provider and the start_chat_stream entry point
+with mocked dependencies.
 """
-
-from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
@@ -14,58 +12,12 @@ from uuid import UUID, uuid4
 import pytest
 
 from veupath_chatbot.services.chat.orchestrator import (
-    _mock_stream_chat,
-    _use_mock_chat_provider,
     start_chat_stream,
 )
+from veupath_chatbot.tests.fixtures.mock_chat import mock_stream_chat
 
 # ---------------------------------------------------------------------------
-# _use_mock_chat_provider
-# ---------------------------------------------------------------------------
-
-
-class TestUseMockChatProvider:
-    """Test mock provider detection."""
-
-    def test_returns_true_when_mock(self) -> None:
-        mock_settings = MagicMock()
-        mock_settings.chat_provider = "mock"
-        with patch(
-            "veupath_chatbot.platform.config.get_settings",
-            return_value=mock_settings,
-        ):
-            assert _use_mock_chat_provider() is True
-
-    def test_returns_true_case_insensitive(self) -> None:
-        mock_settings = MagicMock()
-        mock_settings.chat_provider = "  MOCK  "
-        with patch(
-            "veupath_chatbot.platform.config.get_settings",
-            return_value=mock_settings,
-        ):
-            assert _use_mock_chat_provider() is True
-
-    def test_returns_false_when_default(self) -> None:
-        mock_settings = MagicMock()
-        mock_settings.chat_provider = "default"
-        with patch(
-            "veupath_chatbot.platform.config.get_settings",
-            return_value=mock_settings,
-        ):
-            assert _use_mock_chat_provider() is False
-
-    def test_returns_false_when_empty(self) -> None:
-        mock_settings = MagicMock()
-        mock_settings.chat_provider = ""
-        with patch(
-            "veupath_chatbot.platform.config.get_settings",
-            return_value=mock_settings,
-        ):
-            assert _use_mock_chat_provider() is False
-
-
-# ---------------------------------------------------------------------------
-# _mock_stream_chat
+# mock_stream_chat
 # ---------------------------------------------------------------------------
 
 
@@ -75,7 +27,7 @@ class TestMockStreamChat:
     @pytest.mark.asyncio
     async def test_basic_message_yields_deltas_and_end(self) -> None:
         events: list[dict[str, Any]] = []
-        async for ev in _mock_stream_chat(message="Hello"):
+        async for ev in mock_stream_chat(message="Hello"):
             events.append(ev)
 
         types = [e["type"] for e in events]
@@ -86,7 +38,7 @@ class TestMockStreamChat:
     @pytest.mark.asyncio
     async def test_basic_message_echoes_input(self) -> None:
         events: list[dict[str, Any]] = []
-        async for ev in _mock_stream_chat(message="Test input"):
+        async for ev in mock_stream_chat(message="Test input"):
             events.append(ev)
 
         assistant_messages = [e for e in events if e["type"] == "assistant_message"]
@@ -97,7 +49,7 @@ class TestMockStreamChat:
     @pytest.mark.asyncio
     async def test_artifact_graph_trigger_yields_planning_artifact(self) -> None:
         events: list[dict[str, Any]] = []
-        async for ev in _mock_stream_chat(message="show artifact graph"):
+        async for ev in mock_stream_chat(message="show artifact graph"):
             events.append(ev)
 
         types = [e["type"] for e in events]
@@ -110,7 +62,7 @@ class TestMockStreamChat:
     @pytest.mark.asyncio
     async def test_delegation_trigger_yields_subkani_and_strategy_events(self) -> None:
         events: list[dict[str, Any]] = []
-        async for ev in _mock_stream_chat(
+        async for ev in mock_stream_chat(
             message="delegate_strategy_subtasks", strategy_id="test-strat-123"
         ):
             events.append(ev)
@@ -131,7 +83,7 @@ class TestMockStreamChat:
     @pytest.mark.asyncio
     async def test_slow_message_still_completes(self) -> None:
         events: list[dict[str, Any]] = []
-        async for ev in _mock_stream_chat(message="slow test"):
+        async for ev in mock_stream_chat(message="slow test"):
             events.append(ev)
 
         types = [e["type"] for e in events]
@@ -140,7 +92,7 @@ class TestMockStreamChat:
     @pytest.mark.asyncio
     async def test_delegation_default_strategy_id(self) -> None:
         events: list[dict[str, Any]] = []
-        async for ev in _mock_stream_chat(message="delegation test"):
+        async for ev in mock_stream_chat(message="delegation test"):
             events.append(ev)
 
         su_events = [e for e in events if e["type"] == "strategy_update"]

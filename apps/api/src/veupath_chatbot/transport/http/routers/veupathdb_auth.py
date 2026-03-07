@@ -5,19 +5,17 @@ Pathfinder user (via ``User.external_id = email``) and returns a
 ``pathfinder-auth`` token so the frontend has a stable identity across sessions.
 """
 
-from __future__ import annotations
-
 import httpx
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from veupath_chatbot.integrations.veupathdb.factory import get_site, get_wdk_client
 from veupath_chatbot.platform.config import get_settings
 from veupath_chatbot.platform.context import veupathdb_auth_token_ctx
 from veupath_chatbot.platform.errors import UnauthorizedError, ValidationError
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.security import create_user_token
+from veupath_chatbot.services.wdk import get_site, get_wdk_client
 from veupath_chatbot.transport.http.deps import UserRepo
 from veupath_chatbot.transport.http.schemas import (
     AuthStatusResponse,

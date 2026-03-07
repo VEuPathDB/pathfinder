@@ -1,0 +1,196 @@
+"""Tests for WDK-compliant filter operations via answerSpec.viewFilters.
+
+WDK does NOT have dedicated filter endpoints. Filters are managed through
+the step's answerSpec.viewFilters array via GET/PATCH on the step resource.
+"""
+
+from typing import cast
+from unittest.mock import AsyncMock, MagicMock
+
+from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+
+# ---------------------------------------------------------------------------
+# Client-level tests: get_step_view_filters / update_step_view_filters
+# ---------------------------------------------------------------------------
+
+
+class TestClientGetStepViewFilters:
+    """client.get_step_view_filters extracts viewFilters from step GET."""
+
+    async def test_returns_view_filters_from_step(self) -> None:
+        from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
+
+        client = VEuPathDBClient.__new__(VEuPathDBClient)
+        step_response: JSONObject = {
+            "id": 42,
+            "answerSpec": {
+                "searchName": "GenesByTextSearch",
+                "searchConfig": {"parameters": {}},
+                "viewFilters": [
+                    {"name": "filter1", "value": {"min": 0}, "disabled": False}
+                ],
+            },
+        }
+        client.get = AsyncMock(return_value=step_response)
+        result = await client.get_step_view_filters("12345", 42)
+        client.get.assert_awaited_once_with("/users/12345/steps/42")
+        assert result == [{"name": "filter1", "value": {"min": 0}, "disabled": False}]
+
+    async def test_returns_empty_when_no_view_filters(self) -> None:
+        from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
+
+        client = VEuPathDBClient.__new__(VEuPathDBClient)
+        step_response: JSONObject = {
+            "id": 42,
+            "answerSpec": {
+                "searchName": "GenesByTextSearch",
+                "searchConfig": {"parameters": {}},
+            },
+        }
+        client.get = AsyncMock(return_value=step_response)
+        result = await client.get_step_view_filters("12345", 42)
+        assert result == []
+
+    async def test_returns_empty_when_no_answer_spec(self) -> None:
+        from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
+
+        client = VEuPathDBClient.__new__(VEuPathDBClient)
+        client.get = AsyncMock(return_value={"id": 42})
+        result = await client.get_step_view_filters("12345", 42)
+        assert result == []
+
+
+class TestClientUpdateStepViewFilters:
+    """client.update_step_view_filters PATCHes answerSpec.viewFilters."""
+
+    async def test_patches_step_with_view_filters(self) -> None:
+        from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
+
+        client = VEuPathDBClient.__new__(VEuPathDBClient)
+        client.patch = AsyncMock(return_value={})
+        filters: JSONArray = [
+            cast(JSONValue, {"name": "f1", "value": {"min": 0}, "disabled": False})
+        ]
+        await client.update_step_view_filters("12345", 42, filters)
+        client.patch.assert_awaited_once_with(
+            "/users/12345/steps/42",
+            json={"answerSpec": {"viewFilters": filters}},
+        )
+
+    async def test_patches_with_empty_filters(self) -> None:
+        from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
+
+        client = VEuPathDBClient.__new__(VEuPathDBClient)
+        client.patch = AsyncMock(return_value={})
+        await client.update_step_view_filters("12345", 42, [])
+        client.patch.assert_awaited_once_with(
+            "/users/12345/steps/42",
+            json={"answerSpec": {"viewFilters": []}},
+        )
+
+
+# ---------------------------------------------------------------------------
+# FilterMixin tests: list, set, delete via viewFilters
+# ---------------------------------------------------------------------------
+
+
+def _make_filter_mixin() -> tuple[object, MagicMock]:
+    """Create a FilterMixin instance with a mock client."""
+    from veupath_chatbot.integrations.veupathdb.strategy_api.filters import FilterMixin
+
+    client = MagicMock()
+    client.get_step_view_filters = AsyncMock(return_value=[])
+    client.update_step_view_filters = AsyncMock(return_value={})
+    mixin = FilterMixin(client, user_id="12345")
+    mixin._session_initialized = True
+    return mixin, client
+
+
+class TestFilterMixinList:
+    """FilterMixin.list_step_filters delegates to client.get_step_view_filters."""
+
+    async def test_list_returns_view_filters(self) -> None:
+        mixin, client = _make_filter_mixin()
+        expected: JSONArray = [
+            cast(JSONValue, {"name": "f1", "value": {"min": 0}, "disabled": False})
+        ]
+        client.get_step_view_filters.return_value = expected
+        result = await mixin.list_step_filters(step_id=42)  # type: ignore[union-attr]
+        client.get_step_view_filters.assert_awaited_once_with("12345", 42)
+        assert result == expected
+
+
+class TestFilterMixinSet:
+    """FilterMixin.set_step_filter adds/updates a filter in viewFilters."""
+
+    async def test_adds_new_filter(self) -> None:
+        mixin, client = _make_filter_mixin()
+        client.get_step_view_filters.return_value = []
+        await mixin.set_step_filter(  # type: ignore[union-attr]
+            step_id=42,
+            filter_name="ranked",
+            value={"values": ["yes"]},
+        )
+        client.update_step_view_filters.assert_awaited_once()
+        call_args = client.update_step_view_filters.call_args
+        filters = call_args.args[2]
+        assert len(filters) == 1
+        assert filters[0]["name"] == "ranked"
+        assert filters[0]["value"] == {"values": ["yes"]}
+        assert filters[0]["disabled"] is False
+
+    async def test_updates_existing_filter(self) -> None:
+        mixin, client = _make_filter_mixin()
+        client.get_step_view_filters.return_value = [
+            {"name": "ranked", "value": {"values": ["no"]}, "disabled": False},
+            {"name": "other", "value": {}, "disabled": False},
+        ]
+        await mixin.set_step_filter(  # type: ignore[union-attr]
+            step_id=42,
+            filter_name="ranked",
+            value={"values": ["yes"]},
+            disabled=True,
+        )
+        call_args = client.update_step_view_filters.call_args
+        filters = call_args.args[2]
+        assert len(filters) == 2
+        ranked = next(f for f in filters if f["name"] == "ranked")
+        assert ranked["value"] == {"values": ["yes"]}
+        assert ranked["disabled"] is True
+        other = next(f for f in filters if f["name"] == "other")
+        assert other["value"] == {}
+
+
+class TestFilterMixinDelete:
+    """FilterMixin.delete_step_filter removes a filter from viewFilters."""
+
+    async def test_removes_filter(self) -> None:
+        mixin, client = _make_filter_mixin()
+        client.get_step_view_filters.return_value = [
+            {"name": "ranked", "value": 5, "disabled": False},
+            {"name": "other", "value": {}, "disabled": False},
+        ]
+        await mixin.delete_step_filter(step_id=42, filter_name="ranked")  # type: ignore[union-attr]
+        call_args = client.update_step_view_filters.call_args
+        filters = call_args.args[2]
+        assert len(filters) == 1
+        assert filters[0]["name"] == "other"
+
+    async def test_delete_nonexistent_filter_is_noop(self) -> None:
+        mixin, client = _make_filter_mixin()
+        client.get_step_view_filters.return_value = [
+            {"name": "existing", "value": 1, "disabled": False},
+        ]
+        await mixin.delete_step_filter(step_id=42, filter_name="nonexistent")  # type: ignore[union-attr]
+        call_args = client.update_step_view_filters.call_args
+        filters = call_args.args[2]
+        assert len(filters) == 1
+        assert filters[0]["name"] == "existing"
+
+    async def test_delete_from_empty_filters(self) -> None:
+        mixin, client = _make_filter_mixin()
+        client.get_step_view_filters.return_value = []
+        await mixin.delete_step_filter(step_id=42, filter_name="any")  # type: ignore[union-attr]
+        call_args = client.update_step_view_filters.call_args
+        filters = call_args.args[2]
+        assert filters == []

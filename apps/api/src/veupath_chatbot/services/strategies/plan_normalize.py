@@ -4,18 +4,18 @@ Produce canonical JSON shapes for frontend consumption. Multi-pick becomes
 list[str], ranges become ``{min, max}``, etc.
 """
 
-from __future__ import annotations
-
 import collections.abc
 import hashlib
 import json
 from collections.abc import Callable, Mapping
 
 from veupath_chatbot.domain.parameters.canonicalize import ParameterCanonicalizer
-from veupath_chatbot.domain.parameters.specs import adapt_param_specs
+from veupath_chatbot.domain.parameters.specs import (
+    adapt_param_specs,
+    unwrap_search_data,
+)
 from veupath_chatbot.platform.errors import ValidationError
 from veupath_chatbot.platform.types import JSONObject, JSONValue
-from veupath_chatbot.services.catalog.param_resolution import _unwrap_search_data
 
 
 async def canonicalize_plan_parameters(
@@ -124,7 +124,7 @@ async def canonicalize_plan_parameters(
                         }
                     ],
                 ) from exc
-            details = _unwrap_search_data(details) or {}
+            details = unwrap_search_data(details) or {}
             specs_cache[cache_key] = details if isinstance(details, dict) else {}
         spec_map = adapt_param_specs(details if isinstance(details, dict) else {})
         canonicalizer = ParameterCanonicalizer(spec_map)

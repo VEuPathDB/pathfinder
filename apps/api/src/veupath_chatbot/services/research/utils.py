@@ -1,7 +1,5 @@
 """Utility functions for research services."""
 
-from __future__ import annotations
-
 import html
 import re
 from difflib import SequenceMatcher
@@ -311,45 +309,36 @@ def dedupe_key(item: JSONObject) -> str:
     return f"title:{norm_text(str(title))}|year:{year}"
 
 
-async def fetch_page_summary(
-    client: httpx.AsyncClient, url: JSONValue, *, max_chars: int
-) -> str | None:
-    """Fetch and extract a text summary from a web page.
+_HEAD_LIMIT = 32 * 1024  # 32 KB — more than enough to capture <head>
 
-    Tries meta description tags first, then falls back to the longest ``<p>``
-    element.  Returns ``None`` for PDFs, Google Scholar links, or on error.
-    """
-    if not isinstance(url, str) or not url.strip():
-        return None
-    u = url.strip()
-    if u.lower().endswith(".pdf"):
-        return None
-    if "scholar.google." in u:
-        return None
-
-    try:
-        resp = await client.get(
-            u,
-            follow_redirects=True,
-            headers={"Referer": "https://duckduckgo.com/"},
-        )
-        resp.raise_for_status()
-        page_html = resp.text or ""
-    except Exception:
-        return None
-
-    meta_patterns = [
+_META_PATTERNS = [
+    re.compile(
         r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']',
+        re.IGNORECASE,
+    ),
+    re.compile(
         r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']',
+        re.IGNORECASE,
+    ),
+    re.compile(
         r'<meta[^>]+name=["\']twitter:description["\'][^>]+content=["\']([^"\']+)["\']',
-    ]
-    for pat in meta_patterns:
-        m = re.search(pat, page_html, flags=re.IGNORECASE)
-        if m:
-            txt = strip_tags(m.group(1))
-            return truncate_text(txt, max_chars) if txt else None
+        re.IGNORECASE,
+    ),
+]
 
-    paras = re.findall(r"<p[^>]*>(.*?)</p>", page_html, flags=re.IGNORECASE | re.DOTALL)
+
+def _extract_meta_description(text: str) -> str | None:
+    """Try each meta-description pattern and return the first match."""
+    for pat in _META_PATTERNS:
+        m = pat.search(text)
+        if m:
+            return strip_tags(m.group(1)) or None
+    return None
+
+
+def _extract_best_paragraph(text: str) -> str | None:
+    """Return the longest non-boilerplate ``<p>`` content."""
+    paras = re.findall(r"<p[^>]*>(.*?)</p>", text, flags=re.IGNORECASE | re.DOTALL)
     best: str | None = None
     for p in paras:
         txt = strip_tags(p)
@@ -360,4 +349,53 @@ async def fetch_page_summary(
             continue
         if best is None or len(txt) > len(best):
             best = txt
+    return best
+
+
+async def fetch_page_summary(
+    client: httpx.AsyncClient, url: JSONValue, *, max_chars: int
+) -> str | None:
+    """Fetch and extract a text summary from a web page.
+
+    Streams the response and stops reading as soon as ``</head>`` is found or
+    32 KB have been consumed.  Meta description tags are checked first; if none
+    are present the longest ``<p>`` in the buffered content is used as a
+    fallback.  Returns ``None`` for PDFs, Google Scholar links, or on error.
+    """
+    if not isinstance(url, str) or not url.strip():
+        return None
+    u = url.strip()
+    if u.lower().endswith(".pdf"):
+        return None
+    if "scholar.google." in u:
+        return None
+
+    try:
+        buf = ""
+        head_closed = False
+        async with client.stream(
+            "GET",
+            u,
+            follow_redirects=True,
+            headers={"Referer": "https://duckduckgo.com/"},
+        ) as resp:
+            resp.raise_for_status()
+            async for chunk in resp.aiter_text():
+                buf += chunk
+                if "</head>" in buf.lower():
+                    head_closed = True
+                    break
+                if len(buf) >= _HEAD_LIMIT:
+                    break
+    except Exception:
+        return None
+
+    # --- Try meta descriptions (always in <head>) ---
+    search_region = buf[: buf.lower().find("</head>") + 7] if head_closed else buf
+    desc = _extract_meta_description(search_region)
+    if desc:
+        return truncate_text(desc, max_chars)
+
+    # --- Fallback: longest <p> from whatever we already buffered ---
+    best = _extract_best_paragraph(buf)
     return truncate_text(best, max_chars) if best else None

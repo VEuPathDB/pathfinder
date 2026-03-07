@@ -1,20 +1,16 @@
-from __future__ import annotations
-
 import argparse
 import asyncio
 import os
 
 from qdrant_client import AsyncQdrantClient
+from veupath_chatbot.domain.parameters.specs import unwrap_search_data
 from veupath_chatbot.integrations.embeddings.openai_embeddings import OpenAIEmbeddings
 from veupath_chatbot.integrations.vectorstore.bootstrap import get_embedding_dim
 from veupath_chatbot.integrations.vectorstore.collections import (
     WDK_RECORD_TYPES_V1,
     WDK_SEARCHES_V1,
 )
-from veupath_chatbot.integrations.vectorstore.ingest.utils import (
-    extract_search_name,
-    parse_sites,
-)
+from veupath_chatbot.integrations.vectorstore.ingest.utils import parse_sites
 from veupath_chatbot.integrations.vectorstore.ingest.wdk_fetch import (
     fetch_record_types_and_searches,
     fetch_search_details,
@@ -26,11 +22,11 @@ from veupath_chatbot.integrations.vectorstore.ingest.wdk_index import (
     upsert_record_type_docs,
 )
 from veupath_chatbot.integrations.vectorstore.ingest.wdk_transform import (
-    _unwrap_search_data,
     build_record_type_doc,
     build_search_doc,
 )
 from veupath_chatbot.integrations.vectorstore.qdrant_store import QdrantStore
+from veupath_chatbot.integrations.veupathdb.param_utils import wdk_entity_name
 from veupath_chatbot.integrations.veupathdb.site_router import get_site_router
 from veupath_chatbot.platform.config import get_settings
 from veupath_chatbot.platform.logging import get_logger
@@ -75,11 +71,11 @@ async def ingest_site(
             return None, False
         if s.get("isInternal", False):
             return None, False
-        search_name = extract_search_name(s)
+        search_name = wdk_entity_name(s)
         if not search_name:
             return None, False
 
-        summary_unwrapped = _unwrap_search_data(s if isinstance(s, dict) else {})
+        summary_unwrapped = unwrap_search_data(s if isinstance(s, dict) else {}) or {}
         details_unwrapped, details_error = await fetch_search_details(
             client, rt_name, search_name, summary_unwrapped
         )

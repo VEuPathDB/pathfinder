@@ -1,4 +1,9 @@
-"""Tests for ai.tools.strategy_tools.step_ops -- WDK boolean coercion and step creation validation."""
+"""Tests for ai.tools.strategy_tools.step_ops -- step creation tool (thin wrapper).
+
+The business logic is now in services.strategies.step_creation and is tested
+in test_step_creation_service.py. These tests verify the tool layer still
+orchestrates correctly (graph lookup, delegation, response formatting).
+"""
 
 from veupath_chatbot.ai.tools.strategy_tools.step_ops import StrategyStepOps
 from veupath_chatbot.domain.strategy.ast import PlanStepNode
@@ -11,73 +16,6 @@ def _make_step_ops() -> StrategyStepOps:
     ops = StrategyStepOps.__new__(StrategyStepOps)
     ops.session = session
     return ops
-
-
-# -- _coerce_wdk_boolean_question_params --
-
-
-class TestCoerceWdkBooleanQuestionParams:
-    """Test the pure extraction of bq_left_op_, bq_right_op_, bq_operator from parameters."""
-
-    def test_extracts_boolean_question_params(self):
-        ops = _make_step_ops()
-        params = {
-            "bq_left_op_": "step_1",
-            "bq_right_op_": "step_2",
-            "bq_operator": "INTERSECT",
-        }
-        left, right, op = ops._coerce_wdk_boolean_question_params(parameters=params)
-        assert left == "step_1"
-        assert right == "step_2"
-        assert op == "INTERSECT"
-        # Should remove the bq_ keys from parameters
-        assert "bq_left_op_" not in params
-        assert "bq_right_op_" not in params
-        assert "bq_operator" not in params
-
-    def test_returns_none_when_missing_all(self):
-        ops = _make_step_ops()
-        params = {"some_param": "value"}
-        left, right, op = ops._coerce_wdk_boolean_question_params(parameters=params)
-        assert left is None
-        assert right is None
-        assert op is None
-
-    def test_returns_none_when_only_left_present(self):
-        ops = _make_step_ops()
-        params = {"bq_left_op_": "step_1"}
-        left, right, op = ops._coerce_wdk_boolean_question_params(parameters=params)
-        assert left is None
-        assert right is None
-        assert op is None
-
-    def test_returns_none_when_operator_missing(self):
-        ops = _make_step_ops()
-        params = {"bq_left_op_": "step_1", "bq_right_op_": "step_2"}
-        left, right, op = ops._coerce_wdk_boolean_question_params(parameters=params)
-        assert left is None
-        assert right is None
-        assert op is None
-
-    def test_returns_none_for_empty_params(self):
-        ops = _make_step_ops()
-        left, right, op = ops._coerce_wdk_boolean_question_params(parameters={})
-        assert left is None
-        assert right is None
-        assert op is None
-
-    def test_handles_suffixed_bq_keys(self):
-        """WDK may use bq_left_op_XYZ style keys (anything starting with bq_left_op)."""
-        ops = _make_step_ops()
-        params = {
-            "bq_left_op_some_suffix": "step_a",
-            "bq_right_op_another": "step_b",
-            "bq_operator": "UNION",
-        }
-        left, right, op = ops._coerce_wdk_boolean_question_params(parameters=params)
-        assert left == "step_a"
-        assert right == "step_b"
-        assert op == "UNION"
 
 
 # -- create_step validation (no external calls) --

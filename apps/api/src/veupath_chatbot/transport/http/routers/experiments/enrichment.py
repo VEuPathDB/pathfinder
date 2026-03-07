@@ -1,7 +1,5 @@
 """Enrichment analysis endpoints for experiments."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 
 from veupath_chatbot.platform.logging import get_logger

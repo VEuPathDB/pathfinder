@@ -1,7 +1,5 @@
 """Tests for experiment JSON deserialization."""
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.services.experiment._deserialize import experiment_from_json

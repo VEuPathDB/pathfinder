@@ -1,7 +1,5 @@
 """Vocabulary utilities."""
 
-from __future__ import annotations
-
 import math
 import re
 
@@ -47,13 +45,13 @@ def match_vocab_value(
         display = entry.get("display")
         raw_value = entry.get("value")
         if value_norm == (display or ""):
-            return raw_value or display or value
+            return raw_value if raw_value is not None else (display or value)
         if value_norm == (raw_value or ""):
-            return raw_value or value
+            return raw_value if raw_value is not None else value
         if numeric_equivalent(value_norm, display):
-            return raw_value or display or value
+            return raw_value if raw_value is not None else (display or value)
         if numeric_equivalent(value_norm, raw_value):
-            return raw_value or value
+            return raw_value if raw_value is not None else value
     raise ValidationError(
         title="Invalid parameter value",
         detail=f"Parameter '{param_name}' does not accept '{value}'.",

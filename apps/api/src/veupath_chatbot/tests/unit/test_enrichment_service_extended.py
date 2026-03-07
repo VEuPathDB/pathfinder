@@ -5,8 +5,6 @@ result fields, GO ontology parameter inference, vocabulary param encoding,
 HTML gene link parsing, and edge cases in enrichment term extraction.
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.enrichment import (
     _encode_vocab_value,
     _extract_analysis_rows,

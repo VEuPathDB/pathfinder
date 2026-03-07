@@ -1,7 +1,5 @@
 """Tests for ArtifactToolsMixin — planning artifacts, titles, reasoning."""
 
-from __future__ import annotations
-
 from veupath_chatbot.ai.tools.planner.artifact_tools import ArtifactToolsMixin
 
 

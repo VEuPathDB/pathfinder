@@ -1,7 +1,5 @@
 """Scoring, analysis, and serialization helpers for parameter optimization."""
 
-from __future__ import annotations
-
 from typing import cast
 
 import optuna

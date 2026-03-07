@@ -1,7 +1,5 @@
 """Unit tests for the event emission and projection module."""
 
-from __future__ import annotations
-
 import json
 from unittest.mock import AsyncMock
 from uuid import uuid4

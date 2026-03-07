@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+from collections.abc import Sequence
 from itertools import batched
 from typing import Any, cast
 
@@ -10,11 +9,6 @@ from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 
 logger = get_logger(__name__)
-
-
-def extract_search_name(obj: JSONObject) -> str:
-    """Extract a search/record-type name, preferring urlSegment over name."""
-    return str(obj.get("urlSegment") or obj.get("name") or "").strip()
 
 
 def parse_sites(value: str) -> list[str] | None:
@@ -73,9 +67,9 @@ async def embed_and_upsert(
     store: QdrantStore,
     embedder: OpenAIEmbeddings,
     collection: str,
-    ids: list[str | JSONValue],
+    ids: Sequence[str | JSONValue],
     texts: list[str],
-    payloads: list[JSONObject],
+    payloads: Sequence[JSONObject],
 ) -> None:
     """Embed *texts*, pair with *ids*/*payloads*, and upsert to *collection*.
 

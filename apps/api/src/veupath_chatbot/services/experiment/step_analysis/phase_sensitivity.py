@@ -1,11 +1,10 @@
 """Phase 4: Parameter sensitivity -- sweep numeric params across their range."""
 
-from __future__ import annotations
-
 import asyncio
 import copy
 from typing import TypedDict
 
+from veupath_chatbot.domain.strategy.tree import collect_dict_leaves, walk_dict_tree
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
@@ -13,10 +12,9 @@ from veupath_chatbot.services.experiment.helpers import ProgressCallback, safe_f
 from veupath_chatbot.services.experiment.step_analysis._evaluation import (
     _evaluate_tree_against_controls,
     _extract_eval_counts,
-    _f1,
+    _f1_from_counts,
 )
 from veupath_chatbot.services.experiment.step_analysis._tree_utils import (
-    _collect_leaves,
     _node_id,
 )
 from veupath_chatbot.services.experiment.types import (
@@ -244,7 +242,7 @@ async def sweep_parameters(
     :param tree: ``PlanStepNode``-shaped dict.
     :returns: One :class:`ParameterSensitivity` per numeric param.
     """
-    leaves = _collect_leaves(tree)
+    leaves = collect_dict_leaves(tree)
     if not leaves:
         return []
 
@@ -328,24 +326,15 @@ async def sweep_parameters(
         ) -> ParameterSweepPoint | None:
             modified = copy.deepcopy(tree)
 
-            def _patch(
-                node: JSONObject, target_id: str = _lid, param: str = _pname
-            ) -> None:
-                nid = _node_id(node)
-                if nid == target_id:
+            def _patch_node(node: JSONObject) -> None:
+                if _node_id(node) == _lid:
                     params = node.get("parameters")
                     if not isinstance(params, dict):
                         params = {}
                         node["parameters"] = params
-                    params[param] = str(val)
-                pii = node.get("primaryInput")
-                sii = node.get("secondaryInput")
-                if isinstance(pii, dict):
-                    _patch(pii, target_id, param)
-                if isinstance(sii, dict):
-                    _patch(sii, target_id, param)
+                    params[_pname] = str(val)
 
-            _patch(modified)
+            walk_dict_tree(modified, _patch_node)
 
             try:
                 async with sem:
@@ -380,7 +369,7 @@ async def sweep_parameters(
                 total_results=counts.total_results,
                 recall=recall,
                 fpr=fpr,
-                f1=_f1(recall, fpr, counts.neg_total),
+                f1=_f1_from_counts(counts),
             )
 
         tasks = [_eval_value(v) for v in sweep_values]

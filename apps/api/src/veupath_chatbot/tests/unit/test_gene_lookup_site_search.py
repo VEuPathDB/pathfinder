@@ -1,7 +1,5 @@
 """Tests for services.gene_lookup.site_search -- site-search parsing and fetching."""
 
-from __future__ import annotations
-
 from typing import cast
 from unittest.mock import AsyncMock, patch
 

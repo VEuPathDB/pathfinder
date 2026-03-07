@@ -4,8 +4,6 @@ This module composes the public `StrategyTools` class from smaller, purpose-driv
 mixins to keep tool implementations easier to navigate.
 """
 
-from __future__ import annotations
-
 from typing import cast
 
 from veupath_chatbot.domain.strategy.session import StrategySession

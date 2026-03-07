@@ -6,17 +6,12 @@ execution, and persists every mutation to PostgreSQL so experiments
 survive API restarts.
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from functools import cache
 
-from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from veupath_chatbot.persistence.models import ExperimentRow
-from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.store import WriteThruStore
 from veupath_chatbot.services.experiment._deserialize import experiment_from_json
 from veupath_chatbot.services.experiment.types import (
@@ -24,11 +19,8 @@ from veupath_chatbot.services.experiment.types import (
     experiment_to_json,
 )
 
-logger = get_logger(__name__)
-
-
 # ---------------------------------------------------------------------------
-# Private DB helpers (use async_session_factory directly)
+# Row conversion helpers
 # ---------------------------------------------------------------------------
 
 
@@ -57,36 +49,14 @@ def _row_from_experiment(exp: Experiment) -> dict[str, object]:
     }
 
 
-async def _persist_to_db(exp: Experiment) -> None:
-    """Upsert an experiment row into the database."""
-    from veupath_chatbot.persistence.session import async_session_factory
-
-    try:
-        vals = _row_from_experiment(exp)
-        stmt = (
-            pg_insert(ExperimentRow)
-            .values(**vals)
-            .on_conflict_do_update(
-                index_elements=[ExperimentRow.id],
-                set_={k: v for k, v in vals.items() if k != "id"},
-            )
-        )
-        async with async_session_factory() as session:
-            await session.execute(stmt)
-            await session.commit()
-    except Exception:
-        logger.exception("Failed to persist experiment to DB", experiment_id=exp.id)
+def _experiment_from_row(row: ExperimentRow) -> Experiment:
+    """Reconstruct an Experiment from a DB row."""
+    return experiment_from_json(row.data)
 
 
-async def _load_from_db(experiment_id: str) -> Experiment | None:
-    """Load a single experiment from the database."""
-    from veupath_chatbot.persistence.session import async_session_factory
-
-    async with async_session_factory() as session:
-        row = await session.get(ExperimentRow, experiment_id)
-        if row is None:
-            return None
-        return experiment_from_json(row.data)
+# ---------------------------------------------------------------------------
+# DB list helpers (domain-specific queries, not covered by base class)
+# ---------------------------------------------------------------------------
 
 
 async def _list_from_db(
@@ -106,7 +76,7 @@ async def _list_from_db(
     async with async_session_factory() as session:
         result = await session.execute(stmt)
         rows = result.scalars().all()
-        return [experiment_from_json(r.data) for r in rows]
+        return [_experiment_from_row(r) for r in rows]
 
 
 async def _list_by_benchmark_from_db(benchmark_id: str) -> list[Experiment]:
@@ -117,17 +87,7 @@ async def _list_by_benchmark_from_db(benchmark_id: str) -> list[Experiment]:
     async with async_session_factory() as session:
         result = await session.execute(stmt)
         rows = result.scalars().all()
-        return [experiment_from_json(r.data) for r in rows]
-
-
-async def _delete_from_db(experiment_id: str) -> None:
-    """Delete an experiment row from the database."""
-    from veupath_chatbot.persistence.session import async_session_factory
-
-    stmt = sa_delete(ExperimentRow).where(ExperimentRow.id == experiment_id)
-    async with async_session_factory() as session:
-        await session.execute(stmt)
-        await session.commit()
+        return [_experiment_from_row(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -142,9 +102,9 @@ class ExperimentStore(WriteThruStore[Experiment]):
     Adds domain-specific listing methods.
     """
 
-    _persist_fn = staticmethod(_persist_to_db)
-    _load_fn = staticmethod(_load_from_db)
-    _delete_fn = staticmethod(_delete_from_db)
+    _model = ExperimentRow
+    _to_row = staticmethod(_row_from_experiment)
+    _from_row = staticmethod(_experiment_from_row)
 
     # -- Sync listing (used by service.py / ai_analysis_tools.py) ----------
 

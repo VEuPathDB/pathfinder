@@ -1,7 +1,5 @@
 """Tests for services.gene_lookup.result -- gene result building."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.gene_lookup.result import (
     DEFAULT_GENE_ATTRIBUTES,
     build_gene_result,

@@ -1,7 +1,5 @@
 """Tests for ai.models.catalog — ModelEntry, MODEL_CATALOG, and reasoning hyperparams."""
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.ai.models.catalog import (

@@ -12,8 +12,6 @@ module with a clean public API:
 - ``wdk_error_boundary`` — async context manager for consistent WDK error handling
 """
 
-from __future__ import annotations
-
 import hashlib
 import json
 from collections import OrderedDict
@@ -22,7 +20,10 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from veupath_chatbot.domain.parameters.normalize import ParameterNormalizer
-from veupath_chatbot.domain.parameters.specs import adapt_param_specs
+from veupath_chatbot.domain.parameters.specs import (
+    adapt_param_specs,
+    unwrap_search_data,
+)
 from veupath_chatbot.domain.strategy.ast import (
     PlanStepNode,
     StrategyAST,
@@ -40,7 +41,6 @@ from veupath_chatbot.platform.types import (
     JSONObject,
     as_json_object,
 )
-from veupath_chatbot.services.catalog.param_resolution import _unwrap_search_data
 from veupath_chatbot.services.control_helpers import delete_temp_strategy
 from veupath_chatbot.services.experiment.helpers import extract_wdk_id
 
@@ -516,7 +516,7 @@ async def _normalize_synced_parameters(
                     )
                     spec_cache[cache_key] = {}
                     continue
-            details = _unwrap_search_data(details) or {}
+            details = unwrap_search_data(details) or {}
             spec_cache[cache_key] = details if isinstance(details, dict) else {}
 
         specs = adapt_param_specs(spec_cache.get(cache_key) or {})

@@ -4,8 +4,6 @@ Ensures each dataclass can be instantiated with minimal and full arguments,
 default values are correct, and frozen types reject mutation.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.services.experiment.types import (

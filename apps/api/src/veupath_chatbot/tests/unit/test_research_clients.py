@@ -7,8 +7,6 @@ Each client is tested for:
 - Citation generation
 """
 
-from __future__ import annotations
-
 import httpx
 import pytest
 import respx

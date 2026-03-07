@@ -16,22 +16,44 @@ class ParamSpecNormalized:
     max_selected_count: int | None = None
     vocabulary: JSONObject | JSONArray | None = None
     count_only_leaves: bool = False
+    is_number: bool = False
+    min_value: float | None = None
+    max_value: float | None = None
+    increment: float | None = None
+    max_length: int | None = None
+
+
+def unwrap_search_data(details: JSONObject | None) -> JSONObject | None:
+    """Normalize WDK/discovery payload shape to the dict that contains parameters.
+
+    :param details: Search details from WDK/discovery.
+    :returns: Search data dict or None.
+    """
+    if not isinstance(details, dict):
+        return None
+    search_data_raw = details.get("searchData")
+    if isinstance(search_data_raw, dict):
+        return search_data_raw
+    return details
 
 
 def extract_param_specs(payload: JSONObject) -> JSONArray:
+    """Extract parameter spec dicts from a WDK payload.
+
+    Supports the canonical WDK paths (in priority order):
+      1. ``payload["parameters"]`` -- list or dict
+      2. ``payload["paramMap"]`` -- dict (name -> spec)
+      3. ``payload["searchConfig"]["parameters"]`` -- list or dict
+      4. ``payload["searchConfig"]["paramMap"]`` -- dict
+    """
     search_config_raw = payload.get("searchConfig")
     search_config = search_config_raw if isinstance(search_config_raw, dict) else {}
-    question_raw = payload.get("question")
-    question = question_raw if isinstance(question_raw, dict) else {}
 
     candidates: list[JSONValue] = [
         payload.get("parameters"),
         payload.get("paramMap"),
-        payload.get("parameterDetails"),
-        payload.get("paramDetails"),
         search_config.get("parameters"),
         search_config.get("paramMap"),
-        question.get("parameters"),
     ]
     params: JSONValue = next((c for c in candidates if c), [])
     specs: JSONArray = []
@@ -44,6 +66,30 @@ def extract_param_specs(payload: JSONObject) -> JSONArray:
             if isinstance(param, dict):
                 specs.append(param)
     return specs
+
+
+def _safe_float(raw: JSONValue) -> float | None:
+    """Convert a raw JSON value to float, returning None on failure."""
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return float(raw)
+    if isinstance(raw, str):
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+    return None
+
+
+def _safe_int(raw: JSONValue) -> int | None:
+    """Convert a raw JSON value to int, returning None on failure."""
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return int(raw)
+        except ValueError:
+            return None
+    return None
 
 
 def adapt_param_specs(payload: JSONObject) -> dict[str, ParamSpecNormalized]:
@@ -68,6 +114,27 @@ def adapt_param_specs(payload: JSONObject) -> dict[str, ParamSpecNormalized]:
         vocabulary: JSONObject | JSONArray | None = None
         if isinstance(vocabulary_raw, (dict, list)):
             vocabulary = vocabulary_raw
+
+        # WDK StringParam can be numeric (isNumber=true on type="string")
+        is_number_raw = spec.get("isNumber")
+        is_number = bool(is_number_raw) if isinstance(is_number_raw, bool) else False
+
+        # Numeric constraints: min/max/increment
+        min_value = _safe_float(spec.get("min"))
+        max_value = _safe_float(spec.get("max"))
+        increment_raw = spec.get("increment")
+        increment = _safe_float(
+            increment_raw if increment_raw is not None else spec.get("step")
+        )
+
+        # String constraints: maxLength / length (0 means "no limit" in WDK)
+        max_length_raw = spec.get("maxLength")
+        max_length = _safe_int(
+            max_length_raw if max_length_raw is not None else spec.get("length")
+        )
+        if max_length is not None and max_length <= 0:
+            max_length = None
+
         normalized[name] = ParamSpecNormalized(
             name=name,
             param_type=param_type,
@@ -76,6 +143,11 @@ def adapt_param_specs(payload: JSONObject) -> dict[str, ParamSpecNormalized]:
             max_selected_count=max_selected if isinstance(max_selected, int) else None,
             vocabulary=vocabulary,
             count_only_leaves=bool(spec.get("countOnlyLeaves")),
+            is_number=is_number,
+            min_value=min_value,
+            max_value=max_value,
+            increment=increment,
+            max_length=max_length,
         )
     return normalized
 
@@ -104,15 +176,13 @@ def find_missing_required_params(
     for p in param_specs:
         if not isinstance(p, dict):
             continue
-        is_required_raw = p.get("isRequired")
         allow_empty_raw = p.get("allowEmptyValue")
-        is_required = (
-            bool(is_required_raw) if isinstance(is_required_raw, bool) else False
-        )
         allow_empty = (
             bool(allow_empty_raw) if isinstance(allow_empty_raw, bool) else True
         )
-        if is_required or not allow_empty:
+        min_selected_raw = p.get("minSelectedCount")
+        min_selected = min_selected_raw if isinstance(min_selected_raw, int) else 0
+        if not allow_empty or min_selected >= 1:
             required_specs.append(p)
 
     missing: list[str] = []

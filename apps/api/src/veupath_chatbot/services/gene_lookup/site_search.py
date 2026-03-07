@@ -1,7 +1,5 @@
 """Site-search gene fetching and document parsing."""
 
-from __future__ import annotations
-
 from typing import cast
 
 from veupath_chatbot.integrations.veupathdb.site_search import (

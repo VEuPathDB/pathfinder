@@ -6,8 +6,6 @@ module provides a best-effort parser so we can return consistent, machine-readab
 error payloads to the client.
 """
 
-from __future__ import annotations
-
 import re
 from typing import cast
 

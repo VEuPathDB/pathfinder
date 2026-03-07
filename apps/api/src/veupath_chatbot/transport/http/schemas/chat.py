@@ -1,14 +1,16 @@
 """Chat request/response DTOs."""
 
-from __future__ import annotations
-
 from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from veupath_chatbot.ai.models.catalog import ModelProvider, ReasoningEffort
-from veupath_chatbot.platform.types import JSONArray, JSONObject
+from veupath_chatbot.platform.types import (
+    JSONArray,
+    JSONObject,
+    ModelProvider,
+    ReasoningEffort,
+)
 from veupath_chatbot.services.chat.mention_context import MentionType
 
 

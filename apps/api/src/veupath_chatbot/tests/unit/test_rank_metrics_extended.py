@@ -11,8 +11,6 @@ Extends the existing test_experiment_rank_metrics.py with:
 - PR curve sampling correctness
 """
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.services.experiment.rank_metrics import compute_rank_metrics

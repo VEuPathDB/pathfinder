@@ -15,8 +15,6 @@ Skip with:
     pytest -m "not live_wdk"
 """
 
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.tests.fixtures.scripted_engine import (

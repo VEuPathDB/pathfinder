@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from veupath_chatbot.ai.tools.result_tools import ResultTools
@@ -34,11 +32,10 @@ async def test_get_sample_records_validates_step_id() -> None:
 
 @pytest.mark.asyncio
 async def test_get_sample_records_maps_wdk_404_to_actionable_error() -> None:
-    tools = ResultTools(FakeResultToolsSession())
     fake_api = FakeStrategyAPI(
         error=WDKError("GET /users/current/steps/1 -> HTTP 404", 404)
     )
-    tools._get_api = lambda: fake_api
+    tools = ResultTools(FakeResultToolsSession(), strategy_api=fake_api)
 
     result = await tools.get_sample_records(wdk_step_id=437637423, limit=50)
 
@@ -51,14 +48,13 @@ async def test_get_sample_records_maps_wdk_404_to_actionable_error() -> None:
 
 @pytest.mark.asyncio
 async def test_get_sample_records_returns_records_total_and_attributes() -> None:
-    tools = ResultTools(FakeResultToolsSession())
     fake_api = FakeStrategyAPI(
         response={
             "records": [{"record_primary_key": "A", "display_name": "alpha"}],
             "meta": {"totalCount": 17},
         }
     )
-    tools._get_api = lambda: fake_api
+    tools = ResultTools(FakeResultToolsSession(), strategy_api=fake_api)
 
     result = await tools.get_sample_records(wdk_step_id=123, limit=5)
 

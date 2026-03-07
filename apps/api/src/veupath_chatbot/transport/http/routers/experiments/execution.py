@@ -1,7 +1,5 @@
 """Experiment execution endpoints: create, batch, benchmark."""
 
-from __future__ import annotations
-
 from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter, Request

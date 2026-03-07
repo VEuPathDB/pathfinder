@@ -4,8 +4,6 @@ Consolidates factory functions that were duplicated across 3+ test files.
 Import from here instead of redefining in each test module.
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.parameters.specs import ParamSpecNormalized
 from veupath_chatbot.domain.strategy.ast import PlanStepNode
 from veupath_chatbot.domain.strategy.ops import CombineOp
@@ -77,6 +75,11 @@ def make_param_spec(
     max_selected: int | None = None,
     vocabulary: dict | list | None = None,
     count_only_leaves: bool = False,
+    is_number: bool = False,
+    min_value: float | None = None,
+    max_value: float | None = None,
+    increment: float | None = None,
+    max_length: int | None = None,
 ) -> ParamSpecNormalized:
     """Create a ParamSpecNormalized for parameter validation tests."""
     return ParamSpecNormalized(
@@ -87,4 +90,9 @@ def make_param_spec(
         max_selected_count=max_selected,
         vocabulary=vocabulary,
         count_only_leaves=count_only_leaves,
+        is_number=is_number,
+        min_value=min_value,
+        max_value=max_value,
+        increment=increment,
+        max_length=max_length,
     )

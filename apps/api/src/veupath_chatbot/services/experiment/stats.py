@@ -1,7 +1,5 @@
 """Shared statistical utilities for experiment analysis."""
 
-from __future__ import annotations
-
 import math
 
 

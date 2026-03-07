@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from veupath_chatbot.services.wdk.helpers import (
     build_attribute_list,
-    extract_displayable_attr_names,
     extract_pk,
     extract_record_ids,
     merge_analysis_params,
@@ -418,31 +417,3 @@ class TestMergeAnalysisParamsEdgeCases:
         }
         result = merge_analysis_params(form_meta, {"pValueCutoff": "0.01"})
         assert result["pValueCutoff"] == "0.01"
-
-
-# ===========================================================================
-# Helpers: extract_displayable_attr_names edge cases
-# ===========================================================================
-
-
-class TestExtractDisplayableAttrNamesEdgeCases:
-    """Additional edge cases for attr name extraction."""
-
-    def test_dict_with_non_dict_meta_values(self) -> None:
-        """If meta value is not a dict, the entry is skipped."""
-        attrs = {
-            "gene_name": {"isDisplayable": True},
-            "bad_attr": "not_a_dict",
-            "also_bad": 42,
-        }
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]
-
-    def test_list_with_none_name(self) -> None:
-        """If name is None, the entry is skipped."""
-        attrs = [
-            {"name": None, "isDisplayable": True},
-            {"name": "gene_name", "isDisplayable": True},
-        ]
-        result = extract_displayable_attr_names(attrs)
-        assert result == ["gene_name"]

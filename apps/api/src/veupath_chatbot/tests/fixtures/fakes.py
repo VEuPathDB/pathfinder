@@ -4,8 +4,6 @@ Consolidates fake/stub classes that were duplicated across 3+ test files.
 Import from here instead of redefining in each test module.
 """
 
-from __future__ import annotations
-
 
 class FakeResultToolsSession:
     """Minimal fake session for ResultTools tests.

@@ -5,8 +5,6 @@ The existing integration tests in test_experiment_service.py cover
 the full run_experiment() orchestration.
 """
 
-from __future__ import annotations
-
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -504,10 +502,10 @@ class TestPhaseCrossValidate:
         sentinel = object()
 
         with patch(
-            "veupath_chatbot.services.experiment.service.run_cross_validation_tree",
+            "veupath_chatbot.services.experiment.service.run_cross_validation",
             new_callable=AsyncMock,
             return_value=sentinel,
-        ) as mock_cv_tree:
+        ) as mock_cv:
             await _phase_cross_validate(
                 config,
                 experiment,
@@ -518,7 +516,10 @@ class TestPhaseCrossValidate:
                 cvf="newline",
             )
 
-        mock_cv_tree.assert_awaited_once()
+        mock_cv.assert_awaited_once()
+        # Verify tree was passed through
+        call_kwargs = mock_cv.call_args.kwargs
+        assert call_kwargs["tree"] is tree
         assert experiment.cross_validation is sentinel
 
 

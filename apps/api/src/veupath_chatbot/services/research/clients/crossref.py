@@ -1,26 +1,22 @@
 """Crossref API client."""
 
-from __future__ import annotations
-
 from typing import cast
 
 import httpx
 
-from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.research.clients._base import (
-    BaseClient,
-    build_response,
+    StandardClient,
     make_citation,
 )
 
 
-class CrossrefClient(BaseClient):
+class CrossrefClient(StandardClient):
     """Client for Crossref API."""
 
-    async def search(
-        self, query: str, *, limit: int, abstract_max_chars: int
-    ) -> JSONObject:
-        """Search Crossref."""
+    _source_name = "crossref"
+
+    async def _fetch_raw(self, query: str, *, limit: int) -> list[JSONValue]:
         url = "https://api.crossref.org/works"
         params = {"query": query, "rows": str(limit)}
         headers = {"User-Agent": "pathfinder-planner/1.0 (mailto:unknown@example.com)"}
@@ -28,81 +24,79 @@ class CrossrefClient(BaseClient):
             resp = await client.get(url, params=params, follow_redirects=True)
             resp.raise_for_status()
             payload = resp.json()
-
         items = (
             payload.get("message", {}).get("items", [])
             if isinstance(payload, dict)
             else []
         )
-        results: JSONArray = []
-        citations: list[JSONObject] = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            title_list = item.get("title")
-            title = (
-                title_list[0].strip()
-                if isinstance(title_list, list) and title_list
-                else ""
-            )
-            doi = item.get("DOI") if isinstance(item.get("DOI"), str) else None
-            url_item = item.get("URL") if isinstance(item.get("URL"), str) else None
-            year_i: int | None = None
-            published = (
-                item.get("published-print") or item.get("published-online") or {}
-            )
-            parts = published.get("date-parts") if isinstance(published, dict) else None
-            if (
-                isinstance(parts, list)
-                and parts
-                and isinstance(parts[0], list)
-                and parts[0]
-            ):
-                try:
-                    year_i = int(parts[0][0])
-                except Exception:
-                    year_i = None
-            authors = None
-            raw_authors = item.get("author")
-            if isinstance(raw_authors, list):
-                authors = []
-                for a in raw_authors:
-                    if not isinstance(a, dict):
-                        continue
-                    family = a.get("family")
-                    given = a.get("given")
-                    if family and given:
-                        authors.append(f"{given} {family}")
-                    elif family:
-                        authors.append(str(family))
-            journal = None
-            ct = item.get("container-title")
-            if isinstance(ct, list) and ct:
-                journal = str(ct[0]).strip()
+        return list(items)
 
-            results.append(
-                {
-                    "title": title,
-                    "year": year_i,
-                    "doi": doi,
-                    "url": url_item or (f"https://doi.org/{doi}" if doi else None),
-                    "authors": cast(JSONValue, authors),
-                    "journalTitle": journal,
-                    "snippet": journal,
-                }
-            )
-            citations.append(
-                make_citation(
-                    source="crossref",
-                    id_prefix="crossref",
-                    title=title or (url_item or "Crossref result"),
-                    url=url_item or (f"https://doi.org/{doi}" if doi else None),
-                    authors=authors,
-                    year=year_i,
-                    doi=doi,
-                    snippet=journal,
-                )
-            )
-        return build_response(
-            query=query, source="crossref", results=results, citations=citations
+    def _parse_item(
+        self, raw: JSONValue, *, abstract_max_chars: int
+    ) -> tuple[JSONObject, JSONObject] | None:
+        if not isinstance(raw, dict):
+            return None
+        item = raw
+
+        title_list = item.get("title")
+        title = (
+            title_list[0].strip() if isinstance(title_list, list) and title_list else ""
         )
+        doi = item.get("DOI") if isinstance(item.get("DOI"), str) else None
+        url_item = item.get("URL") if isinstance(item.get("URL"), str) else None
+
+        year_i: int | None = None
+        published = item.get("published-print") or item.get("published-online") or {}
+        parts = published.get("date-parts") if isinstance(published, dict) else None
+        if (
+            isinstance(parts, list)
+            and parts
+            and isinstance(parts[0], list)
+            and parts[0]
+        ):
+            try:
+                year_i = int(parts[0][0])
+            except Exception:
+                year_i = None
+
+        authors: list[str] | None = None
+        raw_authors = item.get("author")
+        if isinstance(raw_authors, list):
+            authors = []
+            for a in raw_authors:
+                if not isinstance(a, dict):
+                    continue
+                family = a.get("family")
+                given = a.get("given")
+                if family and given:
+                    authors.append(f"{given} {family}")
+                elif family:
+                    authors.append(str(family))
+
+        journal: str | None = None
+        ct = item.get("container-title")
+        if isinstance(ct, list) and ct:
+            journal = str(ct[0]).strip()
+
+        result_url = url_item or (f"https://doi.org/{doi}" if doi else None)
+
+        result: JSONObject = {
+            "title": title,
+            "year": year_i,
+            "doi": doi,
+            "url": result_url,
+            "authors": cast(JSONValue, authors),
+            "journalTitle": journal,
+            "snippet": journal,
+        }
+        citation = make_citation(
+            source="crossref",
+            id_prefix="crossref",
+            title=title or (url_item or "Crossref result"),
+            url=result_url,
+            authors=authors,
+            year=year_i,
+            doi=doi,
+            snippet=journal,
+        )
+        return result, citation

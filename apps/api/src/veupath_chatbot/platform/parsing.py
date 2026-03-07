@@ -1,7 +1,5 @@
 """Parsing helpers shared across layers."""
 
-from __future__ import annotations
-
 import json
 
 from veupath_chatbot.platform.types import JSONArray, JSONObject

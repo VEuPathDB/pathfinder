@@ -1,7 +1,5 @@
 """Experiment and ExperimentConfig dataclasses."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 from veupath_chatbot.platform.types import JSONObject, JSONValue
@@ -78,6 +76,13 @@ class ExperimentConfig:
     sort_attribute: str | None = None
     sort_direction: str = "ASC"
     parent_experiment_id: str | None = None
+
+    @property
+    def is_tree_mode(self) -> bool:
+        """Whether this config uses a multi-step strategy tree."""
+        return self.mode in ("multi-step", "import") and isinstance(
+            self.step_tree, dict
+        )
 
 
 @dataclass(slots=True)

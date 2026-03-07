@@ -1,6 +1,8 @@
 """Compile strategy AST to WDK API calls."""
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
 from veupath_chatbot.domain.parameters.normalize import ParameterNormalizer
 from veupath_chatbot.domain.parameters.specs import (
@@ -9,16 +11,104 @@ from veupath_chatbot.domain.parameters.specs import (
 )
 from veupath_chatbot.domain.strategy.ast import (
     PlanStepNode,
+    StepTreeNode,
     StrategyAST,
 )
 from veupath_chatbot.domain.strategy.ops import CombineOp, get_wdk_operator
-from veupath_chatbot.integrations.veupathdb.strategy_api import (
-    StepTreeNode,
-    StrategyAPI,
-)
 from veupath_chatbot.platform.errors import InternalError, ValidationError
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.types import JSONArray, JSONObject
+from veupath_chatbot.platform.types import JSONObject
+
+# Callback type: given a search name, returns the owning record type (or None).
+# Mirrors WDK's WdkModel.getQuestionByName() — a global lookup across all
+# record types.  Callers inject an implementation backed by the pre-cached
+# SearchCatalog so no HTTP calls are needed at compile time.
+ResolveRecordType = Callable[[str], Awaitable[str | None]]
+
+# ---------------------------------------------------------------------------
+# Protocol: I/O boundary the compiler depends on
+# ---------------------------------------------------------------------------
+
+
+class _CompilerClient(Protocol):
+    """Protocol for the WDK HTTP client methods the compiler needs."""
+
+    async def get_search_details(
+        self, record_type: str, search_name: str, expand_params: bool = False
+    ) -> JSONObject: ...
+
+    async def get_search_details_with_params(
+        self,
+        record_type: str,
+        search_name: str,
+        context: JSONObject,
+        expand_params: bool = False,
+    ) -> JSONObject: ...
+
+
+@runtime_checkable
+class StrategyCompilerAPI(Protocol):
+    """I/O boundary for strategy compilation.
+
+    The compiler calls these methods to create WDK steps and datasets.
+    Any object that satisfies this protocol can be injected -- the real
+    :class:`StrategyAPI` from the integrations layer is one such object.
+    """
+
+    client: _CompilerClient
+
+    async def create_step(
+        self,
+        record_type: str,
+        search_name: str,
+        parameters: JSONObject,
+        custom_name: str | None = None,
+        wdk_weight: int | None = None,
+    ) -> JSONObject: ...
+
+    async def create_combined_step(
+        self,
+        primary_step_id: int,
+        secondary_step_id: int,
+        boolean_operator: str,
+        record_type: str,
+        custom_name: str | None = None,
+        wdk_weight: int | None = None,
+    ) -> JSONObject: ...
+
+    async def create_transform_step(
+        self,
+        input_step_id: int,
+        transform_name: str,
+        parameters: JSONObject,
+        record_type: str = "transcript",
+        custom_name: str | None = None,
+        wdk_weight: int | None = None,
+    ) -> JSONObject: ...
+
+    async def create_dataset(self, ids: list[str]) -> int: ...
+
+
+@runtime_checkable
+class StepDecoratorAPI(Protocol):
+    """I/O boundary for post-compilation step decorations (filters, analyses, reports)."""
+
+    async def set_step_filter(
+        self, step_id: int, filter_name: str, value: object, disabled: bool = False
+    ) -> object: ...
+
+    async def run_step_analysis(
+        self,
+        step_id: int,
+        analysis_type: str,
+        parameters: JSONObject | None = None,
+        custom_name: str | None = None,
+    ) -> JSONObject: ...
+
+    async def run_step_report(
+        self, step_id: int, report_name: str, config: JSONObject | None = None
+    ) -> object: ...
+
 
 logger = get_logger(__name__)
 
@@ -71,15 +161,16 @@ class StrategyCompiler:
 
     def __init__(
         self,
-        api: StrategyAPI,
+        api: StrategyCompilerAPI,
         site_id: str | None = None,
         resolve_record_type: bool = True,
+        resolve_search_record_type: ResolveRecordType | None = None,
     ) -> None:
         self.api = api
         self._compiled_steps: dict[str, CompiledStep] = {}
         self.site_id = site_id
         self.resolve_record_type = resolve_record_type
-        self._searches_cache: dict[str, JSONArray] = {}
+        self._resolve_search_rt = resolve_search_record_type
 
     async def compile(self, strategy: StrategyAST) -> CompilationResult:
         """Compile strategy to WDK steps and tree.
@@ -125,8 +216,12 @@ class StrategyCompiler:
         raise ValueError(f"Unknown node kind: {kind}")
 
     async def _resolve_strategy_record_type(self, strategy: StrategyAST) -> str | None:
-        record_types = await self._get_record_types()
-        if not record_types:
+        """Resolve the strategy-level record type from leaf searches.
+
+        Uses the injected callback to look up each leaf search's record type,
+        then returns the common record type if all agree.
+        """
+        if self._resolve_search_rt is None:
             return None
         search_steps = [
             step.search_name
@@ -135,80 +230,24 @@ class StrategyCompiler:
         ]
         if not search_steps:
             return None
-        matching_sets: list[set[str]] = []
+        resolved_types: set[str] = set()
         for search_name in search_steps:
-            matches = await self._get_record_types_for_search(record_types, search_name)
-            if not matches:
+            rt = await self._resolve_search_rt(search_name)
+            if not rt:
                 return None
-            matching_sets.append(matches)
-        intersection = set.intersection(*matching_sets)
-        if len(intersection) == 1:
-            return next(iter(intersection))
-        if len(intersection) > 1:
+            resolved_types.add(rt)
+        if len(resolved_types) == 1:
+            return next(iter(resolved_types))
+        if len(resolved_types) > 1:
             raise ValidationError(
                 title="Strategy mixes record types",
                 detail="Searches in this strategy belong to multiple record types and cannot be combined.",
                 errors=[
-                    {"recordType": record_type} for record_type in sorted(intersection)
+                    {"recordType": record_type}
+                    for record_type in sorted(resolved_types)
                 ],
             )
         return None
-
-    async def _get_record_types(self) -> JSONArray:
-        try:
-            return await self.api.client.get_record_types()
-        except Exception:
-            return []
-
-    async def _get_record_types_for_search(
-        self, record_types: JSONArray, search_name: str
-    ) -> set[str]:
-        from veupath_chatbot.platform.types import as_json_object
-
-        matches: set[str] = set()
-        for record_type_value in record_types:
-            rt_name: str | None = None
-            if isinstance(record_type_value, str):
-                rt_name = record_type_value
-            elif isinstance(record_type_value, dict):
-                rt = as_json_object(record_type_value)
-                url_segment_value = rt.get("urlSegment")
-                name_value = rt.get("name")
-                if isinstance(url_segment_value, str):
-                    rt_name = url_segment_value
-                elif isinstance(name_value, str):
-                    rt_name = name_value
-                else:
-                    rt_name = None
-            if not rt_name:
-                continue
-            searches = await self._get_searches_for_record_type(rt_name)
-            for search_value in searches:
-                if not isinstance(search_value, dict):
-                    continue
-                search = as_json_object(search_value)
-                search_url_segment = search.get("urlSegment")
-                search_name_value = search.get("name")
-                if (
-                    isinstance(search_url_segment, str)
-                    and search_url_segment == search_name
-                ) or (
-                    isinstance(search_name_value, str)
-                    and search_name_value == search_name
-                ):
-                    matches.add(rt_name)
-                    break
-        return matches
-
-    async def _get_searches_for_record_type(self, record_type: str) -> JSONArray:
-        if record_type in self._searches_cache:
-            return self._searches_cache[record_type]
-        try:
-            searches = await self.api.client.get_searches(record_type)
-        except Exception:
-            searches = []
-        self._searches_cache[record_type] = searches
-        return searches
 
     async def _compile_search(
         self, step: PlanStepNode, record_type: str
@@ -216,14 +255,18 @@ class StrategyCompiler:
         """Compile a search step."""
         logger.debug("Compiling search step", step_id=step.id, search=step.search_name)
 
+        search_rt = await self._resolve_search_record_type(
+            step.search_name, record_type
+        )
         parameters = await self._coerce_parameters(
-            record_type, step.search_name, step.parameters
+            search_rt, step.search_name, step.parameters
         )
         result = await self.api.create_step(
-            record_type=record_type,
+            record_type=search_rt,
             search_name=step.search_name,
             parameters=parameters,
             custom_name=step.display_name,
+            wdk_weight=step.wdk_weight,
         )
         wdk_step_id = _extract_wdk_step_id(result)
 
@@ -261,6 +304,7 @@ class StrategyCompiler:
                 boolean_operator=wdk_op,
                 record_type=record_type,
                 custom_name=step.display_name,
+                wdk_weight=step.wdk_weight,
             )
 
         wdk_step_id = _extract_wdk_step_id(result)
@@ -296,7 +340,24 @@ class StrategyCompiler:
             parameters=params,
             record_type=record_type,
             custom_name=step.display_name or "Genomic colocation",
+            wdk_weight=step.wdk_weight,
         )
+
+    async def _resolve_search_record_type(
+        self, search_name: str, default_record_type: str
+    ) -> str:
+        """Resolve the record type for a search.
+
+        Uses the injected ``resolve_search_record_type`` callback (backed by
+        the pre-cached SearchCatalog) which mirrors WDK's global
+        ``getQuestionByName()`` lookup.  Falls back to the strategy-level
+        default when no callback is available.
+        """
+        if self._resolve_search_rt is not None:
+            resolved = await self._resolve_search_rt(search_name)
+            if resolved:
+                return resolved
+        return default_record_type
 
     async def _compile_transform(
         self, step: PlanStepNode, record_type: str
@@ -310,15 +371,19 @@ class StrategyCompiler:
         )
 
         input_tree = await self._compile_node(step.primary_input, record_type)
+        transform_rt = await self._resolve_search_record_type(
+            step.search_name, record_type
+        )
         parameters = await self._coerce_parameters(
-            record_type, step.search_name, step.parameters
+            transform_rt, step.search_name, step.parameters
         )
         result = await self.api.create_transform_step(
             input_step_id=input_tree.step_id,
             transform_name=step.search_name,
             parameters=parameters,
-            record_type=record_type,
+            record_type=transform_rt,
             custom_name=step.display_name,
+            wdk_weight=step.wdk_weight,
         )
         wdk_step_id = _extract_wdk_step_id(result)
 
@@ -420,7 +485,7 @@ class StrategyCompiler:
 async def apply_step_decorations(
     strategy: StrategyAST,
     compiled_map: dict[str, int],
-    api: StrategyAPI,
+    api: StepDecoratorAPI,
 ) -> None:
     """Apply filters, analyses, and reports to compiled WDK steps.
 
@@ -456,12 +521,16 @@ async def apply_step_decorations(
 
 async def compile_strategy(
     strategy: StrategyAST,
-    api: StrategyAPI,
+    api: StrategyCompilerAPI,
     site_id: str | None = None,
     resolve_record_type: bool = True,
+    resolve_search_record_type: ResolveRecordType | None = None,
 ) -> CompilationResult:
     """Compile a strategy AST to WDK."""
     compiler = StrategyCompiler(
-        api, site_id=site_id, resolve_record_type=resolve_record_type
+        api,
+        site_id=site_id,
+        resolve_record_type=resolve_record_type,
+        resolve_search_record_type=resolve_search_record_type,
     )
     return await compiler.compile(strategy)

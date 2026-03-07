@@ -13,8 +13,6 @@ Skip with:
     pytest -m "not live_wdk"
 """
 
-from __future__ import annotations
-
 import pytest
 from shared_py.defaults import DEFAULT_STREAM_NAME
 

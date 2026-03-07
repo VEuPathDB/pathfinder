@@ -6,8 +6,6 @@ Tests focus on the pure logic inside analyze_contributions:
 - Ablation with recall/fpr delta edge cases
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.step_analysis._tree_utils import (
     _collect_leaves,
     _extract_leaf_branch,

@@ -14,6 +14,7 @@ from starlette.responses import Response
 from veupath_chatbot import __version__
 from veupath_chatbot.integrations.vectorstore.bootstrap import ensure_rag_collections
 from veupath_chatbot.integrations.veupathdb.factory import close_all_clients
+from veupath_chatbot.integrations.veupathdb.site_search import close_site_search_client
 from veupath_chatbot.jobs.rag_startup import start_rag_startup_ingestion_background
 from veupath_chatbot.persistence.session import close_db, init_db
 from veupath_chatbot.platform.config import get_settings
@@ -94,12 +95,53 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Shutdown
     logger.info("Shutting down Pathfinder API")
     await close_all_clients()
+    await close_site_search_client()
     await close_redis()
     await close_db()
 
 
+def _wire_ai_dependencies() -> None:
+    """Wire AI-layer implementations into service-layer modules.
+
+    This is the composition root: the only place that links the AI
+    layer's concrete implementations to the service layer's injected
+    slots.  Keeps services free of direct ``veupath_chatbot.ai`` imports.
+    """
+    from veupath_chatbot.ai.agents.experiment import ExperimentAssistantAgent
+    from veupath_chatbot.ai.agents.factory import (
+        create_agent,
+        create_engine,
+        resolve_effective_model_id,
+    )
+    from veupath_chatbot.services.chat import orchestrator as chat_orchestrator
+    from veupath_chatbot.services.experiment import (
+        ai_analysis_tools as analysis_tools,
+    )
+    from veupath_chatbot.services.experiment import assistant as exp_assistant
+
+    mock_stream_fn = None
+    if get_settings().chat_provider.strip().lower() == "mock":
+        from veupath_chatbot.tests.fixtures.mock_chat import mock_stream_chat
+
+        mock_stream_fn = mock_stream_chat
+
+    chat_orchestrator.configure(
+        create_agent_fn=create_agent,
+        resolve_model_id_fn=resolve_effective_model_id,
+        mock_stream_fn=mock_stream_fn,
+    )
+    exp_assistant.configure(
+        create_engine_fn=create_engine,
+        experiment_agent_cls=ExperimentAssistantAgent,
+    )
+    analysis_tools.configure(
+        experiment_agent_cls=ExperimentAssistantAgent,
+    )
+
+
 def create_app() -> FastAPI:
     """Create and configure FastAPI application."""
+    _wire_ai_dependencies()
     settings = get_settings()
 
     app = FastAPI(

@@ -6,19 +6,15 @@ real WDK deployment.  Fixture responses come from
 ``veupath_chatbot.tests.fixtures.wdk_responses``.
 """
 
-from __future__ import annotations
-
 import json
 
 import httpx
 import pytest
 import respx
 
+from veupath_chatbot.domain.strategy.ast import StepTreeNode
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
-from veupath_chatbot.integrations.veupathdb.strategy_api import (
-    StepTreeNode,
-    StrategyAPI,
-)
+from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
 from veupath_chatbot.tests.fixtures.wdk_responses import (
     analysis_create_response,
     analysis_result_response,
@@ -681,5 +677,7 @@ class TestGetColumnDistribution:
 
         assert result["histogram"] == []
         assert result["statistics"] == {}
-        # Must NOT retry — should be called exactly once
-        assert route.call_count == 1
+        # Tenacity retries transient transport errors 3 times before giving up.
+        # The resulting RetryError is converted to WDKError, which
+        # get_column_distribution catches and returns empty.
+        assert route.call_count == 3

@@ -1,14 +1,10 @@
 """Parameter-related endpoints: dependent params, validation, param specs."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 
-from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
-from veupath_chatbot.integrations.veupathdb.factory import get_wdk_client
-from veupath_chatbot.platform.errors import WDKError
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services import catalog
+from veupath_chatbot.services.wdk import get_discovery_service
 from veupath_chatbot.transport.http.schemas import (
     DependentParamsRequest,
     DependentParamsResponse,
@@ -100,26 +96,14 @@ async def get_dependent_params(
     payload: DependentParamsRequest,
 ) -> DependentParamsResponse:
     """Get dependent parameter vocabulary values."""
-    client = get_wdk_client(siteId)
-    try:
-        result = await client.get_refreshed_dependent_params(
-            recordType,
-            searchName,
-            payload.parameter_name,
-            payload.context_values,
-        )
-        return DependentParamsResponse.model_validate(result)
-    except WDKError as exc:
-        if siteId != "veupathdb":
-            portal_client = get_wdk_client("veupathdb")
-            result = await portal_client.get_refreshed_dependent_params(
-                recordType,
-                searchName,
-                payload.parameter_name,
-                payload.context_values,
-            )
-            return DependentParamsResponse.model_validate(result)
-        raise exc
+    result = await catalog.get_refreshed_dependent_params(
+        site_id=siteId,
+        record_type=recordType,
+        search_name=searchName,
+        parameter_name=payload.parameter_name,
+        context_values=payload.context_values,
+    )
+    return DependentParamsResponse.model_validate(result)
 
 
 @router.post(

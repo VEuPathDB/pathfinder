@@ -1,7 +1,5 @@
 """Results endpoints: records, record detail, attributes, strategy, distributions, analyses, refine."""
 
-from __future__ import annotations
-
 from typing import Literal, cast
 
 from fastapi import APIRouter, Query
@@ -13,8 +11,9 @@ from veupath_chatbot.platform.errors import (
 )
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.services.experiment.classification import classify_records
 from veupath_chatbot.services.experiment.store import get_experiment_store
-from veupath_chatbot.services.wdk.helpers import extract_pk
+from veupath_chatbot.services.wdk import get_strategy_api
 from veupath_chatbot.services.wdk.step_results import StepResultsService
 from veupath_chatbot.transport.http.deps import CurrentUser, ExperimentDep
 from veupath_chatbot.transport.http.schemas.experiments import (
@@ -35,8 +34,6 @@ router = APIRouter()
 
 def _require_step(exp: ExperimentDep) -> StepResultsService:
     """Create a StepResultsService, raising 404 if no WDK step."""
-    from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-
     if not exp.wdk_step_id:
         raise NotFoundError(title="No WDK strategy for this experiment")
     api = get_strategy_api(exp.config.site_id)
@@ -50,8 +47,6 @@ async def get_experiment_attributes(
     exp: ExperimentDep, user_id: CurrentUser
 ) -> JSONObject:
     """Get available attributes for an experiment's record type."""
-    from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-
     api = get_strategy_api(exp.config.site_id)
     svc = StepResultsService(
         api, step_id=exp.wdk_step_id or 0, record_type=exp.config.record_type
@@ -110,43 +105,17 @@ async def get_experiment_records(
         attributes=attr_list,
     )
 
-    tp_ids = {g.id for g in exp.true_positive_genes}
-    fp_ids = {g.id for g in exp.false_positive_genes}
-    fn_ids = {g.id for g in exp.false_negative_genes}
-    tn_ids = {g.id for g in exp.true_negative_genes}
-
     records = answer.get("records", [])
-    classified_records: list[JSONObject] = []
-    if isinstance(records, list):
-        for rec in records:
-            if not isinstance(rec, dict):
-                continue
-            gene_id = extract_pk(rec)
-            classification: str | None = None
-            if gene_id:
-                # WDK transcript IDs include a version suffix (e.g. ".1").
-                # Experiment gene sets store the base gene ID without it.
-                candidates = [gene_id]
-                dot = gene_id.rfind(".")
-                if dot > 0:
-                    candidates.append(gene_id[:dot])
-                for gid in candidates:
-                    if gid in tp_ids:
-                        classification = "TP"
-                        break
-                    if gid in fp_ids:
-                        classification = "FP"
-                        break
-                    if gid in fn_ids:
-                        classification = "FN"
-                        break
-                    if gid in tn_ids:
-                        classification = "TN"
-                        break
-            classified_records.append({**rec, "_classification": classification})
+    classified = classify_records(
+        records if isinstance(records, list) else [],
+        tp_ids={g.id for g in exp.true_positive_genes},
+        fp_ids={g.id for g in exp.false_positive_genes},
+        fn_ids={g.id for g in exp.false_negative_genes},
+        tn_ids={g.id for g in exp.true_negative_genes},
+    )
 
     return {
-        "records": cast(JSONValue, classified_records),
+        "records": cast(JSONValue, classified),
         "meta": answer.get("meta", {}),
     }
 
@@ -158,8 +127,6 @@ async def get_experiment_record_detail(
     user_id: CurrentUser,
 ) -> JSONObject:
     """Get a single record's full details by primary key."""
-    from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-
     pk_parts: list[JSONObject] = [
         {"name": part.name, "value": part.value} for part in body.primary_key
     ]
@@ -247,8 +214,7 @@ async def refine_experiment(
     user_id: CurrentUser,
 ) -> JSONObject:
     """Add a step to the experiment's strategy (combine, transform, etc.)."""
-    from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-    from veupath_chatbot.integrations.veupathdb.strategy_api import StepTreeNode
+    from veupath_chatbot.domain.strategy.ast import StepTreeNode
 
     if not exp.wdk_strategy_id or not exp.wdk_step_id:
         raise NotFoundError(title="No WDK strategy for this experiment")

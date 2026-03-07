@@ -1,7 +1,5 @@
 """Unit tests for step_analysis.phase_operators -- COMPARISON_OPERATORS constant."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.step_analysis.phase_operators import (
     COMPARISON_OPERATORS,
 )

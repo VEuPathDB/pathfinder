@@ -1,17 +1,19 @@
 """Control evaluation logic: run trees/steps against control sets and extract metrics."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
+from veupath_chatbot.domain.strategy.ast import StepTreeNode
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-from veupath_chatbot.integrations.veupathdb.strategy_api import StepTreeNode
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.control_helpers import delete_temp_strategy
 from veupath_chatbot.services.control_tests import (
     _extract_intersection_data,
     resolve_controls_param_type,
+)
+from veupath_chatbot.services.experiment.metrics import (
+    compute_confusion_matrix,
+    compute_metrics,
 )
 from veupath_chatbot.services.experiment.types import ControlValueFormat
 from veupath_chatbot.services.wdk.helpers import extract_record_ids
@@ -265,11 +267,12 @@ def _extract_eval_counts(result: JSONObject) -> _EvalCounts:
     )
 
 
-def _f1(recall: float, fpr: float, neg_total: int) -> float:
-    """Approximate F1 from recall and FPR."""
-    specificity = 1.0 - fpr if neg_total > 0 else 1.0
-    precision = specificity  # proxy when we lack total result count
-    denom = precision + recall
-    if denom == 0:
-        return 0.0
-    return 2 * precision * recall / denom
+def _f1_from_counts(counts: _EvalCounts) -> float:
+    """Compute F1 from evaluation counts via the canonical metrics engine."""
+    cm = compute_confusion_matrix(
+        positive_hits=counts.pos_hits,
+        total_positives=counts.pos_total,
+        negative_hits=counts.neg_hits,
+        total_negatives=counts.neg_total,
+    )
+    return compute_metrics(cm, total_results=counts.total_results).f1_score

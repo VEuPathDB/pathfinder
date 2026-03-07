@@ -1,7 +1,5 @@
 """Tools for attaching filters/analyses/reports to steps (AI-exposed)."""
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from kani import AIParam, ai_function

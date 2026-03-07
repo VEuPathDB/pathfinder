@@ -1,7 +1,5 @@
 """Discovery/search helper tools (AI-exposed)."""
 
-from __future__ import annotations
-
 import re
 from typing import Annotated
 
@@ -10,13 +8,17 @@ from kani import AIParam, ai_function
 
 from veupath_chatbot.domain.strategy.explain import explain_operation
 from veupath_chatbot.domain.strategy.ops import parse_op
-from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
 from veupath_chatbot.platform.errors import ErrorCode
 from veupath_chatbot.platform.logging import get_logger
+from veupath_chatbot.platform.tool_errors import tool_error
 from veupath_chatbot.platform.types import (
     JSONArray,
     JSONObject,
     JSONValue,
+)
+from veupath_chatbot.services.catalog.searches import (
+    get_raw_record_types,
+    get_raw_searches,
 )
 from veupath_chatbot.services.strategies.engine.helpers import StrategyToolsHelpers
 
@@ -48,11 +50,10 @@ class StrategyDiscoveryOps(StrategyToolsHelpers):
             raw_terms = raw_terms_list
         terms = [t.lower() for t in raw_terms if t]
         if not terms:
-            return self._tool_error(
+            return tool_error(
                 ErrorCode.VALIDATION_ERROR, "No keywords provided", keywords=[]
             )
 
-        discovery = get_discovery_service()
         matches: JSONArray = []
 
         record_types: list[str] = []
@@ -65,7 +66,7 @@ class StrategyDiscoveryOps(StrategyToolsHelpers):
             from veupath_chatbot.platform.types import as_json_object
 
             record_types_list: list[str] = []
-            record_types_raw = await discovery.get_record_types(self.session.site_id)
+            record_types_raw = await get_raw_record_types(self.session.site_id)
             for rt_value in record_types_raw:
                 if not isinstance(rt_value, dict):
                     continue
@@ -83,7 +84,7 @@ class StrategyDiscoveryOps(StrategyToolsHelpers):
 
         for rt_name in record_types:
             try:
-                searches = await discovery.get_searches(self.session.site_id, rt_name)
+                searches = await get_raw_searches(self.session.site_id, rt_name)
             except httpx.HTTPError, KeyError:
                 logger.warning(
                     "Failed to fetch searches for record type %s",

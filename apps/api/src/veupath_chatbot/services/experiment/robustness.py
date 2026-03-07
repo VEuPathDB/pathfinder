@@ -5,12 +5,14 @@ to derive confidence intervals and stability scores — all pure Python,
 no additional WDK API calls required.
 """
 
-from __future__ import annotations
-
 import random
 from collections import defaultdict
 
 from veupath_chatbot.platform.logging import get_logger
+from veupath_chatbot.services.experiment.metrics import (
+    compute_confusion_matrix,
+    compute_metrics,
+)
 from veupath_chatbot.services.experiment.rank_metrics import compute_rank_metrics
 from veupath_chatbot.services.experiment.types import (
     DEFAULT_K_VALUES,
@@ -143,21 +145,18 @@ def _collect_classification_metrics(
 ) -> None:
     """Compute binary classification metrics and accumulate into samples dict."""
     result_set = set(result_ids)
-    tp = len(pos_set & result_set)
-    fn = len(pos_set) - tp
-    fp = len(neg_set & result_set)
-    tn = len(neg_set) - fp
+    cm = compute_confusion_matrix(
+        positive_hits=len(pos_set & result_set),
+        total_positives=len(pos_set),
+        negative_hits=len(neg_set & result_set),
+        total_negatives=len(neg_set),
+    )
+    m = compute_metrics(cm)
 
-    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    f1_denom = precision + sensitivity
-    f1 = (2 * precision * sensitivity / f1_denom) if f1_denom > 0 else 0.0
-
-    samples["sensitivity"].append(sensitivity)
-    samples["specificity"].append(specificity)
-    samples["precision"].append(precision)
-    samples["f1_score"].append(f1)
+    samples["sensitivity"].append(m.sensitivity)
+    samples["specificity"].append(m.specificity)
+    samples["precision"].append(m.precision)
+    samples["f1_score"].append(m.f1_score)
 
 
 def _ci_from_samples(

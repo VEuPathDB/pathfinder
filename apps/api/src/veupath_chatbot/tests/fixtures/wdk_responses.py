@@ -8,8 +8,6 @@ Gene IDs are real *Plasmodium falciparum* 3D7 locus tags so that downstream
 code that validates prefixes/formats does not trip.
 """
 
-from __future__ import annotations
-
 # ---------------------------------------------------------------------------
 # Default realistic Plasmodium falciparum gene IDs
 # ---------------------------------------------------------------------------

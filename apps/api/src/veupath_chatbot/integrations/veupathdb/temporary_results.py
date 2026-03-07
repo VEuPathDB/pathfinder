@@ -1,6 +1,5 @@
 """VEuPathDB /temporary-results helpers for downloads."""
 
-import asyncio
 from typing import cast
 
 from veupath_chatbot.integrations.veupathdb.strategy_api.base import StrategyAPIBase
@@ -65,6 +64,10 @@ class TemporaryResultsAPI(StrategyAPIBase):
     ) -> str:
         """Get download URL for step results.
 
+        Creates a temporary result via POST, extracts the ``id`` from the
+        response, and constructs the download URL:
+        ``{base_url}/temporary-results/{id}/result``.
+
         :param step_id: Step ID.
         :param format: Output format (csv, tab, json).
         :param attributes: Attributes to include.
@@ -88,52 +91,16 @@ class TemporaryResultsAPI(StrategyAPIBase):
             reporter="standard" if format in ("csv", "tab") else "fullRecord",
             format_config=format_config,
         )
-        url = self._extract_download_url(result)
-        if url:
-            return url
 
-        # Some WDK deployments return an ID first, then populate the URL on
-        # subsequent GET /temporary-results/{id}. Poll briefly before failing.
-        result_id_raw = result.get("id") or result.get("resultId")
-        result_id = str(result_id_raw) if result_id_raw is not None else ""
-        if not result_id:
+        result_id_raw = result.get("id")
+        if result_id_raw is None:
             raise RuntimeError(
-                "VEuPathDB temporary-results response did not include either a "
-                "download URL or a temporary result id."
+                "VEuPathDB temporary-results response did not include an id."
             )
+        result_id = str(result_id_raw)
 
-        last_status = "unknown"
-        for _ in range(8):
-            await asyncio.sleep(0.5)
-            latest = await self.get_temporary_result(result_id)
-            url = self._extract_download_url(latest)
-            if url:
-                return url
-            status_raw = latest.get("status") or latest.get("state")
-            if isinstance(status_raw, str) and status_raw:
-                last_status = status_raw
-
-        raise RuntimeError(
-            f"Temporary result {result_id} did not produce a download URL "
-            f"(last status: {last_status})."
-        )
-
-    @staticmethod
-    def _extract_download_url(payload: JSONObject) -> str:
-        """Extract a download URL across known WDK response shapes."""
-        direct = (
-            payload.get("url")
-            or payload.get("downloadUrl")
-            or payload.get("download_url")
-        )
-        if isinstance(direct, str) and direct.strip():
-            return direct
-        links_raw = payload.get("links")
-        if isinstance(links_raw, dict):
-            links_url = links_raw.get("download") or links_raw.get("url")
-            if isinstance(links_url, str) and links_url.strip():
-                return links_url
-        return ""
+        base = self.client.base_url.rstrip("/")
+        return f"{base}/temporary-results/{result_id}/result"
 
     async def get_step_preview(
         self,

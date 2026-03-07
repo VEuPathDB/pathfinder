@@ -1,7 +1,5 @@
 """Cross-experiment enrichment comparison."""
 
-from __future__ import annotations
-
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.experiment.types import Experiment
 

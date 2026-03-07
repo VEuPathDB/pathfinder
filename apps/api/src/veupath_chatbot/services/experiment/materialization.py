@@ -4,14 +4,10 @@ Creates, persists, and cleans up WDK strategies from experiment configs,
 including step tree materialization for multi-step and import modes.
 """
 
-from __future__ import annotations
-
+from veupath_chatbot.domain.strategy.ast import StepTreeNode
 from veupath_chatbot.domain.strategy.ops import DEFAULT_COMBINE_OPERATOR
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-from veupath_chatbot.integrations.veupathdb.strategy_api import (
-    StepTreeNode,
-    StrategyAPI,
-)
+from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject, as_json_object
 from veupath_chatbot.services.experiment.helpers import coerce_step_id, extract_wdk_id

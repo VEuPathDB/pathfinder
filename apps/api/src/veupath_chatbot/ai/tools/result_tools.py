@@ -6,28 +6,29 @@ from kani import AIParam, ai_function
 
 from veupath_chatbot.ai.tools.wdk_error_handler import handle_wdk_step_error
 from veupath_chatbot.domain.strategy.session import StrategySession
-from veupath_chatbot.integrations.veupathdb.factory import (
-    get_results_api,
-    get_strategy_api,
-)
-from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
-from veupath_chatbot.integrations.veupathdb.temporary_results import TemporaryResultsAPI
 from veupath_chatbot.platform.errors import ErrorCode, WDKError
 from veupath_chatbot.platform.tool_errors import tool_error
 from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.services.wdk import (
+    StrategyAPI,
+    TemporaryResultsAPI,
+    get_results_api,
+    get_strategy_api,
+)
 
 
 class ResultTools:
     """Tools for fetching step results from VEuPathDB."""
 
-    def __init__(self, session: StrategySession) -> None:
+    def __init__(
+        self,
+        session: StrategySession,
+        strategy_api: StrategyAPI | None = None,
+        results_api: TemporaryResultsAPI | None = None,
+    ) -> None:
         self.session = session
-
-    def _get_api(self) -> StrategyAPI:
-        return get_strategy_api(self.session.site_id)
-
-    def _get_results_api(self) -> TemporaryResultsAPI:
-        return get_results_api(self.session.site_id)
+        self.strategy_api = strategy_api
+        self.results_api = results_api
 
     @ai_function()
     async def get_download_url(
@@ -78,7 +79,7 @@ class ResultTools:
                 )
 
         try:
-            results_api = self._get_results_api()
+            results_api = self.results_api or get_results_api(self.session.site_id)
             url = await results_api.get_download_url(
                 step_id=wdk_step_id,
                 format=format,
@@ -140,7 +141,7 @@ class ResultTools:
             )
 
         try:
-            strategy_api = self._get_api()
+            strategy_api = self.strategy_api or get_strategy_api(self.session.site_id)
             preview_raw = await strategy_api.get_step_answer(
                 step_id=wdk_step_id,
                 pagination={"offset": 0, "numRecords": limit},

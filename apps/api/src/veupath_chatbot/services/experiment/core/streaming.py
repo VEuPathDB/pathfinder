@@ -3,8 +3,6 @@
 Events are persisted to Redis Streams. Operations are registered in PostgreSQL.
 """
 
-from __future__ import annotations
-
 import asyncio
 import copy
 import json

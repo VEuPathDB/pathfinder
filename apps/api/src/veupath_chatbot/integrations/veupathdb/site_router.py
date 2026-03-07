@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import cast
 
 import yaml
+from pydantic import BaseModel, Field
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 from veupath_chatbot.platform.config import get_settings
 from veupath_chatbot.platform.errors import ErrorCode, NotFoundError
@@ -14,13 +15,41 @@ from veupath_chatbot.platform.types import JSONObject
 logger = get_logger(__name__)
 
 
+# ── Pydantic config models ───────────────────────────────────────────
+
+
+class SiteConfig(BaseModel):
+    """Validated configuration for a single VEuPathDB site."""
+
+    name: str = ""
+    display_name: str = ""
+    base_url: str = ""
+    project_id: str = ""
+    is_portal: bool = False
+
+
+class RoutingConfig(BaseModel):
+    """Validated routing/timeout configuration."""
+
+    portal_timeout: float = 120.0
+    component_timeout: float = 30.0
+
+
+class SitesConfig(BaseModel):
+    """Top-level sites configuration parsed from YAML."""
+
+    sites: dict[str, SiteConfig] = Field(default_factory=dict)
+    default_site: str = "plasmodb"
+    routing: RoutingConfig = Field(default_factory=RoutingConfig)
+
+
 @lru_cache
-def load_sites_config(config_path: str | None = None) -> JSONObject:
-    """Load sites configuration from YAML.
+def load_sites_config(config_path: str | None = None) -> SitesConfig:
+    """Load and validate sites configuration from YAML.
 
     :param config_path: Optional path to a YAML file. If unset or empty, uses
         the bundled ``sites.yaml`` next to this module.
-    :returns: Parsed sites config (sites, default_site, routing, etc.).
+    :returns: Validated SitesConfig model.
     """
     path = (
         Path(config_path).resolve()
@@ -29,12 +58,13 @@ def load_sites_config(config_path: str | None = None) -> JSONObject:
     )
     logger.info("Loading sites config", path=str(path))
     with open(path) as f:
-        config = yaml.safe_load(f)
-    logger.info(
-        "Sites config loaded",
-        num_sites=len(config.get("sites", {}) if isinstance(config, dict) else {}),
-    )
-    return cast(JSONObject, config)
+        raw = yaml.safe_load(f)
+    if not isinstance(raw, dict):
+        logger.warning("Sites config is not a dict, using defaults")
+        return SitesConfig()
+    config = SitesConfig.model_validate(raw)
+    logger.info("Sites config loaded", num_sites=len(config.sites))
+    return config
 
 
 class SiteInfo:
@@ -55,6 +85,18 @@ class SiteInfo:
         self.base_url = base_url.rstrip("/")
         self.project_id = project_id
         self.is_portal = is_portal
+
+    @classmethod
+    def from_config(cls, site_id: str, cfg: SiteConfig) -> SiteInfo:
+        """Construct a SiteInfo from a validated SiteConfig."""
+        return cls(
+            id=site_id,
+            name=cfg.name,
+            display_name=cfg.display_name,
+            base_url=cfg.base_url,
+            project_id=cfg.project_id,
+            is_portal=cfg.is_portal,
+        )
 
     @property
     def service_url(self) -> str:
@@ -106,51 +148,10 @@ class SiteRouter:
         self._load_sites()
 
     def _load_sites(self) -> None:
-        """Load site configurations."""
-        sites_config_raw = self._config.get("sites", {})
-        if not isinstance(sites_config_raw, dict):
-            logger.warning(
-                "sites config is not a dict", type=type(sites_config_raw).__name__
-            )
-            return
-        sites_config: JSONObject = sites_config_raw
-        logger.info("Loading sites", count=len(sites_config))
-        for site_id, site_config_raw in sites_config.items():
-            if not isinstance(site_config_raw, dict):
-                logger.warning(
-                    "Site config is not a dict",
-                    site_id=site_id,
-                    type=type(site_config_raw).__name__,
-                )
-                continue
-            site_config: JSONObject = site_config_raw
-            try:
-                name_raw = site_config.get("name")
-                display_name_raw = site_config.get("display_name")
-                base_url_raw = site_config.get("base_url")
-                project_id_raw = site_config.get("project_id")
-                is_portal_raw = site_config.get("is_portal", False)
-
-                name = str(name_raw) if name_raw is not None else ""
-                display_name = (
-                    str(display_name_raw) if display_name_raw is not None else ""
-                )
-                base_url = str(base_url_raw) if base_url_raw is not None else ""
-                project_id = str(project_id_raw) if project_id_raw is not None else ""
-                is_portal = (
-                    bool(is_portal_raw) if isinstance(is_portal_raw, bool) else False
-                )
-
-                self._sites[site_id] = SiteInfo(
-                    id=site_id,
-                    name=name,
-                    display_name=display_name,
-                    base_url=base_url,
-                    project_id=project_id,
-                    is_portal=is_portal,
-                )
-            except Exception as e:
-                logger.error("Failed to load site", site_id=site_id, error=str(e))
+        """Load site configurations from validated config."""
+        logger.info("Loading sites", count=len(self._config.sites))
+        for site_id, site_cfg in self._config.sites.items():
+            self._sites[site_id] = SiteInfo.from_config(site_id, site_cfg)
         logger.info("Sites loaded", site_ids=list(self._sites.keys()))
 
     def get_site(self, site_id: str) -> SiteInfo:
@@ -177,14 +178,7 @@ class SiteRouter:
     def get_default_site(self) -> SiteInfo:
         """Get the default site."""
         settings = get_settings()
-        default_id_raw = self._config.get(
-            "default_site", settings.veupathdb_default_site
-        )
-        default_id = (
-            str(default_id_raw)
-            if default_id_raw is not None
-            else settings.veupathdb_default_site
-        )
+        default_id = self._config.default_site or settings.veupathdb_default_site
         return self.get_site(default_id)
 
     def get_client(self, site_id: str) -> VEuPathDBClient:
@@ -195,25 +189,11 @@ class SiteRouter:
         """
         if site_id not in self._clients:
             site = self.get_site(site_id)
-            routing_raw = self._config.get("routing", {})
-            if not isinstance(routing_raw, dict):
-                routing: JSONObject = {}
-            else:
-                routing = routing_raw
+            routing = self._config.routing
             settings = get_settings()
-            portal_timeout_raw = routing.get("portal_timeout", 120)
-            component_timeout_raw = routing.get("component_timeout", 30)
-            portal_timeout = (
-                float(portal_timeout_raw)
-                if isinstance(portal_timeout_raw, (int, float))
-                else 120.0
+            timeout = (
+                routing.portal_timeout if site.is_portal else routing.component_timeout
             )
-            component_timeout = (
-                float(component_timeout_raw)
-                if isinstance(component_timeout_raw, (int, float))
-                else 30.0
-            )
-            timeout = portal_timeout if site.is_portal else component_timeout
             self._clients[site_id] = VEuPathDBClient(
                 base_url=site.service_url,
                 timeout=float(timeout),

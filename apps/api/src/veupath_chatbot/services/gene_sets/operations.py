@@ -1,0 +1,316 @@
+"""Gene set business logic.
+
+All domain operations on gene sets live here. The transport layer
+(HTTP router) delegates to this module for create, delete, list,
+set operations, enrichment, and step-results access.
+"""
+
+from typing import Literal
+from uuid import UUID, uuid4
+
+from veupath_chatbot.domain.strategy.tree import count_dict_nodes
+from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
+from veupath_chatbot.integrations.veupathdb.strategy_api.api import StrategyAPI
+from veupath_chatbot.platform.logging import get_logger
+from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.experiment.types import EnrichmentResult
+from veupath_chatbot.services.experiment.types.core import EnrichmentAnalysisType
+from veupath_chatbot.services.gene_sets.store import GeneSetStore
+from veupath_chatbot.services.gene_sets.types import GeneSet, GeneSetSource
+from veupath_chatbot.services.wdk.enrichment_service import EnrichmentService
+from veupath_chatbot.services.wdk.helpers import extract_record_ids
+from veupath_chatbot.services.wdk.step_results import StepResultsService
+
+logger = get_logger(__name__)
+
+SetOperation = Literal["intersect", "union", "minus"]
+
+
+# ---------------------------------------------------------------------------
+# Pure helpers (no I/O, no dependencies)
+# ---------------------------------------------------------------------------
+
+
+def count_steps_in_tree(node: object) -> int:
+    """Recursively count steps in a WDK strategy step tree."""
+    return count_dict_nodes(node)
+
+
+# ---------------------------------------------------------------------------
+# WDK helpers (async, take an API instance)
+# ---------------------------------------------------------------------------
+
+
+async def resolve_root_step_id(api: StrategyAPI, *, strategy_id: int) -> int | None:
+    """Get the root step ID from a WDK strategy."""
+    strategy = await api.get_strategy(strategy_id)
+    root_step_id = strategy.get("rootStepId")
+    if isinstance(root_step_id, int):
+        return root_step_id
+    return None
+
+
+async def fetch_gene_ids_from_step(api: StrategyAPI, *, step_id: int) -> list[str]:
+    """Fetch gene IDs from a WDK step via the standard report endpoint."""
+    answer = await api.get_step_answer(
+        step_id,
+        attributes=["primary_key"],
+        pagination={"offset": 0, "numRecords": 10_000},
+    )
+    records = answer.get("records", [])
+    if not isinstance(records, list):
+        return []
+    return extract_record_ids(records)
+
+
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
+
+
+class GeneSetService:
+    """Orchestrates all gene-set domain operations.
+
+    Depends on the gene-set store and (lazily) on WDK APIs.
+    The transport layer should instantiate this once per request
+    or hold a singleton.
+    """
+
+    def __init__(self, store: GeneSetStore) -> None:
+        self._store = store
+
+    # -- Lookup / ownership ---------------------------------------------------
+
+    async def get_for_user(self, user_id: UUID, gene_set_id: str) -> GeneSet:
+        """Retrieve a gene set, raising KeyError if not found or wrong owner."""
+        gs = await self._store.aget(gene_set_id)
+        if gs is None or gs.user_id != user_id:
+            raise KeyError(f"Gene set not found: {gene_set_id}")
+        return gs
+
+    # -- CRUD -----------------------------------------------------------------
+
+    async def create(
+        self,
+        *,
+        user_id: UUID,
+        name: str,
+        site_id: str,
+        gene_ids: list[str],
+        source: GeneSetSource,
+        wdk_strategy_id: int | None = None,
+        wdk_step_id: int | None = None,
+        search_name: str | None = None,
+        record_type: str | None = None,
+        parameters: dict[str, str] | None = None,
+    ) -> GeneSet:
+        """Create a gene set, auto-resolving from WDK if needed."""
+        step_count = 1
+
+        # Auto-resolve root step and fetch gene IDs when creating from strategy
+        if not gene_ids and wdk_strategy_id is not None:
+            api = get_strategy_api(site_id)
+
+            # Resolve the root step ID if not provided
+            if wdk_step_id is None:
+                try:
+                    wdk_step_id = await resolve_root_step_id(
+                        api, strategy_id=wdk_strategy_id
+                    )
+                    logger.info(
+                        "Resolved root step from strategy",
+                        strategy_id=wdk_strategy_id,
+                        step_id=wdk_step_id,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to resolve root step from strategy",
+                        strategy_id=wdk_strategy_id,
+                        error=str(exc),
+                    )
+
+            # Fetch gene IDs from the step
+            if wdk_step_id is not None:
+                try:
+                    gene_ids = await fetch_gene_ids_from_step(api, step_id=wdk_step_id)
+                    logger.info(
+                        "Fetched gene IDs from WDK step",
+                        step_id=wdk_step_id,
+                        gene_count=len(gene_ids),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to fetch gene IDs from WDK step",
+                        step_id=wdk_step_id,
+                        error=str(exc),
+                    )
+
+            # Count steps in the strategy
+            try:
+                strategy = await api.get_strategy(wdk_strategy_id)
+                step_tree = strategy.get("stepTree")
+                step_count = count_steps_in_tree(step_tree)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to count strategy steps",
+                    strategy_id=wdk_strategy_id,
+                    error=str(exc),
+                )
+
+        gs = GeneSet(
+            id=str(uuid4()),
+            name=name,
+            site_id=site_id,
+            gene_ids=gene_ids,
+            source=source,
+            user_id=user_id,
+            wdk_strategy_id=wdk_strategy_id,
+            wdk_step_id=wdk_step_id,
+            search_name=search_name,
+            record_type=record_type,
+            parameters=parameters,
+            step_count=step_count,
+        )
+        self._store.save(gs)
+        logger.info(
+            "Gene set created",
+            gene_set_id=gs.id,
+            name=gs.name,
+            gene_count=len(gs.gene_ids),
+        )
+        return gs
+
+    async def list_for_user(
+        self,
+        user_id: UUID,
+        *,
+        site_id: str | None = None,
+    ) -> list[GeneSet]:
+        """List gene sets for a user, optionally filtered by site."""
+        return await self._store.alist_for_user(user_id, site_id=site_id)
+
+    async def delete(self, user_id: UUID, gene_set_id: str) -> None:
+        """Delete a gene set, raising KeyError if not found or wrong owner."""
+        await self.get_for_user(user_id, gene_set_id)
+        if not self._store.delete(gene_set_id):
+            raise KeyError(f"Gene set not found: {gene_set_id}")
+        logger.info("Gene set deleted", gene_set_id=gene_set_id)
+
+    # -- Set operations -------------------------------------------------------
+
+    async def perform_set_operation(
+        self,
+        *,
+        user_id: UUID,
+        set_a_id: str,
+        set_b_id: str,
+        operation: str,
+        name: str,
+    ) -> GeneSet:
+        """Perform a set operation (intersect, union, minus) between two gene sets."""
+        set_a = await self.get_for_user(user_id, set_a_id)
+        set_b = await self.get_for_user(user_id, set_b_id)
+
+        ids_a = set(set_a.gene_ids)
+        ids_b = set(set_b.gene_ids)
+
+        match operation:
+            case "intersect":
+                result_ids = ids_a & ids_b
+            case "union":
+                result_ids = ids_a | ids_b
+            case "minus":
+                result_ids = ids_a - ids_b
+            case _:
+                raise ValueError(
+                    f"Invalid operation: must be 'intersect', 'union', or 'minus', got '{operation}'"
+                )
+
+        gs = GeneSet(
+            id=str(uuid4()),
+            name=name,
+            site_id=set_a.site_id,
+            gene_ids=sorted(result_ids),
+            source="derived",
+            user_id=user_id,
+            parent_set_ids=[set_a.id, set_b.id],
+            operation=operation,
+        )
+        self._store.save(gs)
+        logger.info(
+            "Gene set derived via set operation",
+            gene_set_id=gs.id,
+            operation=operation,
+            gene_count=len(gs.gene_ids),
+        )
+        return gs
+
+    # -- Enrichment -----------------------------------------------------------
+
+    async def run_enrichment(
+        self,
+        user_id: UUID,
+        gene_set_id: str,
+        enrichment_types: list[EnrichmentAnalysisType],
+    ) -> list[EnrichmentResult]:
+        """Run enrichment analysis on a gene set."""
+        gs = await self.get_for_user(user_id, gene_set_id)
+
+        svc = EnrichmentService()
+        results, errors = await svc.run_batch(
+            site_id=gs.site_id,
+            analysis_types=enrichment_types,
+            step_id=gs.wdk_step_id,
+            search_name=gs.search_name,
+            record_type=gs.record_type or "gene",
+            parameters=gs.parameters,
+        )
+
+        if not results and errors:
+            raise RuntimeError("Enrichment analysis failed: " + "; ".join(errors))
+        return results
+
+    # -- Step results access --------------------------------------------------
+
+    async def get_step_results_service(
+        self, user_id: UUID, gene_set_id: str
+    ) -> StepResultsService:
+        """Get a StepResultsService for a gene set.
+
+        Raises ValueError if the gene set has no associated WDK step.
+        """
+        gs = await self.get_for_user(user_id, gene_set_id)
+        if not gs.wdk_step_id:
+            raise ValueError(
+                "No WDK strategy: this gene set has no associated WDK strategy "
+                "for result browsing."
+            )
+        api = get_strategy_api(gs.site_id)
+        return StepResultsService(
+            api, step_id=gs.wdk_step_id, record_type=gs.record_type or "gene"
+        )
+
+    async def get_strategy_tree(
+        self, user_id: UUID, gene_set_id: str
+    ) -> tuple[GeneSet, JSONObject]:
+        """Get the WDK strategy tree for a gene set.
+
+        Returns the gene set and the strategy tree dict.
+        Raises ValueError if no WDK strategy is associated.
+        """
+        gs = await self.get_for_user(user_id, gene_set_id)
+        if not gs.wdk_strategy_id:
+            raise ValueError(
+                "No WDK strategy: this gene set has no associated WDK strategy."
+            )
+        if not gs.wdk_step_id:
+            raise ValueError(
+                "No WDK strategy: this gene set has no associated WDK strategy "
+                "for result browsing."
+            )
+        api = get_strategy_api(gs.site_id)
+        svc = StepResultsService(
+            api, step_id=gs.wdk_step_id, record_type=gs.record_type or "gene"
+        )
+        tree = await svc.get_strategy(gs.wdk_strategy_id)
+        return gs, tree

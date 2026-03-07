@@ -1,7 +1,5 @@
 """Helpers for standardized AI tool error payloads."""
 
-from __future__ import annotations
-
 from enum import Enum
 
 from veupath_chatbot.platform.types import JSONObject, JSONValue

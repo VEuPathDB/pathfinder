@@ -1,7 +1,5 @@
 """Validation and error-payload helpers for strategy tools."""
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.strategy.ast import PlanStepNode
 from veupath_chatbot.domain.strategy.session import StrategyGraph
 from veupath_chatbot.platform.errors import ErrorCode, ValidationError
@@ -21,16 +19,14 @@ class ValidationMixin(StrategyToolsBase):
 
     def _graph_not_found(self, graph_id: str | None) -> JSONObject:
         if graph_id:
-            return self._tool_error(
-                ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id
-            )
-        return self._tool_error(
+            return tool_error(ErrorCode.NOT_FOUND, "Graph not found", graphId=graph_id)
+        return tool_error(
             ErrorCode.NOT_FOUND, "Graph not found. Provide a graphId.", graphId=graph_id
         )
 
     def _step_not_found(self, step_id: str) -> JSONObject:
         """Standard error payload for a missing step."""
-        return self._tool_error(
+        return tool_error(
             ErrorCode.STEP_NOT_FOUND, f"Step not found: {step_id}", stepId=step_id
         )
 
@@ -66,12 +62,7 @@ class ValidationMixin(StrategyToolsBase):
                 if isinstance(extra, dict):
                     context.update({k: v for k, v in extra.items() if v is not None})
         details.update({k: v for k, v in context.items() if v is not None})
-        return self._tool_error(ErrorCode.VALIDATION_ERROR, exc.title, **details)
-
-    def _tool_error(
-        self, code: ErrorCode | str, message: str, **details: JSONValue
-    ) -> JSONObject:
-        return tool_error(code, message, **details)
+        return tool_error(ErrorCode.VALIDATION_ERROR, exc.title, **details)
 
     def _is_placeholder_name(self, name: str | None) -> bool:
         if not name:

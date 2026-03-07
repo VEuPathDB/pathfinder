@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import time
 
 from veupath_chatbot.integrations.embeddings.openai_embeddings import embed_one

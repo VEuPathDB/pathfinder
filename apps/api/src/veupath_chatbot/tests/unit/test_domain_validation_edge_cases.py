@@ -1,8 +1,6 @@
 """Edge-case and bug-hunting tests for domain/research/citations.py and
 cross-domain validation concerns."""
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.research.citations import (
     Citation,
     _new_citation_id,

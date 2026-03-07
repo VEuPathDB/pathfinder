@@ -1,7 +1,5 @@
 """Tests for cross-validation metric utilities."""
 
-from __future__ import annotations
-
 import math
 
 from veupath_chatbot.services.experiment.cross_validation import (

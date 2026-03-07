@@ -1,7 +1,5 @@
 """Literature search service orchestrating multiple API clients."""
 
-from __future__ import annotations
-
 import asyncio
 import collections.abc
 from typing import cast
@@ -44,6 +42,10 @@ class LiteratureSearchService:
         self._arxiv = ArxivClient(timeout_seconds=timeout_seconds)
         self._preprint = PreprintClient(timeout_seconds=timeout_seconds)
 
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     async def search(
         self,
         query: str,
@@ -64,18 +66,174 @@ class LiteratureSearchService:
         require_doi: bool = False,
     ) -> JSONObject:
         """Search scientific literature across multiple sources."""
-        q = (query or "").strip()
-        if not q:
-            return {"results": [], "citations": [], "error": "query_required"}
+        error = self._validate_inputs(
+            query,
+            limit=limit,
+            abstract_max_chars=abstract_max_chars,
+            max_authors=max_authors,
+        )
+        if error is not None:
+            return error
+
+        q = query.strip()
         limit = max(1, min(int(limit or 5), 25))
         abstract_max_chars = max(200, min(int(abstract_max_chars or 2000), 10000))
         if max_authors != -1:
             max_authors = max(0, min(int(max_authors or 2), 50))
 
-        by_source: dict[str, JSONObject] = {}
+        by_source = await self._dispatch_sources(
+            query=q,
+            source=source,
+            limit=limit,
+            include_abstract=include_abstract,
+            abstract_max_chars=abstract_max_chars,
+        )
+
+        filtered, citations_by_key = self._deduplicate_and_filter(
+            by_source=by_source,
+            include_abstract=include_abstract,
+            abstract_max_chars=abstract_max_chars,
+            max_authors=max_authors,
+            year_from=year_from,
+            year_to=year_to,
+            author_includes=author_includes,
+            title_includes=title_includes,
+            journal_includes=journal_includes,
+            doi_equals=doi_equals,
+            pmid_equals=pmid_equals,
+            require_doi=require_doi,
+        )
+
+        sorted_results = self._sort_results(filtered, sort=sort, source=source, query=q)
+
+        return self._build_response(
+            query=q,
+            source=source,
+            sort=sort,
+            include_abstract=include_abstract,
+            abstract_max_chars=abstract_max_chars,
+            max_authors=max_authors,
+            year_from=year_from,
+            year_to=year_to,
+            author_includes=author_includes,
+            title_includes=title_includes,
+            journal_includes=journal_includes,
+            doi_equals=doi_equals,
+            pmid_equals=pmid_equals,
+            require_doi=require_doi,
+            results=sorted_results,
+            citations_by_key=citations_by_key,
+            by_source=by_source,
+            limit=limit,
+        )
+
+    # ------------------------------------------------------------------
+    # Input validation
+    # ------------------------------------------------------------------
+
+    def _validate_inputs(
+        self,
+        query: str,
+        *,
+        limit: int,
+        abstract_max_chars: int,
+        max_authors: int,
+    ) -> JSONObject | None:
+        """Return an error payload if the query is empty, else None."""
+        q = (query or "").strip()
+        if not q:
+            return {"results": [], "citations": [], "error": "query_required"}
+        return None
+
+    # ------------------------------------------------------------------
+    # Source dispatch
+    # ------------------------------------------------------------------
+
+    def _build_source_tasks(
+        self,
+        *,
+        query: str,
+        source: LiteratureSource,
+        limit: int,
+        include_abstract: bool,
+        abstract_max_chars: int,
+    ) -> list[tuple[str, collections.abc.Awaitable[JSONObject]]]:
+        """Build (name, coroutine) pairs for the requested sources.
+
+        Only creates coroutines for sources that will actually be dispatched,
+        avoiding unawaited-coroutine warnings when a single source is selected.
+        """
+        common = {"limit": limit, "abstract_max_chars": abstract_max_chars}
+        abstract_kw = {**common, "include_abstract": include_abstract}
+
+        def _make(name: str) -> tuple[str, collections.abc.Awaitable[JSONObject]]:
+            if name == "europepmc":
+                return (name, self._europepmc.search(query, **common))
+            if name == "crossref":
+                return (name, self._crossref.search(query, **common))
+            if name == "openalex":
+                return (name, self._openalex.search(query, **common))
+            if name == "semanticscholar":
+                return (name, self._semanticscholar.search(query, **common))
+            if name == "pubmed":
+                return (name, self._pubmed.search(query, **abstract_kw))
+            if name == "arxiv":
+                return (name, self._arxiv.search(query, **common))
+            if name == "biorxiv":
+                return (
+                    name,
+                    self._preprint.search(
+                        query,
+                        site="biorxiv.org",
+                        source="biorxiv",
+                        **abstract_kw,
+                    ),
+                )
+            # medrxiv
+            return (
+                name,
+                self._preprint.search(
+                    query,
+                    site="medrxiv.org",
+                    source="medrxiv",
+                    **abstract_kw,
+                ),
+            )
+
+        all_names = [
+            "europepmc",
+            "crossref",
+            "openalex",
+            "semanticscholar",
+            "pubmed",
+            "arxiv",
+            "biorxiv",
+            "medrxiv",
+        ]
+        names = all_names if source == "all" else [source]
+        return [_make(name) for name in names]
+
+    async def _dispatch_sources(
+        self,
+        *,
+        query: str,
+        source: LiteratureSource,
+        limit: int,
+        include_abstract: bool,
+        abstract_max_chars: int,
+    ) -> dict[str, JSONObject]:
+        """Dispatch searches to all requested sources in parallel."""
+        tasks = self._build_source_tasks(
+            query=query,
+            source=source,
+            limit=limit,
+            include_abstract=include_abstract,
+            abstract_max_chars=abstract_max_chars,
+        )
 
         async def _safe(
-            name: str, coro: collections.abc.Awaitable[JSONObject]
+            name: str,
+            coro: collections.abc.Awaitable[JSONObject],
         ) -> tuple[str, JSONObject]:
             try:
                 res = await coro
@@ -87,7 +245,7 @@ class LiteratureSearchService:
                 return (
                     name,
                     {
-                        "query": q,
+                        "query": query,
                         "source": name,
                         "results": [],
                         "citations": [],
@@ -95,145 +253,33 @@ class LiteratureSearchService:
                     },
                 )
 
-        if source == "all":
-            pairs = await asyncio.gather(
-                _safe(
-                    "europepmc",
-                    self._europepmc.search(
-                        q, limit=limit, abstract_max_chars=abstract_max_chars
-                    ),
-                ),
-                _safe(
-                    "crossref",
-                    self._crossref.search(
-                        q, limit=limit, abstract_max_chars=abstract_max_chars
-                    ),
-                ),
-                _safe(
-                    "openalex",
-                    self._openalex.search(
-                        q, limit=limit, abstract_max_chars=abstract_max_chars
-                    ),
-                ),
-                _safe(
-                    "semanticscholar",
-                    self._semanticscholar.search(
-                        q, limit=limit, abstract_max_chars=abstract_max_chars
-                    ),
-                ),
-                _safe(
-                    "pubmed",
-                    self._pubmed.search(
-                        q,
-                        limit=limit,
-                        include_abstract=include_abstract,
-                        abstract_max_chars=abstract_max_chars,
-                    ),
-                ),
-                _safe(
-                    "arxiv",
-                    self._arxiv.search(
-                        q, limit=limit, abstract_max_chars=abstract_max_chars
-                    ),
-                ),
-                _safe(
-                    "biorxiv",
-                    self._preprint.search(
-                        q,
-                        site="biorxiv.org",
-                        source="biorxiv",
-                        limit=limit,
-                        include_abstract=include_abstract,
-                        abstract_max_chars=abstract_max_chars,
-                    ),
-                ),
-                _safe(
-                    "medrxiv",
-                    self._preprint.search(
-                        q,
-                        site="medrxiv.org",
-                        source="medrxiv",
-                        limit=limit,
-                        include_abstract=include_abstract,
-                        abstract_max_chars=abstract_max_chars,
-                    ),
-                ),
-            )
-            by_source.update(dict(pairs))
-        else:
-            # single-source
-            if source == "europepmc":
-                k, v = await _safe(
-                    "europepmc",
-                    self._europepmc.search(
-                        q, limit=limit, abstract_max_chars=abstract_max_chars
-                    ),
-                )
-            elif source == "crossref":
-                k, v = await _safe(
-                    "crossref",
-                    self._crossref.search(
-                        q, limit=limit, abstract_max_chars=abstract_max_chars
-                    ),
-                )
-            elif source == "openalex":
-                k, v = await _safe(
-                    "openalex",
-                    self._openalex.search(
-                        q, limit=limit, abstract_max_chars=abstract_max_chars
-                    ),
-                )
-            elif source == "semanticscholar":
-                k, v = await _safe(
-                    "semanticscholar",
-                    self._semanticscholar.search(
-                        q, limit=limit, abstract_max_chars=abstract_max_chars
-                    ),
-                )
-            elif source == "pubmed":
-                k, v = await _safe(
-                    "pubmed",
-                    self._pubmed.search(
-                        q,
-                        limit=limit,
-                        include_abstract=include_abstract,
-                        abstract_max_chars=abstract_max_chars,
-                    ),
-                )
-            elif source == "arxiv":
-                k, v = await _safe(
-                    "arxiv",
-                    self._arxiv.search(
-                        q, limit=limit, abstract_max_chars=abstract_max_chars
-                    ),
-                )
-            elif source == "biorxiv":
-                k, v = await _safe(
-                    "biorxiv",
-                    self._preprint.search(
-                        q,
-                        site="biorxiv.org",
-                        source="biorxiv",
-                        limit=limit,
-                        include_abstract=include_abstract,
-                        abstract_max_chars=abstract_max_chars,
-                    ),
-                )
-            else:  # medrxiv
-                k, v = await _safe(
-                    "medrxiv",
-                    self._preprint.search(
-                        q,
-                        site="medrxiv.org",
-                        source="medrxiv",
-                        limit=limit,
-                        include_abstract=include_abstract,
-                        abstract_max_chars=abstract_max_chars,
-                    ),
-                )
-            by_source[k] = v
+        pairs = await asyncio.gather(*(_safe(name, coro) for name, coro in tasks))
+        return dict(pairs)
 
-        # Merge + filter + dedupe; keep citations aligned via dedupe key.
+    # ------------------------------------------------------------------
+    # Deduplication and filtering
+    # ------------------------------------------------------------------
+
+    def _deduplicate_and_filter(
+        self,
+        *,
+        by_source: dict[str, JSONObject],
+        include_abstract: bool,
+        abstract_max_chars: int,
+        max_authors: int,
+        year_from: int | None,
+        year_to: int | None,
+        author_includes: str | None,
+        title_includes: str | None,
+        journal_includes: str | None,
+        doi_equals: str | None,
+        pmid_equals: str | None,
+        require_doi: bool,
+    ) -> tuple[JSONArray, dict[str, JSONObject]]:
+        """Merge, filter, and deduplicate results from all sources.
+
+        Returns (filtered_results, citations_by_dedupe_key).
+        """
         filtered: JSONArray = []
         citations_by_key: dict[str, JSONObject] = {}
         seen: set[str] = set()
@@ -251,6 +297,7 @@ class LiteratureSearchService:
             )
             if not isinstance(results, list) or not isinstance(citations, list):
                 continue
+
             for i, item in enumerate(results):
                 if not isinstance(item, dict):
                     continue
@@ -292,8 +339,10 @@ class LiteratureSearchService:
                 if key in seen:
                     continue
                 seen.add(key)
+
                 authors_limited = limit_authors(
-                    list_str(authors) if authors else None, max_authors
+                    list_str(authors) if authors else None,
+                    max_authors,
                 )
                 abstract_raw = item.get("abstract")
                 abstract_value: str | None
@@ -324,6 +373,24 @@ class LiteratureSearchService:
                         c2["authors"] = cast(JSONValue, authors_limited)
                     citations_by_key[key] = c2
 
+        return filtered, citations_by_key
+
+    # ------------------------------------------------------------------
+    # Sorting and reranking
+    # ------------------------------------------------------------------
+
+    def _sort_results(
+        self,
+        results: JSONArray,
+        *,
+        sort: LiteratureSort,
+        source: LiteratureSource,
+        query: str,
+    ) -> JSONArray:
+        """Sort (and optionally rerank) the filtered results."""
+        if not results:
+            return results
+
         if sort == "newest":
 
             def get_year_key(r: JSONValue) -> tuple[bool, int]:
@@ -333,48 +400,15 @@ class LiteratureSearchService:
                 year = year_raw if isinstance(year_raw, int) else None
                 return (year is not None, year if year is not None else 0)
 
-            filtered.sort(key=get_year_key, reverse=True)
+            return sorted(results, key=get_year_key, reverse=True)
 
-        def _ordered_citations(
-            results_list: JSONArray,
-        ) -> list[JSONObject]:
-            ordered: list[JSONObject] = []
-            for r in results_list:
-                if not isinstance(r, dict):
-                    continue
-                key = dedupe_key(r)
-                c = citations_by_key.get(key)
-                if isinstance(c, dict):
-                    ordered.append(c)
-            return ordered
-
-        payload: JSONObject = {
-            "query": q,
-            "source": source,
-            "sort": sort,
-            "includeAbstract": include_abstract,
-            "abstractMaxChars": abstract_max_chars,
-            "maxAuthors": max_authors,
-            "filters": {
-                "yearFrom": year_from,
-                "yearTo": year_to,
-                "authorIncludes": author_includes,
-                "titleIncludes": title_includes,
-                "journalIncludes": journal_includes,
-                "doiEquals": doi_equals,
-                "pmidEquals": pmid_equals,
-                "requireDoi": require_doi,
-            },
-            "results": filtered[:limit],
-            "citations": cast(JSONValue, _ordered_citations(filtered[:limit])),
-        }
-
-        if sort == "relevance" and source == "all" and filtered:
+        # Relevance reranking only for source="all"
+        if sort == "relevance" and source == "all":
             scored: JSONArray = []
-            for item in filtered:
+            for item in results:
                 if not isinstance(item, dict):
                     continue
-                score, parts = rerank_score(q, item)
+                score, parts = rerank_score(query, item)
                 scored.append(
                     {
                         **item,
@@ -393,17 +427,81 @@ class LiteratureSearchService:
                     float(score_val) if score_val is not None else 0.0,
                 )
 
-            scored.sort(key=get_score_key, reverse=True)
-            filtered = scored
-            payload["results"] = filtered[:limit]
-            payload["citations"] = cast(JSONValue, _ordered_citations(filtered[:limit]))
+            return sorted(scored, key=get_score_key, reverse=True)
+
+        return results
+
+    # ------------------------------------------------------------------
+    # Response assembly
+    # ------------------------------------------------------------------
+
+    def _build_response(
+        self,
+        *,
+        query: str,
+        source: LiteratureSource,
+        sort: LiteratureSort,
+        include_abstract: bool,
+        abstract_max_chars: int,
+        max_authors: int,
+        year_from: int | None,
+        year_to: int | None,
+        author_includes: str | None,
+        title_includes: str | None,
+        journal_includes: str | None,
+        doi_equals: str | None,
+        pmid_equals: str | None,
+        require_doi: bool,
+        results: JSONArray,
+        citations_by_key: dict[str, JSONObject],
+        by_source: dict[str, JSONObject],
+        limit: int,
+    ) -> JSONObject:
+        """Assemble the final response payload."""
+        sliced = results[:limit]
+
+        def _ordered_citations(results_list: JSONArray) -> list[JSONObject]:
+            ordered: list[JSONObject] = []
+            for r in results_list:
+                if not isinstance(r, dict):
+                    continue
+                key = dedupe_key(r)
+                c = citations_by_key.get(key)
+                if isinstance(c, dict):
+                    ordered.append(c)
+            return ordered
+
+        citations = _ordered_citations(sliced)
+
+        payload: JSONObject = {
+            "query": query,
+            "source": source,
+            "sort": sort,
+            "includeAbstract": include_abstract,
+            "abstractMaxChars": abstract_max_chars,
+            "maxAuthors": max_authors,
+            "filters": {
+                "yearFrom": year_from,
+                "yearTo": year_to,
+                "authorIncludes": author_includes,
+                "titleIncludes": title_includes,
+                "journalIncludes": journal_includes,
+                "doiEquals": doi_equals,
+                "pmidEquals": pmid_equals,
+                "requireDoi": require_doi,
+            },
+            "results": sliced,
+            "citations": cast(JSONValue, citations),
+        }
 
         if source == "all":
             payload["bySource"] = cast(JSONValue, by_source)
+
         citations_raw = payload.get("citations")
         if isinstance(citations_raw, list):
             citations_list: list[JSONObject] = [
                 c for c in citations_raw if isinstance(c, dict)
             ]
             ensure_unique_citation_tags(citations_list)
+
         return payload

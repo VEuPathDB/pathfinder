@@ -1,15 +1,13 @@
 """Step report endpoints."""
 
-from __future__ import annotations
-
 from uuid import UUID
 
 from fastapi import APIRouter
 
 from veupath_chatbot.domain.strategy.ast import StepReport
-from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.wdk import get_strategy_api
 from veupath_chatbot.transport.http.deps import CurrentUser, StreamRepo
 from veupath_chatbot.transport.http.routers.steps._shared import (
     get_step_or_404,

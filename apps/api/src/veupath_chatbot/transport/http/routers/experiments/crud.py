@@ -1,7 +1,5 @@
 """CRUD endpoints for experiments: list, get, update, delete, importable strategies."""
 
-from __future__ import annotations
-
 from typing import cast
 
 from fastapi import APIRouter, Response
@@ -14,6 +12,7 @@ from veupath_chatbot.services.experiment.types import (
     experiment_summary_to_json,
     experiment_to_json,
 )
+from veupath_chatbot.services.wdk import get_strategy_api
 from veupath_chatbot.transport.http.deps import CurrentUser, ExperimentDep
 
 router = APIRouter()
@@ -51,7 +50,6 @@ async def create_strategy(
     Materialises the step tree (creates WDK steps and a strategy) and returns
     the WDK strategy ID so it can be used with ``mode="import"`` experiments.
     """
-    from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
     from veupath_chatbot.services.experiment.helpers import extract_wdk_id
     from veupath_chatbot.services.experiment.materialization import (
         _materialize_step_tree,
@@ -95,8 +93,6 @@ async def get_strategy_details(
     This endpoint flattens the steps map into an array and enriches the
     step tree so the frontend can display search names and parameters.
     """
-    from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
-
     api = get_strategy_api(siteId)
     raw = await api.get_strategy(strategy_id)
     if not isinstance(raw, dict):

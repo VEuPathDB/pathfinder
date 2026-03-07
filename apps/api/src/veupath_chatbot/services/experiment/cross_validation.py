@@ -5,8 +5,6 @@ evaluates each held-out fold, and aggregates metrics to detect
 overfitting.
 """
 
-from __future__ import annotations
-
 import math
 import operator
 import random
@@ -220,77 +218,78 @@ async def run_cross_validation(
     *,
     site_id: str,
     record_type: str,
-    search_name: str,
-    parameters: JSONObject,
     controls_search_name: str,
     controls_param_name: str,
     positive_controls: list[str],
     negative_controls: list[str],
     controls_value_format: ControlValueFormat = "newline",
+    # Single-step params (required when tree is None):
+    search_name: str | None = None,
+    parameters: JSONObject | None = None,
+    # Tree-mode param (when provided, uses tree evaluation):
+    tree: JSONObject | None = None,
     k: int = 5,
     full_metrics: ExperimentMetrics | None = None,
     progress_callback: ProgressCallback | None = None,
 ) -> CrossValidationResult:
-    """Run k-fold cross-validation on control gene lists (single-step mode)."""
+    """Run k-fold cross-validation on control gene lists.
 
-    async def _evaluate(pos: list[str] | None, neg: list[str] | None) -> JSONObject:
-        return await run_positive_negative_controls(
-            site_id=site_id,
-            record_type=record_type,
-            target_search_name=search_name,
-            target_parameters=parameters,
-            controls_search_name=controls_search_name,
-            controls_param_name=controls_param_name,
-            positive_controls=pos,
-            negative_controls=neg,
-            controls_value_format=controls_value_format,
+    When *tree* is provided, evaluates each fold against the full strategy
+    tree.  Otherwise, evaluates using the single-step *search_name* +
+    *parameters*.
+    """
+    evaluator: FoldEvaluator
+
+    if tree is not None:
+        from veupath_chatbot.services.experiment.step_analysis import (
+            run_controls_against_tree,
         )
+
+        async def _evaluate_tree(
+            pos: list[str] | None, neg: list[str] | None
+        ) -> JSONObject:
+            return await run_controls_against_tree(
+                site_id=site_id,
+                record_type=record_type,
+                tree=tree,
+                controls_search_name=controls_search_name,
+                controls_param_name=controls_param_name,
+                controls_value_format=controls_value_format,
+                positive_controls=pos,
+                negative_controls=neg,
+            )
+
+        evaluator = _evaluate_tree
+    else:
+        if search_name is None or parameters is None:
+            raise ValueError(
+                "search_name and parameters are required for single-step cross-validation"
+            )
+        # Bind to locals so the closure captures the non-None values.
+        _search_name = search_name
+        _parameters = parameters
+
+        async def _evaluate_single(
+            pos: list[str] | None, neg: list[str] | None
+        ) -> JSONObject:
+            return await run_positive_negative_controls(
+                site_id=site_id,
+                record_type=record_type,
+                target_search_name=_search_name,
+                target_parameters=_parameters,
+                controls_search_name=controls_search_name,
+                controls_param_name=controls_param_name,
+                positive_controls=pos,
+                negative_controls=neg,
+                controls_value_format=controls_value_format,
+            )
+
+        evaluator = _evaluate_single
 
     return await _run_kfold(
         positive_controls=positive_controls,
         negative_controls=negative_controls,
-        evaluator=_evaluate,
-        k=k,
-        full_metrics=full_metrics,
-        progress_callback=progress_callback,
-    )
-
-
-async def run_cross_validation_tree(
-    *,
-    site_id: str,
-    record_type: str,
-    tree: JSONObject,
-    controls_search_name: str,
-    controls_param_name: str,
-    controls_value_format: ControlValueFormat,
-    positive_controls: list[str],
-    negative_controls: list[str],
-    k: int = 5,
-    full_metrics: ExperimentMetrics | None = None,
-    progress_callback: ProgressCallback | None = None,
-) -> CrossValidationResult:
-    """Tree-aware k-fold cross-validation."""
-    from veupath_chatbot.services.experiment.step_analysis import (
-        run_controls_against_tree,
-    )
-
-    async def _evaluate(pos: list[str] | None, neg: list[str] | None) -> JSONObject:
-        return await run_controls_against_tree(
-            site_id=site_id,
-            record_type=record_type,
-            tree=tree,
-            controls_search_name=controls_search_name,
-            controls_param_name=controls_param_name,
-            controls_value_format=controls_value_format,
-            positive_controls=pos,
-            negative_controls=neg,
-        )
-
-    return await _run_kfold(
-        positive_controls=positive_controls,
-        negative_controls=negative_controls,
-        evaluator=_evaluate,
+        evaluator=evaluator,
         k=k,
         full_metrics=full_metrics,
         progress_callback=progress_callback,

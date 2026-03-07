@@ -1,7 +1,5 @@
 """Unit tests for StrategyGraph session operations."""
 
-from __future__ import annotations
-
 from veupath_chatbot.domain.strategy.ast import PlanStepNode, StrategyAST
 from veupath_chatbot.domain.strategy.ops import CombineOp
 from veupath_chatbot.domain.strategy.session import (

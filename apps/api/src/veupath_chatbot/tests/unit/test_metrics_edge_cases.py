@@ -9,8 +9,6 @@ Covers areas NOT tested by the existing test_experiment_metrics.py:
 - NPV / FPR / FNR correctness
 """
 
-from __future__ import annotations
-
 import math
 
 import pytest

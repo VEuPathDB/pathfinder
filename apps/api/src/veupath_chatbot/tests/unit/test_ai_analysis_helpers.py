@@ -1,7 +1,5 @@
 """Tests for experiment analysis AI helper functions."""
 
-from __future__ import annotations
-
 from veupath_chatbot.services.experiment.ai_analysis_helpers import (
     classify_gene,
     record_matches,

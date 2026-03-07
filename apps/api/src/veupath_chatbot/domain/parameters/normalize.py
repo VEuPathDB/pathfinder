@@ -1,12 +1,18 @@
-"""Normalize parameter values into WDK wire format."""
+"""Normalize parameter values into WDK wire format.
 
-from __future__ import annotations
+Delegates validation and decoding to the shared dispatch chain in
+``_value_helpers._process_value()``, then applies WDK wire formatting:
+compound types (multi-pick lists, ranges, filter dicts/lists) are
+serialized as JSON strings.
+"""
 
 import json
 from dataclasses import dataclass
 
-from veupath_chatbot.domain.parameters._decode_values import decode_values
-from veupath_chatbot.domain.parameters._value_helpers import ParameterValueMixin
+from veupath_chatbot.domain.parameters._value_helpers import (
+    ParameterValueMixin,
+    ParamKind,
+)
 from veupath_chatbot.domain.parameters.specs import ParamSpecNormalized
 from veupath_chatbot.platform.errors import ValidationError
 from veupath_chatbot.platform.types import (
@@ -14,10 +20,19 @@ from veupath_chatbot.platform.types import (
     JSONValue,
 )
 
+# WDK wire format wraps these compound kinds with json.dumps().
+_WIRE_JSON_KINDS = frozenset({ParamKind.MULTI_PICK, ParamKind.RANGE, ParamKind.FILTER})
+
 
 @dataclass(frozen=True)
 class ParameterNormalizer(ParameterValueMixin):
-    """Normalize parameter values using canonical parameter specs."""
+    """Normalize parameter values using canonical parameter specs.
+
+    Produces WDK wire-safe values: multi-pick lists become JSON strings,
+    ranges become JSON strings, filters become JSON strings.
+    Does NOT expand selections to leaf terms -- even when WDK marks a
+    vocabulary as ``countOnlyLeaves``, WDK handles that expansion itself.
+    """
 
     specs: dict[str, ParamSpecNormalized]
 
@@ -39,72 +54,10 @@ class ParameterNormalizer(ParameterValueMixin):
     def _normalize_value(
         self, spec: ParamSpecNormalized, value: JSONValue
     ) -> JSONValue:
-        param_type = spec.param_type
-        if value is None:
-            return self._handle_empty(spec, value)
+        result = self._process_value(spec, value)
 
-        if param_type == "multi-pick-vocabulary":
-            values = [self._stringify(v) for v in decode_values(value, spec.name)]
-            values = [self._match_vocab_value(spec, v) for v in values]
-            # Do not expand selections to leaf terms. Even when WDK marks a vocabulary
-            # as `countOnlyLeaves`, users may legitimately select higher-level nodes
-            # (e.g. a genus) and WDK will interpret it appropriately.
-            self._validate_multi_count(spec, values)
-            return json.dumps(values)
+        # WDK wire format: compound types must be serialized as JSON strings.
+        if result.kind in _WIRE_JSON_KINDS and isinstance(result.value, (list, dict)):
+            return json.dumps(result.value)
 
-        if param_type == "single-pick-vocabulary":
-            decoded = decode_values(value, spec.name)
-            if len(decoded) > 1:
-                raise ValidationError(
-                    title="Invalid parameter value",
-                    detail=f"Parameter '{spec.name}' allows only one value.",
-                    errors=[{"param": spec.name, "value": value}],
-                )
-            selected = self._stringify(decoded[0]) if decoded else ""
-            if not selected:
-                self._validate_single_required(spec)
-                return ""
-            selected = self._match_vocab_value(spec, selected)
-            # See note above for multi-pick vocabularies: do not coerce selections
-            # to leaf terms based on `countOnlyLeaves`.
-            if not selected:
-                self._validate_single_required(spec)
-            return self._stringify(selected)
-
-        if param_type in {"number", "date", "timestamp", "string"}:
-            if isinstance(value, (list, dict, tuple, set)):
-                raise ValidationError(
-                    title="Invalid parameter value",
-                    detail=f"Parameter '{spec.name}' must be a scalar value.",
-                    errors=[{"param": spec.name, "value": value}],
-                )
-            return self._stringify(value)
-
-        if param_type in {"number-range", "date-range"}:
-            if isinstance(value, dict):
-                return json.dumps(value)
-            if isinstance(value, (list, tuple)) and len(value) == 2:
-                return json.dumps({"min": value[0], "max": value[1]})
-            raise ValidationError(
-                title="Invalid parameter value",
-                detail=f"Parameter '{spec.name}' must be a range.",
-                errors=[{"param": spec.name, "value": value}],
-            )
-
-        if param_type == "filter":
-            if isinstance(value, (dict, list)):
-                return json.dumps(value)
-            return self._stringify(value)
-
-        if param_type in {"input-dataset"}:
-            if isinstance(value, list):
-                if len(value) != 1:
-                    raise ValidationError(
-                        title="Invalid parameter value",
-                        detail=f"Parameter '{spec.name}' must be a single value.",
-                        errors=[{"param": spec.name, "value": value}],
-                    )
-                return self._stringify(value[0])
-            return self._stringify(value)
-
-        return value
+        return result.value

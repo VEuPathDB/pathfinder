@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-import asyncio
 from collections.abc import Awaitable, Callable
 
 from qdrant_client import AsyncQdrantClient
@@ -9,17 +6,20 @@ from veupath_chatbot.integrations.vectorstore.collections import (
     WDK_RECORD_TYPES_V1,
     WDK_SEARCHES_V1,
 )
+from veupath_chatbot.integrations.vectorstore.ingest.pipeline import (
+    run_concurrent_pipeline,
+)
 from veupath_chatbot.integrations.vectorstore.ingest.utils import (
     embed_and_upsert,
     existing_point_ids,
-    extract_search_name,
 )
 from veupath_chatbot.integrations.vectorstore.qdrant_store import (
     QdrantStore,
     point_uuid,
 )
+from veupath_chatbot.integrations.veupathdb.param_utils import wdk_entity_name
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.types import JSONArray, JSONObject
+from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
 
 logger = get_logger(__name__)
 
@@ -65,7 +65,7 @@ async def filter_existing_searches(
             continue
         if s.get("isInternal", False):
             continue
-        search_name = extract_search_name(s)
+        search_name = wdk_entity_name(s)
         if not search_name:
             continue
         enriched.append((rt_name, s, point_uuid(f"{site_id}:{rt_name}:{search_name}")))
@@ -92,7 +92,7 @@ async def _upsert_docs_batch(
 ) -> None:
     if not docs:
         return
-    ids: list[object] = []
+    ids: list[str | JSONValue] = []
     texts: list[str] = []
     payloads: list[JSONObject] = []
     for d in docs:
@@ -101,9 +101,8 @@ async def _upsert_docs_batch(
             if isinstance(text_value, str):
                 ids.append(d.get("id"))
                 texts.append(text_value)
-                payloads.append(
-                    d.get("payload") if isinstance(d.get("payload"), dict) else {}
-                )
+                payload_raw = d.get("payload")
+                payloads.append(payload_raw if isinstance(payload_raw, dict) else {})
     await embed_and_upsert(
         store=store,
         embedder=embedder,
@@ -140,60 +139,26 @@ async def run_search_indexing_pipeline(
     batch_size: int,
     site_id: str,
 ) -> None:
-    # BUG: failed_details uses `nonlocal` from concurrent workers. In asyncio
-    # this is safe (single-threaded event loop), but the read-modify-write
-    # (`failed_details += 1`) is only safe because `await` doesn't yield mid-
-    # increment. If this code ever moved to threads, this would be a data race.
-    # Not a live bug today, but fragile.
     failed_details: int = 0
-    jobs: asyncio.Queue[tuple[str, JSONObject] | None] = asyncio.Queue()
-    docs: asyncio.Queue[JSONObject | None] = asyncio.Queue()
 
-    async def worker() -> None:
+    async def process(item: tuple[str, JSONObject]) -> JSONObject | None:
         nonlocal failed_details
-        while True:
-            item = await jobs.get()
-            if item is None:
-                jobs.task_done()
-                break
-            rt_name, s = item
-            try:
-                doc, had_error = await make_doc(rt_name, s)
-                if had_error:
-                    failed_details += 1
-                await docs.put(doc)
-            finally:
-                jobs.task_done()
+        rt_name, s = item
+        doc, had_error = await make_doc(rt_name, s)
+        if had_error:
+            failed_details += 1
+        return doc
 
-    async def consumer() -> None:
-        buffered: JSONArray = []
-        while True:
-            doc = await docs.get()
-            if doc is None:
-                docs.task_done()
-                break
-            buffered.append(doc)
-            docs.task_done()
-            if len(buffered) >= batch_size:
-                await upsert_search_docs_batch(store, embedder, buffered)
-                buffered.clear()
+    async def flush(batch: list[JSONObject]) -> None:
+        await upsert_search_docs_batch(store, embedder, list(batch))
 
-        if buffered:
-            await upsert_search_docs_batch(store, embedder, buffered)
-
-    consumer_task = asyncio.create_task(consumer())
-    workers = [asyncio.create_task(worker()) for _ in range(max(1, int(concurrency)))]
-
-    for rt_name, s in searches_to_fetch:
-        await jobs.put((rt_name, s))
-    for _ in workers:
-        await jobs.put(None)
-
-    await jobs.join()
-    await docs.put(None)
-    await consumer_task
-    for w in workers:
-        await w
+    await run_concurrent_pipeline(
+        items=searches_to_fetch,
+        process_fn=process,
+        flush_fn=flush,
+        concurrency=concurrency,
+        batch_size=batch_size,
+    )
 
     if failed_details:
         logger.warning(

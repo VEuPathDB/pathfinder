@@ -2,6 +2,7 @@
 
 from veupath_chatbot.domain.strategy.session import StrategySession
 from veupath_chatbot.platform.errors import ErrorCode, ValidationError
+from veupath_chatbot.platform.tool_errors import tool_error
 from veupath_chatbot.services.strategies.engine.validation import ValidationMixin
 
 
@@ -115,20 +116,18 @@ class TestValidationErrorPayload:
         )
 
 
-# ── _tool_error ───────────────────────────────────────────────────────
+# ── tool_error ────────────────────────────────────────────────────────
 
 
 class TestToolError:
     def test_produces_standard_payload(self) -> None:
-        mixin = _make_mixin()
-        result = mixin._tool_error(ErrorCode.NOT_FOUND, "Step not found", stepId="s1")
+        result = tool_error(ErrorCode.NOT_FOUND, "Step not found", stepId="s1")
         assert result["ok"] is False
         assert result["code"] == "NOT_FOUND"
         assert result["message"] == "Step not found"
 
     def test_with_string_code(self) -> None:
-        mixin = _make_mixin()
-        result = mixin._tool_error("CUSTOM_CODE", "Custom error")
+        result = tool_error("CUSTOM_CODE", "Custom error")
         assert result["code"] == "CUSTOM_CODE"
 
 

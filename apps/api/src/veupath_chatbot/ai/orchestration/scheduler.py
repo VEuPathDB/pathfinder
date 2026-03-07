@@ -1,7 +1,5 @@
 """Run delegation graph nodes respecting dependency ordering."""
 
-from __future__ import annotations
-
 import asyncio
 from collections.abc import Awaitable, Callable
 

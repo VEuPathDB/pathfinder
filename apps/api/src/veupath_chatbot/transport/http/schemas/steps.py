@@ -1,7 +1,5 @@
 """Step request/response DTOs."""
 
-from __future__ import annotations
-
 from pydantic import BaseModel, Field
 
 from veupath_chatbot.platform.types import JSONObject, JSONValue
