@@ -14,17 +14,22 @@ can consume stable rules without re-implementing coercion.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from veupath_chatbot.domain.parameters._decode_values import decode_values
 from veupath_chatbot.domain.parameters._value_helpers import ParameterValueMixin
 from veupath_chatbot.domain.parameters.specs import ParamSpecNormalized
+from veupath_chatbot.domain.parameters.vocab_utils import (
+    collect_leaf_terms,
+    find_vocab_node,
+    get_node_term,
+    get_vocab_children,
+)
 from veupath_chatbot.platform.errors import ValidationError
 from veupath_chatbot.platform.types import (
     JSONArray,
     JSONObject,
     JSONValue,
-    as_json_array,
-    as_json_object,
 )
 
 FAKE_ALL_SENTINEL = "@@fake@@"
@@ -76,10 +81,6 @@ class ParameterCanonicalizer(ParameterValueMixin):
             values = [self._match_vocab_value(spec, v) for v in values]
             values = self._enforce_leaf_values(spec, values)
             self._validate_multi_count(spec, values)
-            # list[str] is compatible with JSONValue (which includes list[JSONValue])
-            # Since str is a JSONValue, list[str] is compatible with list[JSONValue]
-            from typing import cast
-
             return cast(JSONValue, values)
 
         if param_type == "single-pick-vocabulary":
@@ -184,64 +185,9 @@ class ParameterCanonicalizer(ParameterValueMixin):
     ) -> list[str]:
         if not isinstance(vocabulary, dict) or not match:
             return []
-
-        def find_node(node: JSONObject) -> JSONObject | None:
-            data_value = node.get("data", {})
-            data = as_json_object(data_value) if isinstance(data_value, dict) else {}
-            term_value = data.get("term")
-            term = str(term_value) if term_value is not None else None
-            display_value = data.get("display")
-            display = str(display_value) if display_value is not None else None
-            if match in (term, display):
-                return node
-            children_value = node.get("children", [])
-            if isinstance(children_value, list):
-                children_list = as_json_array(children_value)
-                for child_value in children_list:
-                    if isinstance(child_value, dict):
-                        child = as_json_object(child_value)
-                        found = find_node(child)
-                        if found:
-                            return found
-            return None
-
-        def collect_leaf_terms(node: JSONObject) -> list[str]:
-            children_value = node.get("children", [])
-            children: list[JSONObject] = []
-            if isinstance(children_value, list):
-                children_list = as_json_array(children_value)
-                for child_value in children_list:
-                    if isinstance(child_value, dict):
-                        children.append(as_json_object(child_value))
-            if not children:
-                data_value = node.get("data", {})
-                data = (
-                    as_json_object(data_value) if isinstance(data_value, dict) else {}
-                )
-                term_value = data.get("term")
-                term = str(term_value) if term_value is not None else None
-                return [term] if term else []
-            leaves: list[str] = []
-            for child in children:
-                leaves.extend(collect_leaf_terms(child))
-            return leaves
-
-        matched_node = find_node(vocabulary)
+        matched_node = find_vocab_node(vocabulary, match)
         if not matched_node:
             return []
-        children_value = matched_node.get("children", [])
-        children: list[JSONObject] = []
-        if isinstance(children_value, list):
-            children_list = as_json_array(children_value)
-            for child_value in children_list:
-                if isinstance(child_value, dict):
-                    children.append(as_json_object(child_value))
-        if not children:
-            data_value = matched_node.get("data", {})
-            data = as_json_object(data_value) if isinstance(data_value, dict) else {}
-            term_value = data.get("term")
-            term = str(term_value) if term_value is not None else None
-            return [term] if term else []
         return collect_leaf_terms(matched_node)
 
     def _find_leaf_term_for_match(
@@ -249,35 +195,9 @@ class ParameterCanonicalizer(ParameterValueMixin):
     ) -> str | None:
         if not isinstance(vocabulary, dict) or not match:
             return None
-
-        def find_node(node: JSONObject) -> JSONObject | None:
-            data_value = node.get("data", {})
-            data = as_json_object(data_value) if isinstance(data_value, dict) else {}
-            term = data.get("term")
-            display = data.get("display")
-            if match in (term, display):
-                return node
-            children_value = node.get("children", [])
-            if isinstance(children_value, list):
-                children_list = as_json_array(children_value)
-                for child_value in children_list:
-                    if isinstance(child_value, dict):
-                        child = as_json_object(child_value)
-                        found = find_node(child)
-                        if found:
-                            return found
-            return None
-
-        matched_node = find_node(vocabulary)
+        matched_node = find_vocab_node(vocabulary, match)
         if not matched_node:
             return None
-        children_value = matched_node.get("children", [])
-        children = (
-            as_json_array(children_value) if isinstance(children_value, list) else []
-        )
-        if children:
+        if get_vocab_children(matched_node):
             return None
-        data_value = matched_node.get("data", {})
-        data = as_json_object(data_value) if isinstance(data_value, dict) else {}
-        term = data.get("term")
-        return str(term) if isinstance(term, str) else None
+        return get_node_term(matched_node)

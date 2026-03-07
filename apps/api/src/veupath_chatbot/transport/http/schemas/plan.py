@@ -6,6 +6,8 @@ These models make the plan contract explicit in OpenAPI instead of using
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
@@ -50,7 +52,7 @@ class BasePlanNode(BaseModel):
 class ColocationParams(BaseModel):
     upstream: int = Field(ge=0)
     downstream: int = Field(ge=0)
-    strand: str = "both"
+    strand: Literal["same", "opposite", "both"] = "both"
 
 
 class PlanNode(BasePlanNode):

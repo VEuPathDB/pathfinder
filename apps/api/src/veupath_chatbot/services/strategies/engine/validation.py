@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from veupath_chatbot.domain.strategy.ast import PlanStepNode
 from veupath_chatbot.domain.strategy.session import StrategyGraph
 from veupath_chatbot.platform.errors import ErrorCode, ValidationError
 from veupath_chatbot.platform.tool_errors import tool_error
@@ -26,6 +27,29 @@ class ValidationMixin(StrategyToolsBase):
         return self._tool_error(
             ErrorCode.NOT_FOUND, "Graph not found. Provide a graphId.", graphId=graph_id
         )
+
+    def _step_not_found(self, step_id: str) -> JSONObject:
+        """Standard error payload for a missing step."""
+        return self._tool_error(
+            ErrorCode.STEP_NOT_FOUND, f"Step not found: {step_id}", stepId=step_id
+        )
+
+    def _get_graph_and_step(
+        self, graph_id: str | None, step_id: str
+    ) -> tuple[StrategyGraph, PlanStepNode] | JSONObject:
+        """Look up graph and step, returning an error dict on failure.
+
+        Callers should check ``isinstance(result, dict)`` -- if True the
+        result is a ready-to-return error payload.  Otherwise it is a
+        ``(graph, step)`` tuple.
+        """
+        graph = self._get_graph(graph_id)
+        if not graph:
+            return self._graph_not_found(graph_id)
+        step = graph.get_step(step_id)
+        if not step:
+            return self._step_not_found(step_id)
+        return graph, step
 
     def _validation_error_payload(
         self, exc: ValidationError, **context: JSONValue

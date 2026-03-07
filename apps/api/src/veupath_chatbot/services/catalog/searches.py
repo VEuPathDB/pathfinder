@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
-import logging
 import re
 
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
+from veupath_chatbot.integrations.veupathdb.param_utils import (
+    wdk_entity_name,
+    wdk_search_matches,
+)
 from veupath_chatbot.integrations.veupathdb.site_search import (
     query_site_search,
     strip_html_tags,
 )
+from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONValue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def list_searches(site_id: str, record_type: str) -> list[dict[str, str]]:
@@ -27,17 +31,14 @@ async def list_searches(site_id: str, record_type: str) -> list[dict[str, str]]:
         is_internal_raw = s.get("isInternal")
         if isinstance(is_internal_raw, bool) and is_internal_raw:
             continue
-        url_segment_raw = s.get("urlSegment")
-        name_raw = s.get("name")
-        url_segment = url_segment_raw if isinstance(url_segment_raw, str) else None
-        name = name_raw if isinstance(name_raw, str) else ""
+        search_name = wdk_entity_name(s)
         display_name_raw = s.get("displayName")
         display_name = display_name_raw if isinstance(display_name_raw, str) else ""
         description_raw = s.get("description")
         description = description_raw if isinstance(description_raw, str) else ""
         result.append(
             {
-                "name": url_segment or name,
+                "name": search_name,
                 "displayName": display_name,
                 "description": description,
             }
@@ -143,19 +144,9 @@ async def search_for_searches(
     record_types = list(dict.fromkeys(record_types))
     if not record_types:
         record_types_raw = await discovery.get_record_types(site_id)
-        record_types_list: list[str] = []
-        for rt in record_types_raw:
-            if not isinstance(rt, dict):
-                continue
-            url_seg_raw = rt.get("urlSegment")
-            name_raw = rt.get("name")
-            url_seg = url_seg_raw if isinstance(url_seg_raw, str) else None
-            name = name_raw if isinstance(name_raw, str) else None
-            rt_name = url_seg or name or ""
-            if rt_name:
-                record_types_list.append(rt_name)
-        record_types = record_types_list
-        record_types = [rt for rt in record_types if rt]
+        record_types = [
+            wdk_entity_name(rt) for rt in record_types_raw if wdk_entity_name(rt)
+        ]
 
     raw_terms = re.findall(r"[A-Za-z0-9]+", query or "")
     terms = [t.lower() for t in raw_terms if t]
@@ -181,23 +172,18 @@ async def search_for_searches(
             is_internal_raw = search.get("isInternal")
             if isinstance(is_internal_raw, bool) and is_internal_raw:
                 continue
+            canonical_name = wdk_entity_name(search)
             display_name_raw = search.get("displayName")
-            url_seg_raw = search.get("urlSegment")
             display_name = (
                 display_name_raw if isinstance(display_name_raw, str) else ""
-            ) or (url_seg_raw if isinstance(url_seg_raw, str) else "")
+            ) or canonical_name
             desc_raw = search.get("description")
             desc = desc_raw if isinstance(desc_raw, str) else ""
-            url_seg_raw2 = search.get("urlSegment")
-            name_raw = search.get("name")
-            url_segment = (url_seg_raw2 if isinstance(url_seg_raw2, str) else "") or (
-                name_raw if isinstance(name_raw, str) else ""
-            )
             internal_name_raw = search.get("name")
             internal_name = (
                 internal_name_raw if isinstance(internal_name_raw, str) else ""
             )
-            haystack = f"{display_name} {desc} {url_segment} {internal_name}".lower()
+            haystack = f"{display_name} {desc} {canonical_name} {internal_name}".lower()
             score = 0
             if terms:
                 score = sum(
@@ -209,19 +195,13 @@ async def search_for_searches(
                 if query_lower and (
                     query_lower in display_name.lower()
                     or query_lower in desc.lower()
-                    or query_lower in url_segment.lower()
+                    or query_lower in canonical_name.lower()
                 ):
                     score = 1
             if score > 0:
-                url_seg_final_raw = search.get("urlSegment")
-                name_final_raw = search.get("name")
-                url_seg_final = (
-                    url_seg_final_raw if isinstance(url_seg_final_raw, str) else None
-                )
-                name_final = name_final_raw if isinstance(name_final_raw, str) else ""
                 matches.append(
                     {
-                        "name": url_seg_final or name_final or "",
+                        "name": canonical_name,
                         "displayName": display_name,
                         "description": desc,
                         "recordType": rt_name,
@@ -285,18 +265,8 @@ async def _resolve_record_type_for_search(
         return record_type
     ordered: list[str] = []
     for rt in record_types:
-        rt_name: str | None = None
-        if isinstance(rt, str):
-            rt_name = rt
-        elif isinstance(rt, dict):
-            url_seg_raw = rt.get("urlSegment")
-            name_raw = rt.get("name")
-            url_seg = url_seg_raw if isinstance(url_seg_raw, str) else None
-            name = name_raw if isinstance(name_raw, str) else None
-            rt_name = url_seg or name
-        else:
-            continue
-        if not isinstance(rt_name, str):
+        rt_name = wdk_entity_name(rt)
+        if not rt_name:
             continue
         if rt_name == record_type:
             ordered.insert(0, rt_name)
@@ -307,17 +277,6 @@ async def _resolve_record_type_for_search(
             searches = await client.get_searches(rt_name)
         except Exception:
             continue
-        found = False
-        for search in searches:
-            if not isinstance(search, dict):
-                continue
-            url_seg_raw = search.get("urlSegment")
-            name_raw = search.get("name")
-            url_seg = url_seg_raw if isinstance(url_seg_raw, str) else None
-            name = name_raw if isinstance(name_raw, str) else None
-            if url_seg == search_name or name == search_name:
-                found = True
-                break
-        if found:
+        if any(wdk_search_matches(s, search_name) for s in searches):
             return rt_name
     return record_type

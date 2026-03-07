@@ -9,7 +9,7 @@ from typing import TypedDict
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
-from veupath_chatbot.services.experiment.helpers import ProgressCallback
+from veupath_chatbot.services.experiment.helpers import ProgressCallback, safe_float
 from veupath_chatbot.services.experiment.step_analysis._evaluation import (
     _evaluate_tree_against_controls,
     _extract_eval_counts,
@@ -41,14 +41,21 @@ class _NumericParamSpec(TypedDict):
 
 
 def _safe_float(v: object) -> float | None:
+    """Convert to float, returning ``None`` for missing/unparseable values.
+
+    Delegates to :func:`safe_float` for the actual conversion (including
+    ``inf``/``nan`` rejection) but preserves ``None`` semantics for callers
+    that need to distinguish "missing" from zero.
+    """
     if v is None:
         return None
-    if isinstance(v, (int, float)):
-        return float(v)
-    try:
-        return float(str(v))
-    except TypeError, ValueError:
+    # Use a sentinel that safe_float cannot produce from valid input.
+    # safe_float rejects inf/nan, so inf is safe as a "not converted" marker.
+    sentinel = float("inf")
+    result = safe_float(v, default=sentinel)
+    if result == sentinel:
         return None
+    return result
 
 
 async def _discover_numeric_params(

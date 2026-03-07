@@ -7,21 +7,18 @@ from typing import cast
 
 import httpx
 
-from veupath_chatbot.domain.research.citations import (
-    Citation,
-    _new_citation_id,
-    _now_iso,
-    ensure_unique_citation_tags,
-)
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.services.research.clients._base import (
+    API_USER_AGENT,
+    BaseClient,
+    build_response,
+    make_citation,
+)
 from veupath_chatbot.services.research.utils import strip_tags, truncate_text
 
 
-class PubmedClient:
+class PubmedClient(BaseClient):
     """Client for PubMed API."""
-
-    def __init__(self, *, timeout_seconds: float = 15.0) -> None:
-        self._timeout = timeout_seconds
 
     async def search(
         self,
@@ -32,10 +29,9 @@ class PubmedClient:
         abstract_max_chars: int,
     ) -> JSONObject:
         """Search PubMed."""
-        headers = {
-            "User-Agent": "pathfinder-planner/1.0 (+https://pathfinder.veupathdb.org)"
-        }
-        async with httpx.AsyncClient(timeout=self._timeout, headers=headers) as client:
+        async with httpx.AsyncClient(
+            timeout=self._timeout, headers={"User-Agent": API_USER_AGENT}
+        ) as client:
             esearch = await client.get(
                 "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
                 params={
@@ -54,12 +50,9 @@ class PubmedClient:
             )
             pmids = [str(x) for x in idlist if str(x).strip()]
             if not pmids:
-                return {
-                    "query": query,
-                    "source": "pubmed",
-                    "results": [],
-                    "citations": [],
-                }
+                return build_response(
+                    query=query, source="pubmed", results=[], citations=[]
+                )
 
             esummary = await client.get(
                 "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
@@ -135,22 +128,17 @@ class PubmedClient:
                 }
             )
             citations.append(
-                Citation(
-                    id=_new_citation_id("pubmed"),
+                make_citation(
                     source="pubmed",
+                    id_prefix="pubmed",
                     title=title or url_item,
                     url=url_item,
                     authors=authors,
                     year=year,
                     pmid=pmid,
                     snippet=abstract or journal,
-                    accessed_at=_now_iso(),
-                ).to_dict()
+                )
             )
-        ensure_unique_citation_tags(citations)
-        return {
-            "query": query,
-            "source": "pubmed",
-            "results": results,
-            "citations": cast(JSONValue, citations),
-        }
+        return build_response(
+            query=query, source="pubmed", results=results, citations=citations
+        )

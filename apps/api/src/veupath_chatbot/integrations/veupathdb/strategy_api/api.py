@@ -4,8 +4,6 @@ Aggregates all strategy API mixins into the final :class:`StrategyAPI` class
 that callers instantiate.
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.integrations.veupathdb.strategy_api.reports import ReportsMixin
 from veupath_chatbot.integrations.veupathdb.strategy_api.steps import StepsMixin
 from veupath_chatbot.integrations.veupathdb.strategy_api.strategies import (

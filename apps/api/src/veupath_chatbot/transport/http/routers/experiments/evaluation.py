@@ -6,6 +6,7 @@ from typing import cast
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from veupath_chatbot.platform.errors import ValidationError
 from veupath_chatbot.platform.logging import get_logger
@@ -15,6 +16,15 @@ from veupath_chatbot.services.experiment.store import get_experiment_store
 from veupath_chatbot.services.experiment.types import ControlValueFormat
 from veupath_chatbot.transport.http.deps import CurrentUser, ExperimentDep
 from veupath_chatbot.transport.http.schemas.experiments import ThresholdSweepRequest
+
+
+class StepContributionsRequest(BaseModel):
+    """Request body for step contributions analysis."""
+
+    step_tree: JSONObject = Field(alias="stepTree")
+
+    model_config = {"populate_by_name": True}
+
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -257,7 +267,7 @@ async def threshold_sweep(
 @router.post("/{experiment_id}/step-contributions")
 async def step_contributions(
     exp: ExperimentDep,
-    body: dict[str, object],
+    body: StepContributionsRequest,
     user_id: CurrentUser,
 ) -> JSONObject:
     """Analyse per-step contribution to overall result for multi-step experiments.
@@ -265,9 +275,7 @@ async def step_contributions(
     Evaluates controls against each leaf step individually to show how much
     each step contributes to the final strategy result.
     """
-    step_tree_raw = body.get("stepTree")
-    if not step_tree_raw or not isinstance(step_tree_raw, dict):
-        return {"contributions": []}
+    step_tree_raw = body.step_tree
 
     from veupath_chatbot.services.experiment.step_analysis._tree_utils import (
         _collect_leaves,

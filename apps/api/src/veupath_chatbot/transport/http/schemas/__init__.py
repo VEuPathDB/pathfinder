@@ -22,6 +22,7 @@ from .sites import (
     SiteResponse,
 )
 from .steps import (
+    RecordDetailRequest,
     StepAnalysisRequest,
     StepAnalysisResponse,
     StepAnalysisRunResponse,
@@ -75,6 +76,7 @@ __all__ = [
     "StepReportRequest",
     "StepReportRunResponse",
     "StepReportResponse",
+    "RecordDetailRequest",
     "StepResponse",
     "StrategyResponse",
     "WdkStrategySummaryResponse",

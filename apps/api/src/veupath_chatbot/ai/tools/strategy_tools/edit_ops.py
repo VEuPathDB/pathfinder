@@ -28,12 +28,7 @@ class StrategyEditOps(StrategyToolsHelpers):
         if not graph:
             return self._graph_not_found(graph_id)
         if step_id not in graph.steps:
-            return self._tool_error(
-                ErrorCode.STEP_NOT_FOUND,
-                f"Step not found: {step_id}",
-                graphId=graph.id,
-                stepId=step_id,
-            )
+            return self._step_not_found(step_id)
 
         to_remove = {step_id}
         changed = True
@@ -95,7 +90,11 @@ class StrategyEditOps(StrategyToolsHelpers):
             )
         return self._with_full_graph(
             graph,
-            {"ok": False, "graphId": graph.id, "message": "Nothing to undo"},
+            self._tool_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Nothing to undo",
+                graphId=graph.id,
+            ),
         )
 
     @ai_function()
@@ -106,21 +105,13 @@ class StrategyEditOps(StrategyToolsHelpers):
         graph_id: Annotated[str | None, AIParam(desc="Graph ID to edit")] = None,
     ) -> JSONObject:
         """Rename a step with a new display name."""
-        graph = self._get_graph(graph_id)
-        if not graph:
-            return self._graph_not_found(graph_id)
-
-        step = graph.get_step(step_id)
-        if not step:
-            return self._tool_error(
-                ErrorCode.STEP_NOT_FOUND, f"Step not found: {step_id}", stepId=step_id
-            )
+        result = self._get_graph_and_step(graph_id, step_id)
+        if isinstance(result, dict):
+            return result
+        graph, step = result
 
         step.display_name = new_name
-
-        response = self._serialize_step(graph, step)
-        response["ok"] = True
-        return self._with_plan_payload(graph, response)
+        return self._step_ok_response(graph, step)
 
     @ai_function()
     async def update_step(
@@ -141,15 +132,10 @@ class StrategyEditOps(StrategyToolsHelpers):
         ] = None,
         graph_id: Annotated[str | None, AIParam(desc="Graph ID to edit")] = None,
     ) -> JSONObject:
-        graph = self._get_graph(graph_id)
-        if not graph:
-            return self._graph_not_found(graph_id)
-
-        step = graph.get_step(step_id)
-        if not step:
-            return self._tool_error(
-                ErrorCode.STEP_NOT_FOUND, f"Step not found: {step_id}", stepId=step_id
-            )
+        result = self._get_graph_and_step(graph_id, step_id)
+        if isinstance(result, dict):
+            return result
+        graph, step = result
 
         if not isinstance(step, PlanStepNode):
             return self._tool_error(
@@ -162,9 +148,10 @@ class StrategyEditOps(StrategyToolsHelpers):
             step.search_name = search_name
 
         if parameters is not None:
-            # Only validate parameters for leaf steps. Input-bound questions often
-            # have an input-step param that should not be provided by the model.
-            if step.primary_input is None and step.secondary_input is None:
+            # Validate parameters for leaf steps (no inputs) and transform
+            # steps (primary_input set, no secondary_input).  Binary combine
+            # steps are structurally defined and have no WDK params to check.
+            if step.secondary_input is None:
                 record_type = graph.record_type or "gene"
                 try:
                     await validate_parameters(
@@ -194,6 +181,4 @@ class StrategyEditOps(StrategyToolsHelpers):
         if display_name:
             step.display_name = display_name
 
-        response = self._serialize_step(graph, step)
-        response["ok"] = True
-        return self._with_full_graph(graph, response)
+        return self._step_ok_response(graph, step)

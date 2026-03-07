@@ -15,6 +15,7 @@ from veupath_chatbot.domain.parameters.canonicalize import ParameterCanonicalize
 from veupath_chatbot.domain.parameters.specs import adapt_param_specs
 from veupath_chatbot.platform.errors import ValidationError
 from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.services.catalog.param_resolution import _unwrap_search_data
 
 
 async def canonicalize_plan_parameters(
@@ -123,10 +124,7 @@ async def canonicalize_plan_parameters(
                         }
                     ],
                 ) from exc
-            if isinstance(details, dict):
-                search_data = details.get("searchData")
-                if isinstance(search_data, dict):
-                    details = search_data
+            details = _unwrap_search_data(details) or {}
             specs_cache[cache_key] = details if isinstance(details, dict) else {}
         spec_map = adapt_param_specs(details if isinstance(details, dict) else {})
         canonicalizer = ParameterCanonicalizer(spec_map)

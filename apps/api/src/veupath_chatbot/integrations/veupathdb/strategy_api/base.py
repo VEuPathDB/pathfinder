@@ -4,7 +4,7 @@ Provides initialization, parameter normalization, and session management
 that all mixin classes depend on.
 """
 
-from __future__ import annotations
+from typing import cast
 
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 from veupath_chatbot.integrations.veupathdb.param_utils import normalize_param_value
@@ -76,3 +76,22 @@ class StrategyAPIBase:
                 logger.info("Resolved WDK user id", resolved_user_id=resolved)
                 self.user_id = resolved
         self._session_initialized = True
+
+    async def _standard_report(
+        self,
+        step_id: int,
+        report_config: JSONObject,
+    ) -> JSONObject:
+        """Run a standard report on a step.
+
+        Shared helper used by report, answer, count, and preview methods.
+
+        :param step_id: WDK step ID (must be part of a strategy).
+        :param report_config: Report configuration dict.
+        :returns: Standard report response.
+        """
+        result = await self.client.post(
+            f"/users/{self.user_id}/steps/{step_id}/reports/standard",
+            json={"reportConfig": report_config},
+        )
+        return cast(JSONObject, result) if isinstance(result, dict) else {}

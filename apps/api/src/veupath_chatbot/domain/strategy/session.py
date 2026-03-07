@@ -10,17 +10,17 @@ from uuid import uuid4
 
 from veupath_chatbot.domain.strategy.ast import (
     PlanStepNode,
-    StepAnalysis,
-    StepFilter,
-    StepReport,
     StrategyAST,
     from_dict,
+    parse_analyses,
+    parse_colocation_params,
+    parse_filters,
+    parse_reports,
 )
-from veupath_chatbot.domain.strategy.ops import ColocationParams, CombineOp
+from veupath_chatbot.domain.strategy.ops import CombineOp
 from veupath_chatbot.platform.types import (
     JSONArray,
     JSONObject,
-    JSONValue,
     as_json_object,
 )
 
@@ -181,7 +181,7 @@ class StrategySession:
 
 def hydrate_graph_from_steps_data(
     graph: StrategyGraph,
-    steps_data: JSONArray | None,
+    steps_data: JSONArray | object,
     *,
     root_step_id: str | None = None,
     record_type: str | None = None,
@@ -192,80 +192,15 @@ def hydrate_graph_from_steps_data(
     no canonical `plan` to parse into an AST. It enables tools like `list_current_steps`
     to reflect existing UI-visible nodes.
 
+    Accepts arbitrary input; non-list values are silently ignored.
+
     :param graph: Strategy graph to hydrate.
-    :param steps_data: Flat steps list from persistence.
+    :param steps_data: Flat steps list from persistence (or any value).
     :param root_step_id: Root step ID (default: None).
     :param record_type: Record type (default: None).
     """
     if not steps_data or not isinstance(steps_data, list):
         return
-
-    def _parse_filters(raw: JSONValue) -> list[StepFilter]:
-        items = raw if isinstance(raw, list) else []
-        filters: list[StepFilter] = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            name = item.get("name")
-            if not name:
-                continue
-            filters.append(
-                StepFilter(
-                    name=str(name),
-                    value=item.get("value"),
-                    disabled=bool(item.get("disabled", False)),
-                )
-            )
-        return filters
-
-    def _parse_analyses(raw: JSONValue) -> list[StepAnalysis]:
-        items = raw if isinstance(raw, list) else []
-        analyses: list[StepAnalysis] = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            analysis_type = item.get("analysisType") or item.get("analysis_type")
-            if not analysis_type:
-                continue
-            parameters_value = item.get("parameters")
-            parameters: JSONObject = (
-                as_json_object(parameters_value)
-                if isinstance(parameters_value, dict)
-                else {}
-            )
-            custom_name_value = item.get("customName") or item.get("custom_name")
-            custom_name: str | None = (
-                str(custom_name_value) if custom_name_value is not None else None
-            )
-            analyses.append(
-                StepAnalysis(
-                    analysis_type=str(analysis_type),
-                    parameters=parameters,
-                    custom_name=custom_name,
-                )
-            )
-        return analyses
-
-    def _parse_reports(raw: JSONValue) -> list[StepReport]:
-        items = raw if isinstance(raw, list) else []
-        reports: list[StepReport] = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            report_name = (
-                item.get("reportName") or item.get("report_name") or "standard"
-            )
-            config_value = item.get("config")
-            config: JSONObject = (
-                as_json_object(config_value) if isinstance(config_value, dict) else {}
-            )
-            reports.append(
-                StepReport(
-                    report_name=str(report_name),
-                    config=config,
-                )
-            )
-        return reports
 
     nodes: dict[str, PlanStepNode] = {}
 
@@ -299,9 +234,9 @@ def hydrate_graph_from_steps_data(
             id=step_id,
         )
 
-        node.filters = _parse_filters(step.get("filters"))
-        node.analyses = _parse_analyses(step.get("analyses"))
-        node.reports = _parse_reports(step.get("reports"))
+        node.filters = parse_filters(step.get("filters"))
+        node.analyses = parse_analyses(step.get("analyses"))
+        node.reports = parse_reports(step.get("reports"))
 
         op_raw = step.get("operator")
         if isinstance(op_raw, str) and op_raw:
@@ -310,34 +245,7 @@ def hydrate_graph_from_steps_data(
             except Exception:
                 node.operator = None
 
-        cp_raw = step.get("colocationParams")
-        if isinstance(cp_raw, dict):
-            cp_dict = as_json_object(cp_raw)
-            upstream_value = cp_dict.get("upstream", 0)
-            downstream_value = cp_dict.get("downstream", 0)
-            strand_value = cp_dict.get("strand", "both")
-            upstream = (
-                int(upstream_value) if isinstance(upstream_value, (int, float)) else 0
-            )
-            downstream = (
-                int(downstream_value)
-                if isinstance(downstream_value, (int, float))
-                else 0
-            )
-            strand_str = str(strand_value) if strand_value is not None else "both"
-            from typing import Literal
-
-            if strand_str == "same":
-                strand: Literal["same", "opposite", "both"] = "same"
-            elif strand_str == "opposite":
-                strand = "opposite"
-            else:
-                strand = "both"
-            node.colocation_params = ColocationParams(
-                upstream=upstream,
-                downstream=downstream,
-                strand=strand,
-            )
+        node.colocation_params = parse_colocation_params(step.get("colocationParams"))
 
         nodes[step_id] = node
 

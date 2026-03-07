@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDebouncedCallback } from "use-debounce";
 import { createPortal } from "react-dom";
 import {
   Search,
@@ -40,6 +41,13 @@ export function GeneSearchSidebar() {
   const [selectedOrganism, setSelectedOrganism] = useState<string | null>(null);
   const [organismOpen, setOrganismOpen] = useState(false);
   const [organismFilter, setOrganismFilter] = useState("");
+  const filteredOrganisms = useMemo(
+    () =>
+      organisms.filter((org) =>
+        org.toLowerCase().includes(organismFilter.toLowerCase()),
+      ),
+    [organisms, organismFilter],
+  );
   const organismInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch all organisms on mount / site change
@@ -85,9 +93,10 @@ export function GeneSearchSidebar() {
     return () => document.removeEventListener("mousedown", handler);
   }, [organismOpen]);
 
-  // Debounced search
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Search
   const currentQueryRef = useRef("");
+  const resultsLengthRef = useRef(0);
+  resultsLengthRef.current = results.length;
 
   const doSearch = useCallback(
     async (q: string, organism: string | null, append = false) => {
@@ -99,7 +108,7 @@ export function GeneSearchSidebar() {
         return;
       }
 
-      const offset = append ? results.length : 0;
+      const offset = append ? resultsLengthRef.current : 0;
       if (append) {
         setLoadingMore(true);
       } else {
@@ -128,26 +137,23 @@ export function GeneSearchSidebar() {
         setLoadingMore(false);
       }
     },
-    [selectedSite, results.length],
+    [selectedSite],
   );
 
   // Trigger search on query change (debounced)
+  const debouncedSearch = useDebouncedCallback((q: string, organism: string | null) => {
+    setSelectedIds(new Set());
+    void doSearch(q, organism);
+  }, 300);
+
   useEffect(() => {
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     if (!query.trim()) {
       setResults([]);
       setTotalCount(0);
       return;
     }
-    searchTimeoutRef.current = setTimeout(() => {
-      setSelectedIds(new Set());
-      void doSearch(query, selectedOrganism);
-    }, 300);
-    return () => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, selectedOrganism, selectedSite]);
+    debouncedSearch(query, selectedOrganism);
+  }, [query, selectedOrganism, selectedSite, debouncedSearch]);
 
   // Toggle selection
   const toggleSelect = useCallback((geneId: string) => {
@@ -288,27 +294,21 @@ export function GeneSearchSidebar() {
                   />
                 </div>
                 <div className="max-h-48 overflow-y-auto">
-                  {organisms
-                    .filter((org) =>
-                      org.toLowerCase().includes(organismFilter.toLowerCase()),
-                    )
-                    .map((org) => (
-                      <button
-                        key={org}
-                        type="button"
-                        onClick={() => {
-                          setSelectedOrganism(org);
-                          setOrganismOpen(false);
-                          setOrganismFilter("");
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent"
-                      >
-                        <span className="truncate italic">{org}</span>
-                      </button>
-                    ))}
-                  {organisms.filter((org) =>
-                    org.toLowerCase().includes(organismFilter.toLowerCase()),
-                  ).length === 0 && (
+                  {filteredOrganisms.map((org) => (
+                    <button
+                      key={org}
+                      type="button"
+                      onClick={() => {
+                        setSelectedOrganism(org);
+                        setOrganismOpen(false);
+                        setOrganismFilter("");
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent"
+                    >
+                      <span className="truncate italic">{org}</span>
+                    </button>
+                  ))}
+                  {filteredOrganisms.length === 0 && (
                     <p className="px-3 py-2 text-[10px] text-muted-foreground">
                       No organisms match.
                     </p>

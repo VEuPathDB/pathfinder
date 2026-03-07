@@ -13,6 +13,7 @@ Float rounding (default 4 decimal places) can be overridden per-field::
 from __future__ import annotations
 
 import dataclasses
+import functools
 import types
 from typing import (
     Any,
@@ -25,9 +26,20 @@ from typing import (
 )
 
 
+@functools.cache
 def _snake_to_camel(name: str) -> str:
     parts = name.split("_")
     return parts[0] + "".join(p.capitalize() for p in parts[1:])
+
+
+@functools.cache
+def _cached_type_hints(cls: type) -> types.MappingProxyType[str, Any]:
+    return types.MappingProxyType(get_type_hints(cls))
+
+
+@functools.cache
+def _cached_fields(cls: type) -> tuple[dataclasses.Field[Any], ...]:
+    return dataclasses.fields(cls)
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +59,7 @@ def to_json(obj: Any, *, _round: int | None = 4) -> Any:
         return None
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         result: dict[str, Any] = {}
-        for f in dataclasses.fields(obj):
+        for f in _cached_fields(type(obj)):
             val = getattr(obj, f.name)
             fr = f.metadata.get("round", _round) if f.metadata else _round
             result[_snake_to_camel(f.name)] = to_json(val, _round=fr)
@@ -72,9 +84,9 @@ def from_json[T](data: dict[str, Any], cls: type[T]) -> T:
     Nested dataclasses, lists, dicts, and tuples are coerced using
     type-hint introspection.  Missing keys fall back to field defaults.
     """
-    hints = get_type_hints(cls)
+    hints = _cached_type_hints(cls)
     kwargs: dict[str, Any] = {}
-    for f in dataclasses.fields(cls):
+    for f in _cached_fields(cls):
         camel = _snake_to_camel(f.name)
         raw = data.get(camel, dataclasses.MISSING)
         if raw is dataclasses.MISSING:

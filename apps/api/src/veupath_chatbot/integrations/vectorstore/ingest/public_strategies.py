@@ -10,10 +10,8 @@ from pathlib import Path
 from typing import cast
 
 import httpx
-from veupath_chatbot.integrations.embeddings.openai_embeddings import (
-    OpenAIEmbeddings,
-    embed_one,
-)
+from veupath_chatbot.integrations.embeddings.openai_embeddings import OpenAIEmbeddings
+from veupath_chatbot.integrations.vectorstore.bootstrap import get_embedding_dim
 from veupath_chatbot.integrations.vectorstore.collections import EXAMPLE_PLANS_V1
 from veupath_chatbot.integrations.vectorstore.ingest.public_fetch import (
     _delete_strategy,
@@ -111,8 +109,7 @@ async def ingest_site(
             candidates = candidates[: max(0, int(max_strategies))]
 
         if skip_existing and candidates:
-            q = store._client()
-            try:
+            async with store.connect() as q:
                 sigs = [str(s.get("signature") or "").strip() for s in candidates]
                 sig_to_id = {sig: point_uuid(f"{site_id}:{sig}") for sig in sigs if sig}
                 existing = await existing_point_ids(
@@ -120,8 +117,6 @@ async def ingest_site(
                     collection=EXAMPLE_PLANS_V1,
                     ids=list(sig_to_id.values()),
                 )
-            finally:
-                await q.close()
 
             if existing:
                 before = len(candidates)
@@ -316,15 +311,10 @@ async def ingest_public_strategies(
         )
 
     store = QdrantStore.from_settings()
-    dim = len(await embed_one(text="example-plans", model=settings.embeddings_model))
+    dim = await get_embedding_dim(settings.embeddings_model)
 
     if reset:
-        client = store._client()
-        try:
-            if await client.collection_exists(collection_name=EXAMPLE_PLANS_V1):
-                await client.delete_collection(collection_name=EXAMPLE_PLANS_V1)
-        finally:
-            await client.close()
+        await store.reset_collections(EXAMPLE_PLANS_V1)
 
     await store.ensure_collection(name=EXAMPLE_PLANS_V1, vector_size=dim)
     embedder = OpenAIEmbeddings(model=settings.embeddings_model)

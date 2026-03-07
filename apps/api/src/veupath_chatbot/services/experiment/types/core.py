@@ -46,3 +46,10 @@ ControlSetSource = Literal["paper", "curation", "db_build", "other"]
 StepContributionVerdict = Literal["essential", "helpful", "neutral", "harmful"]
 
 DEFAULT_K_VALUES: list[int] = [10, 25, 50, 100]
+
+DEFAULT_STEP_ANALYSIS_PHASES: list[str] = [
+    "step_evaluation",
+    "operator_comparison",
+    "contribution",
+    "sensitivity",
+]

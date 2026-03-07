@@ -56,6 +56,50 @@ EmitFn = Callable[..., Awaitable[None]]
 
 
 # ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+async def _run_single_step_controls(
+    config: ExperimentConfig,
+    parameters: JSONObject,
+) -> JSONObject:
+    """Run single-step control tests with the given parameters."""
+    return await run_positive_negative_controls(
+        site_id=config.site_id,
+        record_type=config.record_type,
+        target_search_name=config.search_name,
+        target_parameters=parameters,
+        controls_search_name=config.controls_search_name,
+        controls_param_name=config.controls_param_name,
+        positive_controls=config.positive_controls or None,
+        negative_controls=config.negative_controls or None,
+        controls_value_format=config.controls_value_format,
+    )
+
+
+async def _apply_control_result(
+    config: ExperimentConfig,
+    experiment: Experiment,
+    result: JSONObject,
+) -> ExperimentMetrics:
+    """Compute metrics and populate gene lists from a control-test result."""
+    metrics = metrics_from_control_result(result)
+    experiment.metrics = metrics
+    (
+        experiment.true_positive_genes,
+        experiment.false_negative_genes,
+        experiment.false_positive_genes,
+        experiment.true_negative_genes,
+    ) = await extract_and_enrich_genes(
+        site_id=config.site_id,
+        result=result,
+        negative_controls=config.negative_controls,
+    )
+    return metrics
+
+
+# ---------------------------------------------------------------------------
 # Phase functions
 # ---------------------------------------------------------------------------
 
@@ -92,31 +136,9 @@ async def _phase_evaluate(
             negative_controls=config.negative_controls or [],
         )
     else:
-        result = await run_positive_negative_controls(
-            site_id=config.site_id,
-            record_type=config.record_type,
-            target_search_name=config.search_name,
-            target_parameters=config.parameters,
-            controls_search_name=config.controls_search_name,
-            controls_param_name=config.controls_param_name,
-            positive_controls=config.positive_controls or None,
-            negative_controls=config.negative_controls or None,
-            controls_value_format=config.controls_value_format,
-        )
+        result = await _run_single_step_controls(config, config.parameters)
 
-    metrics = metrics_from_control_result(result)
-    experiment.metrics = metrics
-
-    (
-        experiment.true_positive_genes,
-        experiment.false_negative_genes,
-        experiment.false_positive_genes,
-        experiment.true_negative_genes,
-    ) = await extract_and_enrich_genes(
-        site_id=config.site_id,
-        result=result,
-        negative_controls=config.negative_controls,
-    )
+    metrics = await _apply_control_result(config, experiment, result)
 
     await emit("evaluating", message="Evaluation complete", metrics=to_json(metrics))
     store.save(experiment)
@@ -374,29 +396,8 @@ async def _phase_optimize_parameters(
             message="Optimization complete — re-evaluating with best parameters",
         )
 
-        result = await run_positive_negative_controls(
-            site_id=config.site_id,
-            record_type=config.record_type,
-            target_search_name=config.search_name,
-            target_parameters=optimized_params,
-            controls_search_name=config.controls_search_name,
-            controls_param_name=config.controls_param_name,
-            positive_controls=config.positive_controls or None,
-            negative_controls=config.negative_controls or None,
-            controls_value_format=config.controls_value_format,
-        )
-        metrics = metrics_from_control_result(result)
-        experiment.metrics = metrics
-        (
-            experiment.true_positive_genes,
-            experiment.false_negative_genes,
-            experiment.false_positive_genes,
-            experiment.true_negative_genes,
-        ) = await extract_and_enrich_genes(
-            site_id=config.site_id,
-            result=result,
-            negative_controls=config.negative_controls,
-        )
+        result = await _run_single_step_controls(config, optimized_params)
+        metrics = await _apply_control_result(config, experiment, result)
         return result, metrics
 
     return None, metrics
@@ -406,6 +407,7 @@ async def _phase_optimize_tree_knobs(
     config: ExperimentConfig,
     experiment: Experiment,
     emit: EmitFn,
+    store: ExperimentStore,
     tree: JSONObject,
     cvf: ControlValueFormat,
 ) -> None:
@@ -430,6 +432,7 @@ async def _phase_optimize_tree_knobs(
             max_list_size=config.max_list_size,
         )
         experiment.tree_optimization = tree_opt_result
+        store.save(experiment)
         await emit(
             "optimizing",
             message=f"Tree optimization complete — best score: {tree_opt_result.best_trial.score:.4f}"
@@ -633,7 +636,9 @@ async def run_experiment(
         # Phase 7: Tree-knob optimization (multi-step only)
         has_tree_knobs = bool(config.threshold_knobs or config.operator_knobs)
         if is_tree_mode and has_tree_knobs and final_tree is not None:
-            await _phase_optimize_tree_knobs(config, experiment, _emit, tree_dict, cvf)
+            await _phase_optimize_tree_knobs(
+                config, experiment, _emit, store, tree_dict, cvf
+            )
 
         # Phase 8: Cross-validation
         if (

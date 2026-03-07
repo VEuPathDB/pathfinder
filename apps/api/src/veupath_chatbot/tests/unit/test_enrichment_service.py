@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from veupath_chatbot.services.experiment.types import EnrichmentResult
 from veupath_chatbot.services.wdk.enrichment_service import EnrichmentService
 
 
@@ -142,9 +143,14 @@ class TestRunBatch:
                 step_id=42,
                 analysis_types=["go_process", "pathway", "word"],
             )
-            assert len(results) == 2
+            # All 3 types produce a result (errored one has error field set)
+            assert len(results) == 3
             assert len(errors) == 1
             assert "pathway" in errors[0]
+            # The failed result should carry the error message
+            failed = [r for r in results if isinstance(r, EnrichmentResult) and r.error]
+            assert len(failed) == 1
+            assert failed[0].analysis_type == "pathway"
 
     @pytest.mark.asyncio
     async def test_empty_types_returns_empty(self) -> None:

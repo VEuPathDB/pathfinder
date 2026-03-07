@@ -70,24 +70,30 @@ class GraphOpsMixin(StrategyToolsBase):
             return f"{verb} {record_type} results for {summary}."
         return f"{verb} results for {summary}."
 
-    def _serialize_step(
+    def _build_step_fields(
         self,
-        graph: StrategyGraph,
+        graph: StrategyGraph | None,
         step: PlanStepNode,
+        *,
+        id_key: str = "stepId",
+        always_include_inputs: bool = False,
     ) -> JSONObject:
-        """Serialize a step with WDK-aligned fields.
+        """Build the common serialized fields for a step node.
 
-        Includes ``estimatedSize`` and ``wdkStepId`` when available on the
-        graph (populated after ``build_strategy``).  Omits noisy fields
-        (parameters, filters, analyses, reports) when empty.
+        Shared by ``_serialize_step`` (tool responses) and
+        ``_serialize_graph_step`` (graph snapshots).
 
-        :param graph: Strategy graph with WDK IDs and counts.
+        :param graph: Strategy graph (for WDK IDs / counts), or None.
         :param step: Step node to serialize.
+        :param id_key: Key name for the step ID ("stepId" or "id").
+        :param always_include_inputs: If True, always emit primaryInputStepId /
+            secondaryInputStepId (graph-snapshot mode). If False, only emit them
+            when structurally relevant (combine/transform).
         :returns: Serialized step dict.
         """
         kind = step.infer_kind()
         info: JSONObject = {
-            "stepId": step.id,
+            id_key: step.id,
             "kind": kind,
             "displayName": step.display_name or step.search_name,
         }
@@ -105,26 +111,51 @@ class GraphOpsMixin(StrategyToolsBase):
             info["secondaryInputStepId"] = (
                 step.secondary_input.id if step.secondary_input else None
             )
+        elif always_include_inputs:
+            info["primaryInputStepId"] = (
+                step.primary_input.id if step.primary_input else None
+            )
+            info["secondaryInputStepId"] = (
+                step.secondary_input.id if step.secondary_input else None
+            )
         elif kind == "transform":
             info["primaryInputStepId"] = (
                 step.primary_input.id if step.primary_input else None
             )
 
         # WDK-aligned fields (populated after build_strategy).
-        wdk_step_id = graph.wdk_step_ids.get(step.id)
-        if wdk_step_id is not None:
-            info["wdkStepId"] = wdk_step_id
-        info["isBuilt"] = wdk_step_id is not None
+        if graph:
+            wdk_step_id = graph.wdk_step_ids.get(step.id)
+            if wdk_step_id is not None:
+                info["wdkStepId"] = wdk_step_id
+            info["isBuilt"] = wdk_step_id is not None
 
-        estimated_size = graph.step_counts.get(step.id)
-        if estimated_size is not None:
-            info["estimatedSize"] = estimated_size
+            estimated_size = graph.step_counts.get(step.id)
+            if estimated_size is not None:
+                info["estimatedSize"] = estimated_size
 
         # Only include heavy fields when non-empty.
         if step.parameters:
             info["parameters"] = step.parameters
         _serialize_step_decorations(step, info)
         return info
+
+    def _serialize_step(
+        self,
+        graph: StrategyGraph,
+        step: PlanStepNode,
+    ) -> JSONObject:
+        """Serialize a step with WDK-aligned fields.
+
+        Includes ``estimatedSize`` and ``wdkStepId`` when available on the
+        graph (populated after ``build_strategy``).  Omits noisy fields
+        (parameters, filters, analyses, reports) when empty.
+
+        :param graph: Strategy graph with WDK IDs and counts.
+        :param step: Step node to serialize.
+        :returns: Serialized step dict.
+        """
+        return self._build_step_fields(graph, step, id_key="stepId")
 
     def _serialize_graph_step(self, step: PlanStepNode) -> JSONObject:
         """Serialize a step for graph snapshots.
@@ -136,39 +167,9 @@ class GraphOpsMixin(StrategyToolsBase):
         :returns: Serialized step dict keyed by id.
         """
         graph = self._get_graph(None)
-        kind = step.infer_kind()
-        base: JSONObject = {
-            "id": step.id,
-            "kind": kind,
-            "displayName": step.display_name or step.search_name,
-        }
-        if kind != "combine":
-            base["searchName"] = step.search_name
-
-        base["primaryInputStepId"] = (
-            step.primary_input.id if step.primary_input else None
+        return self._build_step_fields(
+            graph, step, id_key="id", always_include_inputs=True
         )
-        base["secondaryInputStepId"] = (
-            step.secondary_input.id if step.secondary_input else None
-        )
-        if kind == "combine":
-            base["operator"] = step.operator.value if step.operator else None
-
-        # WDK-aligned fields (populated after build_strategy).
-        if graph:
-            wdk_step_id = graph.wdk_step_ids.get(step.id)
-            if wdk_step_id is not None:
-                base["wdkStepId"] = wdk_step_id
-            base["isBuilt"] = wdk_step_id is not None
-            estimated_size = graph.step_counts.get(step.id)
-            if estimated_size is not None:
-                base["estimatedSize"] = estimated_size
-
-        # Only include heavy fields when non-empty.
-        if step.parameters:
-            base["parameters"] = step.parameters
-        _serialize_step_decorations(step, base)
-        return base
 
     def _build_graph_snapshot(self, graph: StrategyGraph) -> JSONObject:
         plan_payload = self._build_context_plan(graph)
@@ -253,6 +254,16 @@ class GraphOpsMixin(StrategyToolsBase):
             "name": name,
             "description": description,
         }
+
+    def _step_ok_response(self, graph: StrategyGraph, step: PlanStepNode) -> JSONObject:
+        """Serialize a step as an ``ok=True`` response with a full graph snapshot.
+
+        This combines the three-step pattern used after successful step
+        mutations: serialize the step, mark ok, wrap with graph context.
+        """
+        response = self._serialize_step(graph, step)
+        response["ok"] = True
+        return self._with_full_graph(graph, response)
 
     def _with_plan_payload(
         self, graph: StrategyGraph, payload: JSONObject

@@ -10,22 +10,7 @@ from typing import cast
 
 from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
 from veupath_chatbot.platform.types import JSONObject
-
-
-def extract_pk(record: JSONObject) -> str | None:
-    """Extract primary key string from a WDK record.
-
-    :param record: WDK record dict with ``id`` array.
-    :returns: First primary key value, or None.
-    """
-    pk = record.get("id")
-    if isinstance(pk, list) and pk:
-        first = pk[0]
-        if isinstance(first, dict):
-            val = first.get("value")
-            if isinstance(val, str):
-                return val.strip()
-    return None
+from veupath_chatbot.services.wdk.helpers import extract_pk
 
 
 def classify_gene(

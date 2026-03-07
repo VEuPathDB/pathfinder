@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 from fastapi import APIRouter
 
 from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
@@ -110,7 +108,7 @@ async def get_dependent_params(
             payload.parameter_name,
             payload.context_values,
         )
-        return cast(DependentParamsResponse, result)
+        return DependentParamsResponse.model_validate(result)
     except WDKError as exc:
         if siteId != "veupathdb":
             portal_client = get_wdk_client("veupathdb")
@@ -120,7 +118,7 @@ async def get_dependent_params(
                 payload.parameter_name,
                 payload.context_values,
             )
-            return cast(DependentParamsResponse, result)
+            return DependentParamsResponse.model_validate(result)
         raise exc
 
 
@@ -141,7 +139,7 @@ async def validate_search_params(
         search_name=searchName,
         context_values=payload.context_values or {},
     )
-    return cast(SearchValidationResponse, result)
+    return SearchValidationResponse.model_validate(result)
 
 
 @router.get(

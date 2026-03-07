@@ -7,7 +7,7 @@ import { StrategyGraph } from "@/features/strategy/graph/components/StrategyGrap
 import { ConversationSidebar } from "@/features/sidebar/components/ConversationSidebar";
 import { useSessionStore } from "@/state/useSessionStore";
 import { useStrategyStore } from "@/state/useStrategyStore";
-import { refreshAuth } from "@/lib/api/client";
+
 import { ToastContainer } from "@/app/components/ToastContainer";
 import { LoginModal } from "@/app/components/LoginModal";
 import { TopBar } from "@/app/components/TopBar";
@@ -29,6 +29,7 @@ import Link from "next/link";
 import { CompactStrategyView } from "@/features/strategy/graph/components/CompactStrategyView";
 import { SettingsPage } from "@/features/settings/components/SettingsPage";
 import { useAuthCheck } from "@/app/hooks/useAuthCheck";
+import { useAuthRefresh } from "@/app/hooks/useAuthRefresh";
 import { useSiteTheme } from "@/features/sites/hooks/useSiteTheme";
 
 export default function HomePage() {
@@ -40,6 +41,7 @@ export default function HomePage() {
   const veupathdbSignedIn = useSessionStore((state) => state.veupathdbSignedIn);
   const { authLoading, apiError, retry: retryAuth } = useAuthCheck();
   useSiteTheme(selectedSite);
+  useAuthRefresh();
   const strategyId = useSessionStore((state) => state.strategyId);
   const { strategy } = useStrategyStore();
   const buildPlan = useStrategyStore((state) => state.buildPlan);
@@ -83,20 +85,6 @@ export default function HomePage() {
       setPendingSiteChange(null);
     }
   }, [pendingSiteChange, setSelectedSite]);
-
-  const authRefreshed = useSessionStore((state) => state.authRefreshed);
-  const setAuthRefreshed = useSessionStore((state) => state.setAuthRefreshed);
-  const bumpAuthVersion = useSessionStore((state) => state.bumpAuthVersion);
-  useEffect(() => {
-    if (!veupathdbSignedIn) return;
-    if (authRefreshed) return;
-    setAuthRefreshed(true);
-    refreshAuth()
-      .then(() => bumpAuthVersion())
-      .catch((err) => {
-        console.error("[refreshAuth]", err);
-      });
-  }, [veupathdbSignedIn, authRefreshed, setAuthRefreshed, bumpAuthVersion]);
 
   const hasGraph = !!(strategy && strategy.steps.length > 0);
 

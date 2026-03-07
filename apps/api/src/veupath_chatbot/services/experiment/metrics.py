@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 
 from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.experiment.helpers import safe_int
 from veupath_chatbot.services.experiment.types import (
     ConfusionMatrix,
     ExperimentMetrics,
@@ -109,11 +110,11 @@ def metrics_from_control_result(result: JSONObject) -> ExperimentMetrics:
     neg_data = negative if isinstance(negative, dict) else {}
     tgt_data = target if isinstance(target, dict) else {}
 
-    pos_count = _int(pos_data.get("intersectionCount"), 0)
-    pos_total = _int(pos_data.get("controlsCount"), 0)
-    neg_count = _int(neg_data.get("intersectionCount"), 0)
-    neg_total = _int(neg_data.get("controlsCount"), 0)
-    total_results = _int(tgt_data.get("resultCount"), 0)
+    pos_count = safe_int(pos_data.get("intersectionCount"), 0)
+    pos_total = safe_int(pos_data.get("controlsCount"), 0)
+    neg_count = safe_int(neg_data.get("intersectionCount"), 0)
+    neg_total = safe_int(neg_data.get("controlsCount"), 0)
+    total_results = safe_int(tgt_data.get("resultCount"), 0)
 
     cm = compute_confusion_matrix(
         positive_hits=pos_count,
@@ -122,11 +123,3 @@ def metrics_from_control_result(result: JSONObject) -> ExperimentMetrics:
         total_negatives=neg_total,
     )
     return compute_metrics(cm, total_results=total_results)
-
-
-def _int(val: object, default: int = 0) -> int:
-    if isinstance(val, int):
-        return val
-    if isinstance(val, float):
-        return int(val)
-    return default

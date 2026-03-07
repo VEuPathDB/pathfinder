@@ -8,15 +8,13 @@ from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.integrations.veupathdb.strategy_api import StepTreeNode
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
-from veupath_chatbot.services.control_helpers import (
-    _extract_record_ids,
-    delete_temp_strategy,
-)
+from veupath_chatbot.services.control_helpers import delete_temp_strategy
 from veupath_chatbot.services.control_tests import (
     _extract_intersection_data,
     resolve_controls_param_type,
 )
 from veupath_chatbot.services.experiment.types import ControlValueFormat
+from veupath_chatbot.services.wdk.helpers import extract_record_ids
 
 logger = get_logger(__name__)
 
@@ -123,7 +121,7 @@ async def run_controls_against_tree(
                     pagination={"offset": 0, "numRecords": min(len(control_ids), 500)},
                 )
                 if isinstance(answer, dict):
-                    intersection_ids = _extract_record_ids(answer.get("records"))
+                    intersection_ids = extract_record_ids(answer.get("records"))
 
             return {
                 "controlsCount": len(control_ids),

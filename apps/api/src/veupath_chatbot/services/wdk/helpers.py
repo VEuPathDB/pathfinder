@@ -68,24 +68,43 @@ def extract_pk(record: JSONObject) -> str | None:
     return None
 
 
-def extract_record_ids(records: list[object]) -> list[str]:
+def extract_record_ids(
+    records: object,
+    *,
+    preferred_key: str | None = None,
+) -> list[str]:
     """Extract gene/record IDs from WDK standard report records.
 
-    Iterates over records and extracts the first primary key value
-    from each.  Skips non-dict entries, missing ``id`` arrays, and
-    non-string values.
+    If *preferred_key* is given, looks it up in each record's
+    ``attributes`` dict first; falls back to the primary-key array.
+
+    Accepts ``object`` so callers do not need to narrow the type before
+    calling (e.g. ``answer.get("records")`` may return ``None``).
+
+    :param records: WDK answer records (expected ``list[dict]``).
+    :param preferred_key: Attribute name to prefer over primary key.
+    :returns: List of non-empty record IDs.
     """
+    if not isinstance(records, list):
+        return []
     ids: list[str] = []
     for rec in records:
         if not isinstance(rec, dict):
             continue
-        pk = rec.get("id")
-        if isinstance(pk, list) and pk:
-            first = pk[0]
-            if isinstance(first, dict):
-                val = first.get("value")
+        extracted: str | None = None
+
+        if preferred_key:
+            attrs = rec.get("attributes")
+            if isinstance(attrs, dict):
+                val = attrs.get(preferred_key)
                 if isinstance(val, str) and val.strip():
-                    ids.append(val.strip())
+                    extracted = val.strip()
+
+        if extracted is None:
+            extracted = extract_pk(rec)
+
+        if extracted:
+            ids.append(extracted)
     return ids
 
 

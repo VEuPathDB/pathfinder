@@ -6,6 +6,7 @@ and serialization helpers. All public symbols are re-exported here.
 
 from veupath_chatbot.services.experiment.types.core import (
     DEFAULT_K_VALUES,
+    DEFAULT_STEP_ANALYSIS_PHASES,
     ControlSetSource,
     ControlValueFormat,
     EnrichmentAnalysisType,
@@ -68,6 +69,7 @@ __all__ = [
     "ControlSetSource",
     "ControlValueFormat",
     "DEFAULT_K_VALUES",
+    "DEFAULT_STEP_ANALYSIS_PHASES",
     "EnrichmentAnalysisType",
     "ExperimentMode",
     "ExperimentProgressPhase",

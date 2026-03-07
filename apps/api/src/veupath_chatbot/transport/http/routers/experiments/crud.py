@@ -34,6 +34,14 @@ class CreateStrategyRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class PatchExperimentRequest(BaseModel):
+    """Request body for PATCH /experiments/{experiment_id}."""
+
+    notes: str | None = Field(default=None, max_length=5000)
+
+    model_config = {"populate_by_name": True}
+
+
 @router.post("/create-strategy")
 async def create_strategy(
     request: CreateStrategyRequest, user_id: CurrentUser
@@ -191,14 +199,11 @@ async def get_experiment(exp: ExperimentDep, user_id: CurrentUser) -> JSONObject
 @router.patch("/{experiment_id}")
 async def update_experiment(
     exp: ExperimentDep,
-    request_body: dict[str, object],
+    body: PatchExperimentRequest,
     user_id: CurrentUser,
 ) -> JSONObject:
     """Update experiment metadata (e.g. notes)."""
-    if "notes" in request_body:
-        exp.notes = (
-            str(request_body["notes"]) if request_body["notes"] is not None else None
-        )
+    exp.notes = body.notes
 
     store = get_experiment_store()
     store.save(exp)

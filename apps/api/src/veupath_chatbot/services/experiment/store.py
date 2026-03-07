@@ -17,7 +17,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from veupath_chatbot.persistence.models import ExperimentRow
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.tasks import spawn
+from veupath_chatbot.platform.store import WriteThruStore
 from veupath_chatbot.services.experiment._deserialize import experiment_from_json
 from veupath_chatbot.services.experiment.types import (
     Experiment,
@@ -135,38 +135,24 @@ async def _delete_from_db(experiment_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-class ExperimentStore:
+class ExperimentStore(WriteThruStore[Experiment]):
     """Experiment repository with in-memory cache and DB write-through.
 
-    Sync methods are safe for asyncio cooperative multitasking: all dict
-    operations complete without yielding.  DB writes are scheduled as
-    fire-and-forget tasks so callers never block.
+    Inherits save/get/delete/aget/adelete from WriteThruStore.
+    Adds domain-specific listing methods.
     """
 
-    def __init__(self) -> None:
-        self._experiments: dict[str, Experiment] = {}
+    _persist_fn = staticmethod(_persist_to_db)
+    _load_fn = staticmethod(_load_from_db)
+    _delete_fn = staticmethod(_delete_from_db)
 
-    # -- Sync interface (used by service.py / ai_analysis_tools.py) ----------
-
-    def save(self, experiment: Experiment) -> None:
-        """Create or update an experiment (in-memory + schedule DB write)."""
-        self._experiments[experiment.id] = experiment
-        coro = _persist_to_db(experiment)
-        try:
-            spawn(coro, name=f"persist-exp-{experiment.id}")
-        except RuntimeError:
-            coro.close()
-            logger.warning("No event loop for DB persist", experiment_id=experiment.id)
-
-    def get(self, experiment_id: str) -> Experiment | None:
-        """Get an experiment by ID from in-memory cache."""
-        return self._experiments.get(experiment_id)
+    # -- Sync listing (used by service.py / ai_analysis_tools.py) ----------
 
     def list_all(
         self, site_id: str | None = None, user_id: str | None = None
     ) -> list[Experiment]:
         """List experiments from in-memory cache."""
-        experiments = list(self._experiments.values())
+        experiments = list(self._cache.values())
         if site_id:
             experiments = [e for e in experiments if e.config.site_id == site_id]
         if user_id:
@@ -176,33 +162,11 @@ class ExperimentStore:
 
     def list_by_benchmark(self, benchmark_id: str) -> list[Experiment]:
         """Return all experiments belonging to a benchmark suite (in-memory)."""
-        exps = [e for e in self._experiments.values() if e.benchmark_id == benchmark_id]
+        exps = [e for e in self._cache.values() if e.benchmark_id == benchmark_id]
         exps.sort(key=lambda e: (not e.is_primary_benchmark, e.created_at))
         return exps
 
-    def delete(self, experiment_id: str) -> bool:
-        """Delete from in-memory + schedule DB delete."""
-        removed = experiment_id in self._experiments
-        self._experiments.pop(experiment_id, None)
-        coro = _delete_from_db(experiment_id)
-        try:
-            spawn(coro, name=f"delete-exp-{experiment_id}")
-        except RuntimeError:
-            coro.close()
-            logger.warning("No event loop for DB delete", experiment_id=experiment_id)
-        return removed
-
-    # -- Async interface (used by endpoint handlers) -------------------------
-
-    async def aget(self, experiment_id: str) -> Experiment | None:
-        """Get an experiment: in-memory first, then DB fallback."""
-        exp = self._experiments.get(experiment_id)
-        if exp is not None:
-            return exp
-        exp = await _load_from_db(experiment_id)
-        if exp is not None:
-            self._experiments[experiment_id] = exp
-        return exp
+    # -- Async listing (used by endpoint handlers) -------------------------
 
     async def alist_all(
         self, site_id: str | None = None, user_id: str | None = None
@@ -211,7 +175,7 @@ class ExperimentStore:
         db_exps = await _list_from_db(site_id, user_id)
         merged: dict[str, Experiment] = {e.id: e for e in db_exps}
         # In-memory entries override DB (running experiments have fresher state)
-        for eid, exp in self._experiments.items():
+        for eid, exp in self._cache.items():
             if site_id and exp.config.site_id != site_id:
                 continue
             if user_id and exp.user_id != user_id:
@@ -225,18 +189,12 @@ class ExperimentStore:
         """List experiments by benchmark: merges DB + in-memory."""
         db_exps = await _list_by_benchmark_from_db(benchmark_id)
         merged: dict[str, Experiment] = {e.id: e for e in db_exps}
-        for eid, exp in self._experiments.items():
+        for eid, exp in self._cache.items():
             if exp.benchmark_id == benchmark_id:
                 merged[eid] = exp
         result = list(merged.values())
         result.sort(key=lambda e: (not e.is_primary_benchmark, e.created_at))
         return result
-
-    async def adelete(self, experiment_id: str) -> bool:
-        """Delete from both in-memory and DB."""
-        self._experiments.pop(experiment_id, None)
-        await _delete_from_db(experiment_id)
-        return True
 
 
 @cache

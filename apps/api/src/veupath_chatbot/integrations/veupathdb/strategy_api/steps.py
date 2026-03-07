@@ -4,11 +4,10 @@ Provides :class:`StepsMixin` with methods to create search steps,
 combined (boolean) steps, transform steps, and datasets.
 """
 
-from __future__ import annotations
-
 from typing import cast
 
 import httpx
+from veupath_chatbot.integrations.veupathdb.param_utils import wdk_entity_name
 from veupath_chatbot.integrations.veupathdb.strategy_api.base import StrategyAPIBase
 from veupath_chatbot.platform.errors import InternalError
 from veupath_chatbot.platform.logging import get_logger
@@ -26,13 +25,8 @@ class StepsMixin(StrategyAPIBase):
             return self._boolean_search_cache[record_type]
 
         searches = await self.client.get_searches(record_type)
-        for search_raw in searches:
-            if not isinstance(search_raw, dict):
-                continue
-            search: JSONObject = search_raw
-            # WDK uses JsonKeys.URL_SEGMENT = "urlSegment" for search names.
-            name_raw = search.get("urlSegment")
-            name = str(name_raw) if isinstance(name_raw, str) else ""
+        for search in searches:
+            name = wdk_entity_name(search)
             if name.startswith("boolean_question"):
                 self._boolean_search_cache[record_type] = name
                 return name

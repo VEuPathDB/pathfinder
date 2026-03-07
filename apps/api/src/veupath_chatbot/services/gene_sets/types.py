@@ -25,7 +25,7 @@ class GeneSet:
     wdk_step_id: int | None = None
     search_name: str | None = None
     record_type: str | None = None
-    parameters: dict | None = None
+    parameters: dict[str, str] | None = None
     parent_set_ids: list[str] = field(default_factory=list)
     operation: str | None = None  # "intersect" | "union" | "minus"
     step_count: int = 1

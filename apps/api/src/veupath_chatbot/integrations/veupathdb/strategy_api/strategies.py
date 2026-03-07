@@ -4,8 +4,6 @@ Provides :class:`StrategiesMixin` with methods to create, read, update,
 and delete WDK strategies.
 """
 
-from __future__ import annotations
-
 from typing import cast
 
 from veupath_chatbot.integrations.veupathdb.strategy_api.base import StrategyAPIBase

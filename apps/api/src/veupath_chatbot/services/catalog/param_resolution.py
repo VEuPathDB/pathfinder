@@ -14,7 +14,11 @@ from veupath_chatbot.domain.parameters.vocab_utils import flatten_vocab
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
 from veupath_chatbot.integrations.veupathdb.factory import get_wdk_client
-from veupath_chatbot.integrations.veupathdb.param_utils import normalize_param_value
+from veupath_chatbot.integrations.veupathdb.param_utils import (
+    normalize_param_value,
+    wdk_entity_name,
+    wdk_search_matches,
+)
 from veupath_chatbot.platform.errors import ErrorCode, WDKError
 from veupath_chatbot.platform.errors import ValidationError as CoreValidationError
 from veupath_chatbot.platform.tool_errors import tool_error
@@ -47,24 +51,11 @@ async def get_search_parameters(
         for rt in record_types:
             if not isinstance(rt, dict):
                 continue
-            url_seg_raw = rt.get("urlSegment")
-            name_raw = rt.get("name")
-            url_seg = url_seg_raw if isinstance(url_seg_raw, str) else None
-            name = name_raw if isinstance(name_raw, str) else ""
-            if normalize(url_seg or name) == normalized:
+            if normalize(wdk_entity_name(rt)) == normalized:
                 exact.append(rt)
         if exact:
-            first = exact[0]
-            exact_url_seg_raw = first.get("urlSegment")
-            exact_name_raw = first.get("name")
-            exact_url_seg: str | None = (
-                exact_url_seg_raw if isinstance(exact_url_seg_raw, str) else None
-            )
-            exact_name: str | None = (
-                exact_name_raw if isinstance(exact_name_raw, str) else None
-            )
-            new_rt = exact_url_seg or exact_name
-            if isinstance(new_rt, str):
+            new_rt = wdk_entity_name(exact[0])
+            if new_rt:
                 resolved_record_type = new_rt
         else:
             display_matches: list[JSONObject] = []
@@ -78,17 +69,8 @@ async def get_search_parameters(
                 if normalize(display_name) == normalized:
                     display_matches.append(rt)
             if len(display_matches) == 1:
-                first = display_matches[0]
-                match_url_seg_raw = first.get("urlSegment")
-                match_name_raw = first.get("name")
-                match_url_seg: str | None = (
-                    match_url_seg_raw if isinstance(match_url_seg_raw, str) else None
-                )
-                match_name: str | None = (
-                    match_name_raw if isinstance(match_name_raw, str) else None
-                )
-                new_rt = match_url_seg or match_name
-                if isinstance(new_rt, str):
+                new_rt = wdk_entity_name(display_matches[0])
+                if new_rt:
                     resolved_record_type = new_rt
 
     try:
@@ -99,26 +81,11 @@ async def get_search_parameters(
         for rt in record_types:
             if not isinstance(rt, dict):
                 continue
-            url_seg_raw = rt.get("urlSegment")
-            name_raw = rt.get("name")
-            url_seg = url_seg_raw if isinstance(url_seg_raw, str) else None
-            name = name_raw if isinstance(name_raw, str) else ""
-            rt_name = url_seg or name
+            rt_name = wdk_entity_name(rt)
             if not rt_name:
                 continue
             searches = await discovery.get_searches(site_id, rt_name)
-            match: JSONObject | None = None
-            for s in searches:
-                if not isinstance(s, dict):
-                    continue
-                s_url_seg_raw = s.get("urlSegment")
-                s_name_raw = s.get("name")
-                s_url_seg = s_url_seg_raw if isinstance(s_url_seg_raw, str) else None
-                s_name = s_name_raw if isinstance(s_name_raw, str) else None
-                if s_url_seg == search_name or s_name == search_name:
-                    match = s
-                    break
-            if match:
+            if any(wdk_search_matches(s, search_name) for s in searches):
                 resolved_record_type = rt_name
                 try:
                     details = await discovery.get_search_details(
@@ -130,15 +97,11 @@ async def get_search_parameters(
 
         if details is None:
             available = await discovery.get_searches(site_id, resolved_record_type)
-            available_searches: list[str] = []
-            for s in available:
-                if not isinstance(s, dict):
-                    continue
-                url_seg_raw = s.get("urlSegment")
-                name_raw = s.get("name")
-                url_seg = url_seg_raw if isinstance(url_seg_raw, str) else None
-                name = name_raw if isinstance(name_raw, str) else ""
-                available_searches.append(url_seg or name)
+            available_searches: list[str] = [
+                wdk_entity_name(s)
+                for s in available
+                if isinstance(s, dict) and wdk_entity_name(s)
+            ]
 
             error_dict: JSONObject = {
                 "path": "searchName",
@@ -155,11 +118,7 @@ async def get_search_parameters(
                 errors=[error_dict],
             ) from e
 
-    if isinstance(details, dict):
-        search_data_raw = details.get("searchData")
-        if isinstance(search_data_raw, dict):
-            details = search_data_raw
-
+    details = _unwrap_search_data(details) or details
     param_specs = extract_param_specs(details if isinstance(details, dict) else {})
 
     def _allowed_values(vocab: JSONObject | JSONArray | None) -> list[str]:
@@ -324,10 +283,7 @@ async def expand_search_details_with_params(
                 )
             except Exception:
                 raise
-            if isinstance(details, dict):
-                search_data_raw = details.get("searchData")
-                if isinstance(search_data_raw, dict):
-                    details = search_data_raw
+            details = _unwrap_search_data(details) or details
             specs = adapt_param_specs(details if isinstance(details, dict) else {})
             normalizer = ParameterNormalizer(specs)
             normalized_context = normalizer.normalize(filtered_context)
@@ -410,7 +366,7 @@ async def _get_search_details_with_portal_fallback(
             search_name,
             context_values,
         )
-    except WDKError as exc:
+    except WDKError:
         if site_id != "veupathdb":
             portal_client = get_wdk_client("veupathdb")
             return await portal_client.get_search_details_with_params(
@@ -418,7 +374,7 @@ async def _get_search_details_with_portal_fallback(
                 search_name,
                 context_values,
             )
-        raise exc
+        raise
 
 
 def _extract_param_names(details: JSONObject) -> set[str]:

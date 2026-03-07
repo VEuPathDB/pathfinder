@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import cast
+from typing import Literal, cast
 from uuid import uuid4
 
 from veupath_chatbot.domain.strategy.ops import ColocationParams, CombineOp
@@ -13,6 +13,95 @@ from veupath_chatbot.platform.types import JSONObject, JSONValue
 def generate_step_id() -> str:
     """Generate a unique step ID."""
     return f"step_{uuid4().hex[:8]}"
+
+
+# ---------------------------------------------------------------------------
+# Shared parsers for filters, analyses, reports, and colocation params.
+# Used by both from_dict() and session.hydrate_graph_from_steps_data().
+# ---------------------------------------------------------------------------
+
+
+def parse_filters(raw: JSONValue) -> list[StepFilter]:
+    """Parse a list of step filters from raw JSON data."""
+    items = raw if isinstance(raw, list) else []
+    filters: list[StepFilter] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        filters.append(
+            StepFilter(
+                name=name,
+                value=item.get("value"),
+                disabled=bool(item.get("disabled", False)),
+            )
+        )
+    return filters
+
+
+def parse_analyses(raw: JSONValue) -> list[StepAnalysis]:
+    """Parse a list of step analyses from raw JSON data."""
+    items = raw if isinstance(raw, list) else []
+    analyses: list[StepAnalysis] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        analysis_type = item.get("analysisType") or item.get("analysis_type")
+        if not isinstance(analysis_type, str) or not analysis_type:
+            continue
+        params_raw = item.get("parameters")
+        params: JSONObject = params_raw if isinstance(params_raw, dict) else {}
+        custom_name_raw = item.get("customName") or item.get("custom_name")
+        custom_name = custom_name_raw if isinstance(custom_name_raw, str) else None
+        analyses.append(
+            StepAnalysis(
+                analysis_type=analysis_type,
+                parameters=params,
+                custom_name=custom_name,
+            )
+        )
+    return analyses
+
+
+def parse_reports(raw: JSONValue) -> list[StepReport]:
+    """Parse a list of step reports from raw JSON data."""
+    items = raw if isinstance(raw, list) else []
+    reports: list[StepReport] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        report_name_raw = item.get("reportName") or item.get("report_name")
+        report_name = (
+            report_name_raw if isinstance(report_name_raw, str) else "standard"
+        )
+        config_raw = item.get("config")
+        config: JSONObject = config_raw if isinstance(config_raw, dict) else {}
+        reports.append(
+            StepReport(
+                report_name=report_name,
+                config=config,
+            )
+        )
+    return reports
+
+
+def parse_colocation_params(raw: JSONValue) -> ColocationParams | None:
+    """Parse colocation parameters from raw JSON data."""
+    if not isinstance(raw, dict):
+        return None
+    upstream_raw = raw.get("upstream", 0)
+    downstream_raw = raw.get("downstream", 0)
+    strand_raw = raw.get("strand", "both")
+    upstream = int(upstream_raw) if isinstance(upstream_raw, (int, float)) else 0
+    downstream = int(downstream_raw) if isinstance(downstream_raw, (int, float)) else 0
+    strand: Literal["same", "opposite", "both"]
+    if isinstance(strand_raw, str) and strand_raw in ("same", "opposite", "both"):
+        strand = cast(Literal["same", "opposite", "both"], strand_raw)
+    else:
+        strand = "both"
+    return ColocationParams(upstream=upstream, downstream=downstream, strand=strand)
 
 
 @dataclass
@@ -180,72 +269,6 @@ def from_dict(data: JSONObject) -> StrategyAST:
 
     """
 
-    def parse_filters(node_data: JSONObject) -> list[StepFilter]:
-        filters: list[StepFilter] = []
-        filters_raw = node_data.get("filters", [])
-        if not isinstance(filters_raw, list):
-            return filters
-        for item in filters_raw:
-            if not isinstance(item, dict):
-                continue
-            name = item.get("name")
-            if not isinstance(name, str):
-                continue
-            filters.append(
-                StepFilter(
-                    name=name,
-                    value=item.get("value"),
-                    disabled=bool(item.get("disabled", False)),
-                )
-            )
-        return filters
-
-    def parse_analyses(node_data: JSONObject) -> list[StepAnalysis]:
-        analyses: list[StepAnalysis] = []
-        analyses_raw = node_data.get("analyses", [])
-        if not isinstance(analyses_raw, list):
-            return analyses
-        for item in analyses_raw:
-            if not isinstance(item, dict):
-                continue
-            analysis_type = item.get("analysisType") or item.get("analysis_type")
-            if not isinstance(analysis_type, str):
-                continue
-            params_raw = item.get("parameters")
-            params = params_raw if isinstance(params_raw, dict) else {}
-            custom_name_raw = item.get("customName") or item.get("custom_name")
-            custom_name = custom_name_raw if isinstance(custom_name_raw, str) else None
-            analyses.append(
-                StepAnalysis(
-                    analysis_type=analysis_type,
-                    parameters=params,
-                    custom_name=custom_name,
-                )
-            )
-        return analyses
-
-    def parse_reports(node_data: JSONObject) -> list[StepReport]:
-        reports: list[StepReport] = []
-        reports_raw = node_data.get("reports", [])
-        if not isinstance(reports_raw, list):
-            return reports
-        for item in reports_raw:
-            if not isinstance(item, dict):
-                continue
-            report_name_raw = item.get("reportName") or item.get("report_name")
-            report_name = (
-                report_name_raw if isinstance(report_name_raw, str) else "standard"
-            )
-            config_raw = item.get("config")
-            config = config_raw if isinstance(config_raw, dict) else {}
-            reports.append(
-                StepReport(
-                    report_name=report_name,
-                    config=config,
-                )
-            )
-        return reports
-
     def parse_node(node_data: JSONObject) -> PlanStepNode:
         search_name = node_data.get("searchName")
         if not isinstance(search_name, str) or not search_name:
@@ -265,31 +288,7 @@ def from_dict(data: JSONObject) -> StrategyAST:
         op_raw = node_data.get("operator")
         operator = CombineOp(op_raw) if isinstance(op_raw, str) and op_raw else None
 
-        colocation = None
-        colocation_params_raw = node_data.get("colocationParams")
-        if isinstance(colocation_params_raw, dict):
-            cp = colocation_params_raw
-            upstream_raw = cp.get("upstream", 0)
-            downstream_raw = cp.get("downstream", 0)
-            strand_raw = cp.get("strand", "both")
-            upstream = upstream_raw if isinstance(upstream_raw, int) else 0
-            downstream = downstream_raw if isinstance(downstream_raw, int) else 0
-            from typing import Literal
-
-            strand: Literal["same", "opposite", "both"]
-            if isinstance(strand_raw, str) and strand_raw in (
-                "same",
-                "opposite",
-                "both",
-            ):
-                strand = cast(Literal["same", "opposite", "both"], strand_raw)
-            else:
-                strand = "both"
-            colocation = ColocationParams(
-                upstream=upstream,
-                downstream=downstream,
-                strand=strand,
-            )
+        colocation = parse_colocation_params(node_data.get("colocationParams"))
 
         # basic structural constraints
         if secondary is not None and primary is None:
@@ -315,9 +314,9 @@ def from_dict(data: JSONObject) -> StrategyAST:
             operator=operator,
             colocation_params=colocation,
             display_name=display_name,
-            filters=parse_filters(node_data),
-            analyses=parse_analyses(node_data),
-            reports=parse_reports(node_data),
+            filters=parse_filters(node_data.get("filters")),
+            analyses=parse_analyses(node_data.get("analyses")),
+            reports=parse_reports(node_data.get("reports")),
             id=step_id,
         )
 

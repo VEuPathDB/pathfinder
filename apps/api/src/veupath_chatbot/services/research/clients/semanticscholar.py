@@ -6,21 +6,18 @@ from typing import cast
 
 import httpx
 
-from veupath_chatbot.domain.research.citations import (
-    Citation,
-    _new_citation_id,
-    _now_iso,
-    ensure_unique_citation_tags,
-)
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.services.research.clients._base import (
+    API_USER_AGENT,
+    BaseClient,
+    build_response,
+    make_citation,
+)
 from veupath_chatbot.services.research.utils import truncate_text
 
 
-class SemanticScholarClient:
+class SemanticScholarClient(BaseClient):
     """Client for Semantic Scholar API."""
-
-    def __init__(self, *, timeout_seconds: float = 15.0) -> None:
-        self._timeout = timeout_seconds
 
     async def search(
         self, query: str, *, limit: int, abstract_max_chars: int
@@ -32,10 +29,9 @@ class SemanticScholarClient:
             "limit": str(limit),
             "fields": "title,year,authors,url,abstract,journal,externalIds",
         }
-        headers = {
-            "User-Agent": "pathfinder-planner/1.0 (+https://pathfinder.veupathdb.org)"
-        }
-        async with httpx.AsyncClient(timeout=self._timeout, headers=headers) as client:
+        async with httpx.AsyncClient(
+            timeout=self._timeout, headers={"User-Agent": API_USER_AGENT}
+        ) as client:
             resp = await client.get(url, params=params, follow_redirects=True)
             resp.raise_for_status()
             payload = resp.json()
@@ -74,13 +70,14 @@ class SemanticScholarClient:
                 if isinstance(ext.get("PubMed"), str):
                     pmid = ext.get("PubMed")
 
+            result_url = url_item or (f"https://doi.org/{doi}" if doi else None)
             results.append(
                 {
                     "title": title,
                     "year": year,
                     "doi": doi,
                     "pmid": pmid,
-                    "url": url_item or (f"https://doi.org/{doi}" if doi else None),
+                    "url": result_url,
                     "authors": cast(JSONValue, authors),
                     "journalTitle": journal,
                     "abstract": abstract,
@@ -88,23 +85,21 @@ class SemanticScholarClient:
                 }
             )
             citations.append(
-                Citation(
-                    id=_new_citation_id("s2"),
+                make_citation(
                     source="semanticscholar",
+                    id_prefix="s2",
                     title=title or (url_item or "Semantic Scholar result"),
-                    url=url_item or (f"https://doi.org/{doi}" if doi else None),
+                    url=result_url,
                     authors=authors,
                     year=year,
                     doi=doi,
                     pmid=pmid,
                     snippet=abstract or journal,
-                    accessed_at=_now_iso(),
-                ).to_dict()
+                )
             )
-        ensure_unique_citation_tags(citations)
-        return {
-            "query": query,
-            "source": "semanticscholar",
-            "results": results,
-            "citations": cast(JSONValue, citations),
-        }
+        return build_response(
+            query=query,
+            source="semanticscholar",
+            results=results,
+            citations=citations,
+        )

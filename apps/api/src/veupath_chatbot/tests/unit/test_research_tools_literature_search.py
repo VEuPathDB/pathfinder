@@ -138,18 +138,17 @@ async def test_literature_search_all_sources_with_filters_year_and_author() -> N
                 if isinstance(year_value, (int, float)):
                     year = int(year_value)
                 assert year >= 2015
-    # Citations are not limited to just the top-N displayed results.
+    # Citations should be aligned 1:1 with the sliced results.
     citations_value = out.get("citations")
     results_value_check = out.get("results")
     assert isinstance(citations_value, list)
     assert isinstance(results_value_check, list)
-    assert len(citations_value) >= len(results_value_check)
+    assert len(citations_value) == len(results_value_check)
 
 
 @pytest.mark.asyncio
-async def test_literature_search_all_sources_includes_citations_beyond_results_limit() -> (
-    None
-):
+async def test_literature_search_all_sources_citations_match_results_limit() -> None:
+    """Citations should be aligned 1:1 with sliced results, not the full filtered list."""
     service = LiteratureSearchService(timeout_seconds=5.0)
 
     with respx.mock(assert_all_called=False) as router:
@@ -217,8 +216,8 @@ async def test_literature_search_all_sources_includes_citations_beyond_results_l
     assert isinstance(results_check, list)
     assert isinstance(citations_check, list)
     assert len(results_check) == 1
-    # But citations should include the other crossref items too.
-    assert len(citations_check) >= 3
+    # Citations should match the sliced results, not the full filtered list.
+    assert len(citations_check) == 1
 
 
 @pytest.mark.asyncio

@@ -126,16 +126,19 @@ class TestCreateCombinedStep:
         """Boolean combine resolves search name and param names via HTTP."""
         _mock_ensure_session(respx)
 
-        # GET /record-types/gene/searches -> includes boolean_question
-        respx.get(f"{BASE}/record-types/gene/searches").respond(
+        # GET /record-types/transcript/searches -> includes boolean_question
+        respx.get(f"{BASE}/record-types/transcript/searches").respond(
             200, json=searches_response()
         )
 
-        boolean_search_name = "boolean_question_GeneRecordClasses.GeneRecordClass"
+        # Real PlasmoDB uses underscores in boolean question urlSegment
+        boolean_search_name = (
+            "boolean_question_TranscriptRecordClasses_TranscriptRecordClass"
+        )
 
         # GET search details for the boolean question
         respx.get(
-            f"{BASE}/record-types/gene/searches/{boolean_search_name}",
+            f"{BASE}/record-types/transcript/searches/{boolean_search_name}",
         ).respond(200, json=search_details_response(boolean_search_name))
 
         step_route = respx.post(f"{BASE}/users/{USER_ID}/steps").respond(
@@ -146,7 +149,7 @@ class TestCreateCombinedStep:
             primary_step_id=100,
             secondary_step_id=101,
             boolean_operator="UNION",
-            record_type="gene",
+            record_type="transcript",
         )
 
         assert result["id"] == 110
@@ -159,9 +162,9 @@ class TestCreateCombinedStep:
         # The operator param should carry the requested value
         assert params["bq_operator"] == "UNION"
         # Left/right operands are empty (wired via stepTree later)
-        suffix = "GeneRecordClasses.GeneRecordClass"
-        assert params[f"bq_left_op__{suffix}"] == ""
-        assert params[f"bq_right_op__{suffix}"] == ""
+        suffix = "TranscriptRecordClasses_TranscriptRecordClass"
+        assert params[f"bq_left_op_{suffix}"] == ""
+        assert params[f"bq_right_op_{suffix}"] == ""
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +183,7 @@ class TestCreateTransformStep:
 
         # GET search details (includes inputStepId as type=input-step)
         respx.get(
-            f"{BASE}/record-types/gene/searches/{transform_name}",
+            f"{BASE}/record-types/transcript/searches/{transform_name}",
         ).respond(200, json=search_details_response(transform_name))
 
         step_route = respx.post(f"{BASE}/users/{USER_ID}/steps").respond(
@@ -195,7 +198,7 @@ class TestCreateTransformStep:
                 "organism": ["Plasmodium vivax P01"],
                 "isSyntenic": "no",
             },
-            record_type="gene",
+            record_type="transcript",
         )
 
         assert result["id"] == 120
@@ -523,7 +526,7 @@ class TestRunStepAnalysis:
         status_url = f"{analysis_base}/{analysis_id}/result/status"
         respx.get(status_url).respond(200, json=analysis_status_response("ERROR"))
 
-        with pytest.raises(InternalError, match="retries exhausted"):
+        with pytest.raises(InternalError, match="Analysis unavailable"):
             await api.run_step_analysis(
                 step_id=step_id,
                 analysis_type="go-enrichment",

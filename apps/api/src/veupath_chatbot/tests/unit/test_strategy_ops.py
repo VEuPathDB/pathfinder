@@ -1,0 +1,189 @@
+"""Unit tests for strategy combine operations."""
+
+from __future__ import annotations
+
+from typing import Literal, cast
+
+import pytest
+
+from veupath_chatbot.domain.strategy.ops import (
+    BOOLEAN_OPERATOR_OPTIONS_DESC,
+    COMBINE_OP_ORDER,
+    DEFAULT_COMBINE_OPERATOR,
+    OP_LABELS,
+    ColocationParams,
+    CombineOp,
+    get_op_label,
+    get_wdk_operator,
+    parse_op,
+)
+
+
+class TestParseOp:
+    """Tests for parse_op() alias resolution and normalization."""
+
+    def test_exact_enum_values(self) -> None:
+        assert parse_op("INTERSECT") == CombineOp.INTERSECT
+        assert parse_op("UNION") == CombineOp.UNION
+        assert parse_op("MINUS") == CombineOp.MINUS
+        assert parse_op("RMINUS") == CombineOp.RMINUS
+        assert parse_op("LONLY") == CombineOp.LONLY
+        assert parse_op("RONLY") == CombineOp.RONLY
+        assert parse_op("COLOCATE") == CombineOp.COLOCATE
+
+    def test_case_insensitive(self) -> None:
+        assert parse_op("intersect") == CombineOp.INTERSECT
+        assert parse_op("Union") == CombineOp.UNION
+        assert parse_op("minus") == CombineOp.MINUS
+
+    def test_common_aliases(self) -> None:
+        assert parse_op("AND") == CombineOp.INTERSECT
+        assert parse_op("INTERSECTION") == CombineOp.INTERSECT
+        assert parse_op("OR") == CombineOp.UNION
+        assert parse_op("PLUS") == CombineOp.UNION
+        assert parse_op("NOT") == CombineOp.MINUS
+
+    def test_directional_aliases(self) -> None:
+        assert parse_op("LEFT_MINUS") == CombineOp.MINUS
+        assert parse_op("RIGHT_MINUS") == CombineOp.RMINUS
+        assert parse_op("LMINUS") == CombineOp.MINUS
+        assert parse_op("MINUS_LEFT") == CombineOp.MINUS
+        assert parse_op("MINUS_RIGHT") == CombineOp.RMINUS
+
+    def test_hyphen_and_space_normalization(self) -> None:
+        assert parse_op("left-minus") == CombineOp.MINUS
+        assert parse_op("right minus") == CombineOp.RMINUS
+        assert parse_op("minus-left") == CombineOp.MINUS
+
+    def test_whitespace_stripped(self) -> None:
+        assert parse_op("  INTERSECT  ") == CombineOp.INTERSECT
+
+    def test_empty_raises(self) -> None:
+        with pytest.raises(ValueError, match="<empty>"):
+            parse_op("")
+
+    def test_none_like_empty_raises(self) -> None:
+        with pytest.raises(ValueError, match="<empty>"):
+            parse_op("   ")
+
+    def test_unknown_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown operator"):
+            parse_op("BOGUS")
+
+
+class TestGetWdkOperator:
+    """Tests for get_wdk_operator()."""
+
+    def test_returns_value_for_boolean_ops(self) -> None:
+        assert get_wdk_operator(CombineOp.INTERSECT) == "INTERSECT"
+        assert get_wdk_operator(CombineOp.UNION) == "UNION"
+        assert get_wdk_operator(CombineOp.MINUS) == "MINUS"
+        assert get_wdk_operator(CombineOp.RMINUS) == "RMINUS"
+        assert get_wdk_operator(CombineOp.LONLY) == "LONLY"
+        assert get_wdk_operator(CombineOp.RONLY) == "RONLY"
+
+    def test_colocate_raises(self) -> None:
+        with pytest.raises(ValueError, match="COLOCATE"):
+            get_wdk_operator(CombineOp.COLOCATE)
+
+
+class TestGetOpLabel:
+    """Tests for get_op_label()."""
+
+    def test_known_ops_have_labels(self) -> None:
+        for op in CombineOp:
+            label = get_op_label(op)
+            assert isinstance(label, str)
+            assert len(label) > 0
+
+    def test_intersect_label(self) -> None:
+        assert "AND" in get_op_label(CombineOp.INTERSECT)
+
+    def test_union_label(self) -> None:
+        assert "OR" in get_op_label(CombineOp.UNION)
+
+
+class TestColocationParamsValidate:
+    """Tests for ColocationParams.validate()."""
+
+    def test_valid_defaults(self) -> None:
+        params = ColocationParams()
+        assert params.validate() == []
+
+    def test_valid_custom(self) -> None:
+        params = ColocationParams(upstream=1000, downstream=500, strand="same")
+        assert params.validate() == []
+
+    def test_negative_upstream(self) -> None:
+        params = ColocationParams(upstream=-1)
+        errors = params.validate()
+        assert len(errors) == 1
+        assert "Upstream" in errors[0]
+
+    def test_negative_downstream(self) -> None:
+        params = ColocationParams(downstream=-5)
+        errors = params.validate()
+        assert len(errors) == 1
+        assert "Downstream" in errors[0]
+
+    def test_both_negative(self) -> None:
+        params = ColocationParams(upstream=-1, downstream=-2)
+        errors = params.validate()
+        assert len(errors) == 2
+
+    def test_invalid_strand(self) -> None:
+        bad_strand = cast(Literal["same", "opposite", "both"], "invalid")
+        params = ColocationParams(strand=bad_strand)
+        errors = params.validate()
+        assert len(errors) == 1
+        assert "strand" in errors[0].lower()
+
+    def test_opposite_strand_valid(self) -> None:
+        params = ColocationParams(strand="opposite")
+        assert params.validate() == []
+
+    def test_zero_distances_valid(self) -> None:
+        params = ColocationParams(upstream=0, downstream=0)
+        assert params.validate() == []
+
+
+class TestModuleConstants:
+    """Tests for module-level constants."""
+
+    def test_combine_op_order_contains_all_ops(self) -> None:
+        for op_name in COMBINE_OP_ORDER:
+            assert CombineOp(op_name) is not None
+
+    def test_combine_op_order_has_7_elements(self) -> None:
+        assert len(COMBINE_OP_ORDER) == 7
+
+    def test_default_combine_operator_is_intersect(self) -> None:
+        assert DEFAULT_COMBINE_OPERATOR == CombineOp.INTERSECT
+
+    def test_boolean_operator_options_desc(self) -> None:
+        assert "INTERSECT" in BOOLEAN_OPERATOR_OPTIONS_DESC
+        assert "UNION" in BOOLEAN_OPERATOR_OPTIONS_DESC
+        assert "MINUS" in BOOLEAN_OPERATOR_OPTIONS_DESC
+
+    def test_op_labels_cover_all_ops(self) -> None:
+        for op in CombineOp:
+            assert op in OP_LABELS
+
+    def test_combine_op_is_str_enum(self) -> None:
+        assert CombineOp.INTERSECT == "INTERSECT"
+        assert str(CombineOp.UNION) == "UNION"
+
+
+class TestParseOpFallback:
+    """Test the CombineOp(norm) fallback path in parse_op."""
+
+    def test_enum_value_fallback(self) -> None:
+        # These go through the alias dict, but verify fallback path works too
+        # by using exact values not in alias dict
+        # All known values are in the alias dict, so the fallback only triggers
+        # for values not in aliases. Since all enum values ARE in aliases,
+        # the fallback is only reachable for values that happen to match
+        # after normalization but aren't aliased. Let's verify the error
+        # message for truly unknown values.
+        with pytest.raises(ValueError, match="Unknown operator: xyz"):
+            parse_op("xyz")

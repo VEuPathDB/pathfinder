@@ -5,12 +5,17 @@ from __future__ import annotations
 import pytest
 
 from veupath_chatbot.domain.parameters.vocab_utils import (
+    flatten_vocab,
     match_vocab_value,
+    normalize_vocab_key,
     numeric_equivalent,
 )
 from veupath_chatbot.platform.errors import ValidationError
 
 
+# ---------------------------------------------------------------------------
+# numeric_equivalent
+# ---------------------------------------------------------------------------
 class TestNumericEquivalent:
     def test_matching_integers(self) -> None:
         assert numeric_equivalent("42", "42") is True
@@ -38,12 +43,201 @@ class TestNumericEquivalent:
     def test_whitespace_handling(self) -> None:
         assert numeric_equivalent("  42  ", "42") is True
 
+    def test_precision_tolerance(self) -> None:
+        """Values within rel_tol=1e-9 should match."""
+        assert numeric_equivalent("1.0000000001", "1.0000000002") is True
 
+    def test_large_precision_difference(self) -> None:
+        assert numeric_equivalent("1.0", "1.001") is False
+
+    def test_negative_numbers(self) -> None:
+        assert numeric_equivalent("-5", "-5.0") is True
+        assert numeric_equivalent("-5", "5") is False
+
+    def test_scientific_notation(self) -> None:
+        assert numeric_equivalent("1e3", "1000") is True
+
+    def test_inf_returns_false(self) -> None:
+        assert numeric_equivalent("inf", "inf") is False
+
+    def test_nan_returns_false(self) -> None:
+        assert numeric_equivalent("nan", "nan") is False
+
+    def test_zero(self) -> None:
+        assert numeric_equivalent("0", "0.0") is True
+        assert numeric_equivalent("-0", "0") is True
+
+
+# ---------------------------------------------------------------------------
+# normalize_vocab_key
+# ---------------------------------------------------------------------------
+class TestNormalizeVocabKey:
+    def test_strips_whitespace(self) -> None:
+        assert normalize_vocab_key("  hello  ") == "hello"
+
+    def test_lowercases(self) -> None:
+        assert normalize_vocab_key("Hello World") == "hello world"
+
+    def test_collapses_whitespace(self) -> None:
+        assert normalize_vocab_key("hello   world") == "hello world"
+
+    def test_handles_tabs_and_newlines(self) -> None:
+        assert normalize_vocab_key("hello\t\nworld") == "hello world"
+
+    def test_empty_string(self) -> None:
+        assert normalize_vocab_key("") == ""
+
+    def test_already_normalized(self) -> None:
+        assert normalize_vocab_key("hello") == "hello"
+
+
+# ---------------------------------------------------------------------------
+# flatten_vocab
+# ---------------------------------------------------------------------------
+class TestFlattenVocab:
+    """Tests for the flatten_vocab function."""
+
+    def test_list_of_pairs(self) -> None:
+        vocab = [["val1", "Display 1"], ["val2", "Display 2"]]
+        entries = flatten_vocab(vocab)
+        assert len(entries) == 2
+        assert entries[0] == {"display": "Display 1", "value": "val1"}
+        assert entries[1] == {"display": "Display 2", "value": "val2"}
+
+    def test_list_of_single_item_lists(self) -> None:
+        vocab = [["val1"], ["val2"]]
+        entries = flatten_vocab(vocab)
+        assert len(entries) == 2
+        # display defaults to value when only one item
+        assert entries[0] == {"display": "val1", "value": "val1"}
+
+    def test_list_of_plain_strings(self) -> None:
+        vocab = ["a", "b", "c"]
+        entries = flatten_vocab(vocab)
+        assert len(entries) == 3
+        assert entries[0] == {"display": "a", "value": "a"}
+
+    def test_list_of_dicts(self) -> None:
+        vocab = [
+            {"term": "t1", "display": "D1"},
+            {"term": "t2", "display": "D2"},
+        ]
+        entries = flatten_vocab(vocab)
+        assert len(entries) == 2
+        # prefer_term=False by default, so value comes from value or term
+        assert entries[0]["value"] == "t1"
+        assert entries[0]["display"] == "D1"
+
+    def test_list_of_dicts_with_value_field(self) -> None:
+        vocab = [
+            {"value": "v1", "term": "t1", "display": "D1"},
+        ]
+        entries = flatten_vocab(vocab, prefer_term=False)
+        assert entries[0]["value"] == "v1"
+
+    def test_list_of_dicts_prefer_term(self) -> None:
+        vocab = [
+            {"value": "v1", "term": "t1", "display": "D1"},
+        ]
+        entries = flatten_vocab(vocab, prefer_term=True)
+        assert entries[0]["value"] == "t1"
+
+    def test_tree_vocab(self) -> None:
+        vocab = {
+            "data": {"term": "root", "display": "Root"},
+            "children": [
+                {"data": {"term": "child1", "display": "Child 1"}, "children": []},
+                {"data": {"term": "child2", "display": "Child 2"}, "children": []},
+            ],
+        }
+        entries = flatten_vocab(vocab, prefer_term=True)
+        assert len(entries) == 3
+        terms = [e["value"] for e in entries]
+        assert "root" in terms
+        assert "child1" in terms
+        assert "child2" in terms
+
+    def test_nested_tree_vocab(self) -> None:
+        vocab = {
+            "data": {"term": "root", "display": "Root"},
+            "children": [
+                {
+                    "data": {"term": "parent", "display": "Parent"},
+                    "children": [
+                        {"data": {"term": "leaf", "display": "Leaf"}, "children": []},
+                    ],
+                },
+            ],
+        }
+        entries = flatten_vocab(vocab, prefer_term=True)
+        assert len(entries) == 3
+        terms = [e["value"] for e in entries]
+        assert terms == ["root", "parent", "leaf"]
+
+    def test_empty_dict_vocab(self) -> None:
+        entries = flatten_vocab({})
+        assert entries == []
+
+    def test_empty_list_vocab(self) -> None:
+        entries = flatten_vocab([])
+        assert entries == []
+
+    def test_list_with_none_first_element_skipped(self) -> None:
+        vocab = [[None, "display"]]
+        entries = flatten_vocab(vocab)
+        assert entries == []
+
+    def test_list_with_none_second_element(self) -> None:
+        vocab = [["val", None]]
+        entries = flatten_vocab(vocab)
+        assert len(entries) == 1
+        assert entries[0] == {"display": "val", "value": "val"}
+
+    def test_tree_with_non_dict_children_skipped(self) -> None:
+        vocab = {
+            "data": {"term": "root", "display": "Root"},
+            "children": ["not_a_dict", 42],
+        }
+        entries = flatten_vocab(vocab, prefer_term=True)
+        assert len(entries) == 1
+        assert entries[0]["value"] == "root"
+
+    def test_tree_with_non_list_children(self) -> None:
+        vocab = {
+            "data": {"term": "root", "display": "Root"},
+            "children": "not_a_list",
+        }
+        entries = flatten_vocab(vocab, prefer_term=True)
+        assert len(entries) == 1
+
+    def test_tree_with_non_dict_data(self) -> None:
+        vocab = {
+            "data": "not_a_dict",
+            "children": [],
+        }
+        entries = flatten_vocab(vocab, prefer_term=True)
+        assert len(entries) == 1
+        assert entries[0] == {"display": None, "value": None}
+
+    def test_numeric_values_in_list(self) -> None:
+        vocab = [42, 3.14]
+        entries = flatten_vocab(vocab)
+        assert entries[0] == {"display": "42", "value": "42"}
+        assert entries[1] == {"display": "3.14", "value": "3.14"}
+
+
+# ---------------------------------------------------------------------------
+# match_vocab_value
+# ---------------------------------------------------------------------------
 class TestMatchVocabValue:
     """Tests for the shared match_vocab_value function."""
 
     def test_no_vocab_returns_value_as_is(self) -> None:
         result = match_vocab_value(vocab=None, param_name="p", value="hello")
+        assert result == "hello"
+
+    def test_empty_list_vocab_returns_value_as_is(self) -> None:
+        result = match_vocab_value(vocab=[], param_name="p", value="hello")
         assert result == "hello"
 
     def test_exact_display_match(self) -> None:
@@ -75,3 +269,26 @@ class TestMatchVocabValue:
         }
         result = match_vocab_value(vocab=vocab, param_name="p", value="Child")
         assert result == "child_val"
+
+    def test_whitespace_stripped(self) -> None:
+        vocab = [["val1", "Display"]]
+        result = match_vocab_value(vocab=vocab, param_name="p", value="  Display  ")
+        assert result == "val1"
+
+    def test_numeric_equivalent_on_value_field(self) -> None:
+        vocab = [["100.0", "hundred"]]
+        result = match_vocab_value(vocab=vocab, param_name="p", value="100")
+        assert result == "100.0"
+
+    def test_display_match_takes_priority_over_value_match(self) -> None:
+        """When display matches first entry, return its value."""
+        vocab = [["internal", "display_name"]]
+        result = match_vocab_value(vocab=vocab, param_name="p", value="display_name")
+        assert result == "internal"
+
+    def test_error_message_includes_param_name_and_value(self) -> None:
+        vocab = [["a", "A"]]
+        with pytest.raises(ValidationError) as exc_info:
+            match_vocab_value(vocab=vocab, param_name="my_param", value="bad")
+        assert "my_param" in (exc_info.value.detail or "")
+        assert "bad" in (exc_info.value.detail or "")

@@ -105,9 +105,8 @@ def _suggest_citation_tag(
     first_author: str | None = None
     if authors and len(authors) > 0:
         first_author = authors[0] if isinstance(authors[0], str) else None
-    first_last = (
-        _slug_token(str(first_author).split(",")[0].split()[0]) if first_author else ""
-    )
+    parts = str(first_author).split(",")[0].split() if first_author else []
+    first_last = _slug_token(parts[0]) if parts else ""
     if first_last and year:
         return f"{first_last}{year}"
     if first_last:

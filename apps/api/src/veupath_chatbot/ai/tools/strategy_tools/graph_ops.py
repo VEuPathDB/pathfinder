@@ -6,6 +6,7 @@ from typing import Annotated, Protocol, cast
 
 from kani import AIParam, ai_function
 
+from veupath_chatbot.platform.errors import ErrorCode
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
 from veupath_chatbot.services.strategies.engine.graph_integrity import (
     find_root_step_ids,
@@ -179,7 +180,7 @@ class StrategyGraphOps(StrategyToolsHelpers):
                 return self._with_full_graph(
                     graph,
                     self._tool_error(
-                        "ENSURE_SINGLE_OUTPUT_FAILED",
+                        ErrorCode.ENSURE_SINGLE_OUTPUT_FAILED,
                         "Failed while combining roots to ensure a single output.",
                         operator=operator,
                         leftStepId=current,

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.experiment.types.core import (
+    DEFAULT_STEP_ANALYSIS_PHASES,
     ControlValueFormat,
     EnrichmentAnalysisType,
     ExperimentMode,
@@ -66,12 +67,7 @@ class ExperimentConfig:
     optimization_target_step: str | None = None
     enable_step_analysis: bool = False
     step_analysis_phases: list[str] = field(
-        default_factory=lambda: [
-            "step_evaluation",
-            "operator_comparison",
-            "contribution",
-            "sensitivity",
-        ]
+        default_factory=lambda: list(DEFAULT_STEP_ANALYSIS_PHASES)
     )
     control_set_id: str | None = None
     threshold_knobs: list[ThresholdKnob] | None = None
@@ -133,3 +129,23 @@ class Experiment:
     rank_metrics: RankMetrics | None = None
     robustness: BootstrapResult | None = None
     tree_optimization: TreeOptimizationResult | None = None
+
+    def classification_id_sets(
+        self,
+    ) -> tuple[set[str], set[str], set[str], set[str]]:
+        """Build classification ID sets from the gene lists.
+
+        :returns: ``(tp_ids, fp_ids, fn_ids, tn_ids)``
+        """
+        return (
+            {g.id for g in self.true_positive_genes},
+            {g.id for g in self.false_positive_genes},
+            {g.id for g in self.false_negative_genes},
+            {g.id for g in self.true_negative_genes},
+        )
+
+    def result_gene_ids(self) -> set[str]:
+        """Return the set of all result gene IDs (TP + FP)."""
+        return {g.id for g in self.true_positive_genes} | {
+            g.id for g in self.false_positive_genes
+        }

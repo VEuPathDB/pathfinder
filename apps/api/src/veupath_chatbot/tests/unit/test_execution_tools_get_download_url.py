@@ -6,31 +6,10 @@ from veupath_chatbot.ai.tools.result_tools import ResultTools
 from veupath_chatbot.integrations.veupathdb.temporary_results import TemporaryResultsAPI
 from veupath_chatbot.platform.errors import WDKError
 from veupath_chatbot.platform.types import JSONObject
-
-
-class _FakeSession:
-    def __init__(self) -> None:
-        self.site_id = "plasmodb"
-
-    def get_graph(self, graph_id: str | None):
-        del graph_id
-        return None
-
-
-class _FakeResultsAPI:
-    def __init__(self, url: str | None = None, error: Exception | None = None) -> None:
-        self._url = url
-        self._error = error
-
-    async def get_download_url(
-        self, step_id: int, format: str = "csv", attributes: list[str] | None = None
-    ) -> str:
-        del step_id
-        del format
-        del attributes
-        if self._error is not None:
-            raise self._error
-        return self._url or ""
+from veupath_chatbot.tests.fixtures.fakes import (
+    FakeResultsAPI,
+    FakeResultToolsSession,
+)
 
 
 class _CaptureClient:
@@ -63,7 +42,7 @@ class _CaptureClient:
 
 @pytest.mark.asyncio
 async def test_get_download_url_validates_format() -> None:
-    tools = ResultTools(_FakeSession())
+    tools = ResultTools(FakeResultToolsSession())
 
     result = await tools.get_download_url(wdk_step_id=123, format="xlsx")
 
@@ -74,8 +53,8 @@ async def test_get_download_url_validates_format() -> None:
 
 @pytest.mark.asyncio
 async def test_get_download_url_maps_report_name_payload_error() -> None:
-    tools = ResultTools(_FakeSession())
-    fake_api = _FakeResultsAPI(
+    tools = ResultTools(FakeResultToolsSession())
+    fake_api = FakeResultsAPI(
         error=WDKError(
             'POST /temporary-results -> HTTP 400: JSONObject["reportName"] not found.',
             400,
@@ -97,8 +76,8 @@ async def test_get_download_url_maps_report_name_payload_error() -> None:
 
 @pytest.mark.asyncio
 async def test_get_download_url_returns_url_on_success() -> None:
-    tools = ResultTools(_FakeSession())
-    fake_api = _FakeResultsAPI(url="https://example/download.csv")
+    tools = ResultTools(FakeResultToolsSession())
+    fake_api = FakeResultsAPI(url="https://example/download.csv")
     tools._get_results_api = lambda: fake_api
 
     result = await tools.get_download_url(

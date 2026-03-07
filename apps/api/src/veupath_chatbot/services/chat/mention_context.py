@@ -236,4 +236,9 @@ def _format_metrics(m: ExperimentMetrics) -> str:
 
 def _truncate(s: str, max_len: int) -> str:
     """Truncate a string with ellipsis."""
-    return s if len(s) <= max_len else s[: max_len - 3] + "..."
+    if len(s) <= max_len:
+        return s
+    # Too small for "..." suffix — just hard-truncate.
+    if max_len < 4:
+        return s[:max_len]
+    return s[: max_len - 3] + "..."

@@ -18,19 +18,13 @@ def run_custom_enrichment(
 
     Computes overlap, fold enrichment, p-value (hypergeometric), and odds ratio.
     """
-    result_ids = {g.id for g in exp.true_positive_genes} | {
-        g.id for g in exp.false_positive_genes
-    }
-    positive_ids = {g.id for g in exp.true_positive_genes}
+    result_ids = exp.result_gene_ids()
+    tp_ids, _, fn_ids, tn_ids = exp.classification_id_sets()
     gene_set = set(gene_ids)
     overlap = result_ids & gene_set
-    tp_in_overlap = positive_ids & gene_set
+    tp_in_overlap = tp_ids & gene_set
 
-    background = (
-        len(result_ids)
-        + len({g.id for g in exp.false_negative_genes})
-        + len({g.id for g in exp.true_negative_genes})
-    )
+    background = len(result_ids) + len(fn_ids) + len(tn_ids)
     background = max(background, 1)
     result_size = max(len(result_ids), 1)
     gene_set_size = max(len(gene_set), 1)

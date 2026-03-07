@@ -101,7 +101,10 @@ def dedup_and_sort(
         existing = best.get(k)
         if existing is None or sr.score > existing.score:
             best[k] = sr
-    return sorted(best.values(), key=lambda x: -x.score)
+    return sorted(
+        best.values(),
+        key=lambda x: (-x.score, key_fn(x.result)),
+    )
 
 
 _GENE_ID_PREFIX_RE = re.compile(

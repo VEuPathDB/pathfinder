@@ -7,7 +7,15 @@ import re
 from difflib import SequenceMatcher
 from urllib.parse import parse_qs, unquote, urlparse
 
+import httpx
+
 from veupath_chatbot.platform.types import JSONObject, JSONValue
+
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/122.0.0.0 Safari/537.36"
+)
 
 
 def norm_text(value: str | None) -> str:
@@ -301,3 +309,55 @@ def dedupe_key(item: JSONObject) -> str:
     if isinstance(url, str) and url.strip():
         return f"url:{url.strip().lower()}"
     return f"title:{norm_text(str(title))}|year:{year}"
+
+
+async def fetch_page_summary(
+    client: httpx.AsyncClient, url: JSONValue, *, max_chars: int
+) -> str | None:
+    """Fetch and extract a text summary from a web page.
+
+    Tries meta description tags first, then falls back to the longest ``<p>``
+    element.  Returns ``None`` for PDFs, Google Scholar links, or on error.
+    """
+    if not isinstance(url, str) or not url.strip():
+        return None
+    u = url.strip()
+    if u.lower().endswith(".pdf"):
+        return None
+    if "scholar.google." in u:
+        return None
+
+    try:
+        resp = await client.get(
+            u,
+            follow_redirects=True,
+            headers={"Referer": "https://duckduckgo.com/"},
+        )
+        resp.raise_for_status()
+        page_html = resp.text or ""
+    except Exception:
+        return None
+
+    meta_patterns = [
+        r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+name=["\']twitter:description["\'][^>]+content=["\']([^"\']+)["\']',
+    ]
+    for pat in meta_patterns:
+        m = re.search(pat, page_html, flags=re.IGNORECASE)
+        if m:
+            txt = strip_tags(m.group(1))
+            return truncate_text(txt, max_chars) if txt else None
+
+    paras = re.findall(r"<p[^>]*>(.*?)</p>", page_html, flags=re.IGNORECASE | re.DOTALL)
+    best: str | None = None
+    for p in paras:
+        txt = strip_tags(p)
+        low = txt.lower()
+        if len(txt) < 60:
+            continue
+        if "toggle navigation" in low or "main navigation" in low:
+            continue
+        if best is None or len(txt) > len(best):
+            best = txt
+    return truncate_text(best, max_chars) if best else None

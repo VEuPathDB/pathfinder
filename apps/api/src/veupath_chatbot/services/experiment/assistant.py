@@ -332,18 +332,15 @@ def _build_context_block(context: JSONObject) -> str:
         non_empty = {k: v for k, v in params.items() if v}
         if non_empty:
             parts.append(f"Parameters: {json.dumps(non_empty, indent=2)}")
-    pos = context.get("positiveControls")
-    if isinstance(pos, list) and pos:
-        parts.append(
-            f"Positive controls ({len(pos)}): {', '.join(str(g) for g in pos[:20])}"
-            + (" ..." if len(pos) > 20 else "")
-        )
-    neg = context.get("negativeControls")
-    if isinstance(neg, list) and neg:
-        parts.append(
-            f"Negative controls ({len(neg)}): {', '.join(str(g) for g in neg[:20])}"
-            + (" ..." if len(neg) > 20 else "")
-        )
+    for label, key in (
+        ("Positive", "positiveControls"),
+        ("Negative", "negativeControls"),
+    ):
+        controls = context.get(key)
+        if isinstance(controls, list) and controls:
+            preview = ", ".join(str(g) for g in controls[:20])
+            suffix = " ..." if len(controls) > 20 else ""
+            parts.append(f"{label} controls ({len(controls)}): {preview}{suffix}")
     # Results: classification metrics (for results/analysis steps)
     metrics = context.get("metrics")
     if isinstance(metrics, dict) and metrics:
@@ -359,10 +356,7 @@ def _build_context_block(context: JSONObject) -> str:
         ):
             val = metrics.get(key)
             if val is not None:
-                if isinstance(val, (int, float)):
-                    m_parts.append(f"{key}: {val}")
-                else:
-                    m_parts.append(f"{key}: {val}")
+                m_parts.append(f"{key}: {val}")
         if m_parts:
             parts.append("Classification metrics: " + ", ".join(m_parts))
     cm = context.get("confusionMatrix")

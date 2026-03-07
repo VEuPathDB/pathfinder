@@ -366,7 +366,7 @@ class LiteratureSearchService:
                 "requireDoi": require_doi,
             },
             "results": filtered[:limit],
-            "citations": cast(JSONValue, _ordered_citations(filtered)),
+            "citations": cast(JSONValue, _ordered_citations(filtered[:limit])),
         }
 
         if sort == "relevance" and source == "all" and filtered:
@@ -396,7 +396,7 @@ class LiteratureSearchService:
             scored.sort(key=get_score_key, reverse=True)
             filtered = scored
             payload["results"] = filtered[:limit]
-            payload["citations"] = cast(JSONValue, _ordered_citations(filtered))
+            payload["citations"] = cast(JSONValue, _ordered_citations(filtered[:limit]))
 
         if source == "all":
             payload["bySource"] = cast(JSONValue, by_source)

@@ -96,8 +96,8 @@ def flatten_vocab(
         walk(vocabulary)
     elif isinstance(vocabulary, list):
         for item in vocabulary:
-            if isinstance(item, list) and item:
-                if item[0] is None:
+            if isinstance(item, list):
+                if not item or item[0] is None:
                     continue
                 value = str(item[0])
                 display_from_list = (
@@ -114,3 +114,56 @@ def flatten_vocab(
             else:
                 entries.append({"display": str(item), "value": str(item)})
     return entries
+
+
+# ---------------------------------------------------------------------------
+# Tree-vocabulary helpers (for dict/tree-shaped WDK vocabularies)
+# ---------------------------------------------------------------------------
+
+
+def _get_node_data(node: JSONObject) -> JSONObject:
+    """Extract the ``data`` sub-dict from a vocab tree node."""
+    raw = node.get("data", {})
+    return raw if isinstance(raw, dict) else {}
+
+
+def get_node_term(node: JSONObject) -> str | None:
+    """Return the ``term`` string from a vocab tree node, or None."""
+    term = _get_node_data(node).get("term")
+    return str(term) if term is not None else None
+
+
+def get_vocab_children(node: JSONObject) -> list[JSONObject]:
+    """Return typed child nodes from a vocab tree node."""
+    raw = node.get("children", [])
+    if not isinstance(raw, list):
+        return []
+    return [child for child in raw if isinstance(child, dict)]
+
+
+def find_vocab_node(root: JSONObject, match: str) -> JSONObject | None:
+    """Find a node whose ``term`` or ``display`` equals *match* (DFS)."""
+    data = _get_node_data(root)
+    term = data.get("term")
+    display = data.get("display")
+    term_str = str(term) if term is not None else None
+    display_str = str(display) if display is not None else None
+    if match in (term_str, display_str):
+        return root
+    for child in get_vocab_children(root):
+        found = find_vocab_node(child, match)
+        if found:
+            return found
+    return None
+
+
+def collect_leaf_terms(node: JSONObject) -> list[str]:
+    """Collect all leaf ``term`` values under *node* (inclusive)."""
+    children = get_vocab_children(node)
+    if not children:
+        term = get_node_term(node)
+        return [term] if term else []
+    leaves: list[str] = []
+    for child in children:
+        leaves.extend(collect_leaf_terms(child))
+    return leaves

@@ -11,11 +11,11 @@ from veupath_chatbot.services.research.clients.semanticscholar import (
 )
 
 __all__ = [
-    "EuropePmcClient",
-    "CrossrefClient",
-    "OpenAlexClient",
-    "SemanticScholarClient",
-    "PubmedClient",
     "ArxivClient",
+    "CrossrefClient",
+    "EuropePmcClient",
+    "OpenAlexClient",
     "PreprintClient",
+    "PubmedClient",
+    "SemanticScholarClient",
 ]

@@ -18,7 +18,6 @@ from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.experiment.ai_analysis_helpers import (
     build_primary_key,
     classify_gene,
-    extract_pk,
     fetch_group_records,
     record_matches,
 )
@@ -29,6 +28,7 @@ from veupath_chatbot.services.experiment.store import get_experiment_store
 from veupath_chatbot.services.experiment.types import (
     Experiment,
 )
+from veupath_chatbot.services.wdk.helpers import extract_pk
 
 
 class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
@@ -56,9 +56,9 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
             chat_history=chat_history,
         )
 
-    def _get_experiment(self) -> Experiment | None:
+    async def _get_experiment(self) -> Experiment | None:
         store = get_experiment_store()
-        return store.get(self.experiment_id)
+        return await store.aget(self.experiment_id)
 
     # -- Data access tools ------------------------------------------------
 
@@ -78,7 +78,7 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
         Each record includes attributes and a classification (TP/FP/FN/TN)
         based on the experiment's control genes.
         """
-        exp = self._get_experiment()
+        exp = await self._get_experiment()
         if not exp or not exp.wdk_step_id:
             return {"error": "Experiment has no WDK strategy"}
 
@@ -93,10 +93,7 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
             sorting=sorting,
         )
 
-        tp_ids = {g.id for g in exp.true_positive_genes}
-        fp_ids = {g.id for g in exp.false_positive_genes}
-        fn_ids = {g.id for g in exp.false_negative_genes}
-        tn_ids = {g.id for g in exp.true_negative_genes}
+        tp_ids, fp_ids, fn_ids, tn_ids = exp.classification_id_sets()
 
         records = answer.get("records", [])
         classified: list[JSONObject] = []
@@ -135,7 +132,7 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
 
         Returns all attributes and tables for the gene from WDK.
         """
-        exp = self._get_experiment()
+        exp = await self._get_experiment()
         if not exp:
             return {"error": "Experiment not found"}
 
@@ -148,10 +145,7 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
                 record_type=exp.config.record_type,
                 primary_key=pk_parts,
             )
-            tp_ids = {g.id for g in exp.true_positive_genes}
-            fp_ids = {g.id for g in exp.false_positive_genes}
-            fn_ids = {g.id for g in exp.false_negative_genes}
-            tn_ids = {g.id for g in exp.true_negative_genes}
+            tp_ids, fp_ids, fn_ids, tn_ids = exp.classification_id_sets()
             classification = classify_gene(gene_id, tp_ids, fp_ids, fn_ids, tn_ids)
             return {
                 "geneId": gene_id,
@@ -172,7 +166,7 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
 
         Useful for understanding patterns in the data.
         """
-        exp = self._get_experiment()
+        exp = await self._get_experiment()
         if not exp or not exp.wdk_step_id:
             return {"error": "Experiment has no WDK strategy"}
 
@@ -192,7 +186,7 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
 
         Fetches records for both groups and identifies attribute differences.
         """
-        exp = self._get_experiment()
+        exp = await self._get_experiment()
         if not exp or not exp.wdk_step_id:
             return {"error": "Experiment has no WDK strategy"}
 
@@ -228,7 +222,7 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, ExperimentAssistantAgent):
         Iterates through result pages looking for records whose attributes
         match the query string.
         """
-        exp = self._get_experiment()
+        exp = await self._get_experiment()
         if not exp or not exp.wdk_step_id:
             return {"error": "Experiment has no WDK strategy"}
 

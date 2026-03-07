@@ -6,21 +6,18 @@ from typing import cast
 
 import httpx
 
-from veupath_chatbot.domain.research.citations import (
-    Citation,
-    _new_citation_id,
-    _now_iso,
-    ensure_unique_citation_tags,
-)
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.services.research.clients._base import (
+    API_USER_AGENT,
+    BaseClient,
+    build_response,
+    make_citation,
+)
 from veupath_chatbot.services.research.utils import truncate_text
 
 
-class EuropePmcClient:
+class EuropePmcClient(BaseClient):
     """Client for Europe PMC API."""
-
-    def __init__(self, *, timeout_seconds: float = 15.0) -> None:
-        self._timeout = timeout_seconds
 
     async def search(
         self, query: str, *, limit: int, abstract_max_chars: int
@@ -33,10 +30,9 @@ class EuropePmcClient:
             "pageSize": str(limit),
             "resultType": "core",
         }
-        headers = {
-            "User-Agent": "pathfinder-planner/1.0 (+https://pathfinder.veupathdb.org)"
-        }
-        async with httpx.AsyncClient(timeout=self._timeout, headers=headers) as client:
+        async with httpx.AsyncClient(
+            timeout=self._timeout, headers={"User-Agent": API_USER_AGENT}
+        ) as client:
             resp = await client.get(url, params=params, follow_redirects=True)
             resp.raise_for_status()
             payload = resp.json()
@@ -101,9 +97,9 @@ class EuropePmcClient:
                 }
             )
             citations.append(
-                Citation(
-                    id=_new_citation_id("epmc"),
+                make_citation(
                     source="europepmc",
+                    id_prefix="epmc",
                     title=title or (link or "Europe PMC result"),
                     url=link,
                     authors=authors,
@@ -111,13 +107,8 @@ class EuropePmcClient:
                     doi=doi,
                     pmid=pmid,
                     snippet=abstract or journal,
-                    accessed_at=_now_iso(),
-                ).to_dict()
+                )
             )
-        ensure_unique_citation_tags(citations)
-        return {
-            "query": query,
-            "source": "europepmc",
-            "results": results,
-            "citations": cast(JSONValue, citations),
-        }
+        return build_response(
+            query=query, source="europepmc", results=results, citations=citations
+        )

@@ -118,7 +118,9 @@ async def analyze_contributions(
             verdict = "essential"
         elif recall_delta < -0.02:
             verdict = "helpful"
-        elif fpr_delta < -0.05:
+        elif fpr_delta < -0.05 or recall_delta > 0.02:
+            # Step is harmful if removing it either reduces FPR meaningfully
+            # or *improves* recall (meaning the step was hurting recall).
             verdict = "harmful"
         else:
             verdict = "neutral"

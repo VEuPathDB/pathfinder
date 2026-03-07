@@ -88,6 +88,17 @@ def infer_enrichment_type(
 
     # GO enrichment — determine which ontology
     ontology = str(params.get("goAssociationsOntologies", ""))
+
+    # WDK vocab params arrive as JSON array strings, e.g. '["Molecular Function"]'.
+    # Unwrap the first element so it matches _REVERSE_GO_ONTOLOGY keys.
+    if ontology.startswith("["):
+        try:
+            parsed = json.loads(ontology)
+            if isinstance(parsed, list) and parsed:
+                ontology = str(parsed[0])
+        except json.JSONDecodeError, ValueError:
+            ontology = ""
+
     if not ontology and isinstance(result, dict):
         ontologies = result.get("goOntologies")
         if isinstance(ontologies, list) and ontologies:
@@ -116,6 +127,22 @@ def upsert_enrichment_result(
     results.append(new)
 
 
+def _extract_result_totals(result: JSONValue) -> tuple[int, int]:
+    """Extract total-analyzed and background-size from a WDK result dict.
+
+    WDK enrichment plugins use different keys for the same concepts:
+    ``resultSize`` / ``totalResults`` for the gene count, and
+    ``backgroundSize`` / ``bgdSize`` for the background universe.
+
+    :returns: ``(total_genes_analyzed, background_size)``
+    """
+    if not isinstance(result, dict):
+        return 0, 0
+    total = safe_int(result.get("resultSize", result.get("totalResults", 0)))
+    bg = safe_int(result.get("backgroundSize", result.get("bgdSize", 0)))
+    return total, bg
+
+
 def parse_enrichment_from_raw(
     wdk_analysis_name: str,
     params: JSONObject,
@@ -129,14 +156,7 @@ def parse_enrichment_from_raw(
     analysis_type = infer_enrichment_type(wdk_analysis_name, params, result)
     rows = _extract_analysis_rows(result)
     terms = _parse_enrichment_terms(rows)
-
-    total_analyzed = 0
-    bg_size = 0
-    if isinstance(result, dict):
-        total_analyzed = safe_int(
-            result.get("resultSize", result.get("totalResults", 0))
-        )
-        bg_size = safe_int(result.get("backgroundSize", result.get("bgdSize", 0)))
+    total_analyzed, bg_size = _extract_result_totals(result)
 
     return EnrichmentResult(
         analysis_type=analysis_type,
@@ -247,9 +267,13 @@ def _parse_enrichment_terms(
             row.get("FoldEnrich", row.get("foldEnrichment", row.get("foldEnrich", 0)))
         )
         odds = safe_float(row.get("OddsRatio", row.get("oddsRatio", 0)))
-        pval = safe_float(row.get("PValue", row.get("pValue", 1.0)))
-        fdr = safe_float(row.get("BenjaminiHochberg", row.get("benjamini", 1.0)))
-        bonf = safe_float(row.get("Bonferroni", row.get("bonferroni", 1.0)))
+        pval = safe_float(row.get("PValue", row.get("pValue", 1.0)), default=1.0)
+        fdr = safe_float(
+            row.get("BenjaminiHochberg", row.get("benjamini", 1.0)), default=1.0
+        )
+        bonf = safe_float(
+            row.get("Bonferroni", row.get("bonferroni", 1.0)), default=1.0
+        )
 
         terms.append(
             EnrichmentTerm(
@@ -317,7 +341,11 @@ def _encode_vocab_value(value: str) -> str:
     values arrive as plain strings and must be wrapped.
     """
     if value.startswith("["):
-        return value
+        try:
+            json.loads(value)
+            return value
+        except json.JSONDecodeError, ValueError:
+            pass
     return json.dumps([value])
 
 
@@ -378,8 +406,8 @@ def _extract_default_params(form_meta: JSONValue) -> JSONObject:
 
         # Vocab params must be JSON arrays for convertToTerms().
         param_type = str(p.get("type", ""))
-        if param_type in _WDK_VOCAB_PARAM_TYPES and not value.startswith("["):
-            value = json.dumps([value])
+        if param_type in _WDK_VOCAB_PARAM_TYPES:
+            value = _encode_vocab_value(value)
 
         defaults[name] = value
     return defaults
@@ -447,14 +475,7 @@ async def _execute_analysis(
 
     rows = _extract_analysis_rows(result)
     terms = _parse_enrichment_terms(rows)
-
-    total_analyzed = 0
-    bg_size = 0
-    if isinstance(result, dict):
-        total_analyzed = safe_int(
-            result.get("resultSize", result.get("totalResults", 0))
-        )
-        bg_size = safe_int(result.get("backgroundSize", result.get("bgdSize", 0)))
+    total_analyzed, bg_size = _extract_result_totals(result)
 
     return EnrichmentResult(
         analysis_type=analysis_type,

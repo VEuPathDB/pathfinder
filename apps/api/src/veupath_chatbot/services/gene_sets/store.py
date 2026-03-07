@@ -2,7 +2,6 @@
 
 Keeps an in-memory dict for fast synchronous access during AI tool calls,
 and persists every mutation to PostgreSQL so gene sets survive API restarts.
-Follows the same pattern as ExperimentStore.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from veupath_chatbot.persistence.models import GeneSetRow
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.tasks import spawn
+from veupath_chatbot.platform.store import WriteThruStore
 from veupath_chatbot.services.gene_sets.types import GeneSet
 
 logger = get_logger(__name__)
@@ -131,33 +130,21 @@ async def _delete_from_db(gene_set_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-class GeneSetStore:
+class GeneSetStore(WriteThruStore[GeneSet]):
     """Gene set repository with in-memory cache and DB write-through.
 
-    Sync methods are safe for asyncio cooperative multitasking: all dict
-    operations complete without yielding.  DB writes are scheduled as
-    fire-and-forget tasks so callers never block.
+    Inherits save/get/delete/aget/adelete from WriteThruStore.
+    Adds domain-specific listing methods.
     """
 
-    def __init__(self) -> None:
-        self._sets: dict[str, GeneSet] = {}
+    _persist_fn = staticmethod(_persist_to_db)
+    _load_fn = staticmethod(_load_from_db)
+    _delete_fn = staticmethod(_delete_from_db)
 
-    # -- Sync interface (used by AI tools / workbench_tools.py) ----------------
-
-    def save(self, gene_set: GeneSet) -> None:
-        self._sets[gene_set.id] = gene_set
-        coro = _persist_to_db(gene_set)
-        try:
-            spawn(coro, name=f"persist-gs-{gene_set.id}")
-        except RuntimeError:
-            coro.close()
-            logger.warning("No event loop for DB persist", gene_set_id=gene_set.id)
-
-    def get(self, gene_set_id: str) -> GeneSet | None:
-        return self._sets.get(gene_set_id)
+    # -- Sync listing (used by AI tools / workbench_tools.py) ----------------
 
     def list_all(self, *, site_id: str | None = None) -> list[GeneSet]:
-        results = list(self._sets.values())
+        results = list(self._cache.values())
         if site_id is not None:
             results = [gs for gs in results if gs.site_id == site_id]
         return sorted(results, key=lambda gs: gs.created_at, reverse=True)
@@ -168,43 +155,24 @@ class GeneSetStore:
         *,
         site_id: str | None = None,
     ) -> list[GeneSet]:
-        results = [gs for gs in self._sets.values() if gs.user_id == user_id]
+        results = [gs for gs in self._cache.values() if gs.user_id == user_id]
         if site_id is not None:
             results = [gs for gs in results if gs.site_id == site_id]
         return sorted(results, key=lambda gs: gs.created_at, reverse=True)
 
-    def delete(self, gene_set_id: str) -> bool:
-        removed = gene_set_id in self._sets
-        self._sets.pop(gene_set_id, None)
-        coro = _delete_from_db(gene_set_id)
-        try:
-            spawn(coro, name=f"delete-gs-{gene_set_id}")
-        except RuntimeError:
-            coro.close()
-            logger.warning("No event loop for DB delete", gene_set_id=gene_set_id)
-        return removed
+    # -- Async listing (used by endpoint handlers) ---------------------------
 
-    # -- Async interface (used by endpoint handlers) ---------------------------
-
-    async def aget(self, gene_set_id: str) -> GeneSet | None:
-        gs = self._sets.get(gene_set_id)
-        if gs is not None:
-            return gs
-        gs = await _load_from_db(gene_set_id)
-        if gs is not None:
-            self._sets[gene_set_id] = gs
-        return gs
-
-    async def alist_for_user(
+    def _merge_with_cache(
         self,
-        user_id: UUID,
+        db_sets: list[GeneSet],
         *,
+        user_id: UUID | None = None,
         site_id: str | None = None,
     ) -> list[GeneSet]:
-        db_sets = await _list_from_db(user_id=str(user_id), site_id=site_id)
+        """Merge DB rows with in-memory cache (cache wins), filter, and sort."""
         merged: dict[str, GeneSet] = {gs.id: gs for gs in db_sets}
-        for gid, gs in self._sets.items():
-            if gs.user_id != user_id:
+        for gid, gs in self._cache.items():
+            if user_id is not None and gs.user_id != user_id:
                 continue
             if site_id and gs.site_id != site_id:
                 continue
@@ -213,10 +181,19 @@ class GeneSetStore:
         result.sort(key=lambda gs: gs.created_at, reverse=True)
         return result
 
-    async def adelete(self, gene_set_id: str) -> bool:
-        self._sets.pop(gene_set_id, None)
-        await _delete_from_db(gene_set_id)
-        return True
+    async def alist_all(self, *, site_id: str | None = None) -> list[GeneSet]:
+        """List gene sets: merges DB rows with in-memory (fresher) state."""
+        db_sets = await _list_from_db(site_id=site_id)
+        return self._merge_with_cache(db_sets, site_id=site_id)
+
+    async def alist_for_user(
+        self,
+        user_id: UUID,
+        *,
+        site_id: str | None = None,
+    ) -> list[GeneSet]:
+        db_sets = await _list_from_db(user_id=str(user_id), site_id=site_id)
+        return self._merge_with_cache(db_sets, user_id=user_id, site_id=site_id)
 
 
 @cache

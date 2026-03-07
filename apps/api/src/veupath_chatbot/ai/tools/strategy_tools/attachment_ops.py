@@ -7,7 +7,6 @@ from typing import Annotated
 from kani import AIParam, ai_function
 
 from veupath_chatbot.domain.strategy.ast import StepAnalysis, StepFilter, StepReport
-from veupath_chatbot.platform.errors import ErrorCode
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.strategies.engine.helpers import StrategyToolsHelpers
 
@@ -27,23 +26,16 @@ class StrategyAttachmentOps(StrategyToolsHelpers):
         graph_id: Annotated[str | None, AIParam(desc="Graph ID to edit")] = None,
     ) -> JSONObject:
         """Attach or update a filter on a step."""
-        graph = self._get_graph(graph_id)
-        if not graph:
-            return self._graph_not_found(graph_id)
-
-        step = graph.get_step(step_id)
-        if not step:
-            return self._tool_error(
-                ErrorCode.STEP_NOT_FOUND, f"Step not found: {step_id}", stepId=step_id
-            )
+        result = self._get_graph_and_step(graph_id, step_id)
+        if isinstance(result, dict):
+            return result
+        graph, step = result
 
         existing = [f for f in step.filters if f.name != filter_name]
         existing.append(StepFilter(name=filter_name, value=value, disabled=disabled))
         step.filters = existing
 
-        response = self._serialize_step(graph, step)
-        response["ok"] = True
-        return self._with_full_graph(graph, response)
+        return self._step_ok_response(graph, step)
 
     @ai_function()
     async def add_step_analysis(
@@ -59,15 +51,10 @@ class StrategyAttachmentOps(StrategyToolsHelpers):
         graph_id: Annotated[str | None, AIParam(desc="Graph ID to edit")] = None,
     ) -> JSONObject:
         """Attach an analysis configuration to a step."""
-        graph = self._get_graph(graph_id)
-        if not graph:
-            return self._graph_not_found(graph_id)
-
-        step = graph.get_step(step_id)
-        if not step:
-            return self._tool_error(
-                ErrorCode.STEP_NOT_FOUND, f"Step not found: {step_id}", stepId=step_id
-            )
+        result = self._get_graph_and_step(graph_id, step_id)
+        if isinstance(result, dict):
+            return result
+        graph, step = result
 
         step.analyses.append(
             StepAnalysis(
@@ -77,9 +64,7 @@ class StrategyAttachmentOps(StrategyToolsHelpers):
             )
         )
 
-        response = self._serialize_step(graph, step)
-        response["ok"] = True
-        return self._with_full_graph(graph, response)
+        return self._step_ok_response(graph, step)
 
     @ai_function()
     async def add_step_report(
@@ -94,18 +79,11 @@ class StrategyAttachmentOps(StrategyToolsHelpers):
         graph_id: Annotated[str | None, AIParam(desc="Graph ID to edit")] = None,
     ) -> JSONObject:
         """Attach a report configuration to a step."""
-        graph = self._get_graph(graph_id)
-        if not graph:
-            return self._graph_not_found(graph_id)
-
-        step = graph.get_step(step_id)
-        if not step:
-            return self._tool_error(
-                ErrorCode.STEP_NOT_FOUND, f"Step not found: {step_id}", stepId=step_id
-            )
+        result = self._get_graph_and_step(graph_id, step_id)
+        if isinstance(result, dict):
+            return result
+        graph, step = result
 
         step.reports.append(StepReport(report_name=report_name, config=config or {}))
 
-        response = self._serialize_step(graph, step)
-        response["ok"] = True
-        return self._with_full_graph(graph, response)
+        return self._step_ok_response(graph, step)

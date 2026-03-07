@@ -17,13 +17,13 @@ import pytest
 
 from veupath_chatbot.platform.errors import InternalError
 from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.control_helpers import _encode_id_list
 from veupath_chatbot.services.control_tests import (
-    _encode_id_list,
-    _extract_record_ids,
     _run_intersection_control,
     resolve_controls_param_type,
     run_positive_negative_controls,
 )
+from veupath_chatbot.services.wdk.helpers import extract_record_ids
 from veupath_chatbot.tests.fixtures.wdk_responses import (
     standard_report_response,
     step_creation_response,
@@ -145,7 +145,7 @@ def _common_kwargs(controls_ids: list[str]) -> dict:
 
 
 # ===================================================================
-# Unit-level helpers (_encode_id_list, _extract_record_ids)
+# Unit-level helpers (_encode_id_list, extract_record_ids)
 # ===================================================================
 class TestEncodeIdList:
     def test_newline_format(self) -> None:
@@ -176,20 +176,20 @@ class TestEncodeIdList:
 class TestExtractRecordIds:
     def test_extracts_from_primary_key(self) -> None:
         records = standard_report_response(GENE_IDS[:2])["records"]
-        assert _extract_record_ids(records) == GENE_IDS[:2]
+        assert extract_record_ids(records) == GENE_IDS[:2]
 
     def test_preferred_key_from_attributes(self) -> None:
         records = standard_report_response(GENE_IDS[:2])["records"]
-        result = _extract_record_ids(records, preferred_key="gene_source_id")
+        result = extract_record_ids(records, preferred_key="gene_source_id")
         assert result == GENE_IDS[:2]
 
     def test_returns_empty_for_non_list(self) -> None:
-        assert _extract_record_ids(None) == []
-        assert _extract_record_ids("not a list") == []
+        assert extract_record_ids(None) == []
+        assert extract_record_ids("not a list") == []
 
     def test_skips_malformed_records(self) -> None:
         records = [{"no_id_field": True}, "not a dict", None]
-        assert _extract_record_ids(records) == []
+        assert extract_record_ids(records) == []
 
 
 # ===================================================================
@@ -453,6 +453,7 @@ class TestBothControls:
                 controls_param_name=CONTROLS_PARAM_NAME,
                 positive_controls=[],
                 negative_controls=[],
+                skip_cleanup=True,
             )
 
         mock_factory.assert_not_called()

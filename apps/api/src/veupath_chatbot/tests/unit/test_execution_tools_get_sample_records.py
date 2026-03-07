@@ -4,35 +4,15 @@ import pytest
 
 from veupath_chatbot.ai.tools.result_tools import ResultTools
 from veupath_chatbot.platform.errors import WDKError
-
-
-class _FakeSession:
-    def __init__(self) -> None:
-        self.site_id = "plasmodb"
-
-    def get_graph(self, graph_id: str | None):
-        del graph_id
-        return None
-
-
-class _FakeStrategyAPI:
-    def __init__(self, response=None, error: Exception | None = None) -> None:
-        self._response = response
-        self._error = error
-
-    async def get_step_answer(
-        self, step_id: int, pagination: dict[str, int] | None = None
-    ):
-        del step_id
-        del pagination
-        if self._error is not None:
-            raise self._error
-        return self._response
+from veupath_chatbot.tests.fixtures.fakes import (
+    FakeResultToolsSession,
+    FakeStrategyAPI,
+)
 
 
 @pytest.mark.asyncio
 async def test_get_sample_records_validates_limit_range() -> None:
-    tools = ResultTools(_FakeSession())
+    tools = ResultTools(FakeResultToolsSession())
 
     result = await tools.get_sample_records(wdk_step_id=123, limit=0)
 
@@ -43,7 +23,7 @@ async def test_get_sample_records_validates_limit_range() -> None:
 
 @pytest.mark.asyncio
 async def test_get_sample_records_validates_step_id() -> None:
-    tools = ResultTools(_FakeSession())
+    tools = ResultTools(FakeResultToolsSession())
 
     result = await tools.get_sample_records(wdk_step_id=0, limit=5)
 
@@ -54,8 +34,8 @@ async def test_get_sample_records_validates_step_id() -> None:
 
 @pytest.mark.asyncio
 async def test_get_sample_records_maps_wdk_404_to_actionable_error() -> None:
-    tools = ResultTools(_FakeSession())
-    fake_api = _FakeStrategyAPI(
+    tools = ResultTools(FakeResultToolsSession())
+    fake_api = FakeStrategyAPI(
         error=WDKError("GET /users/current/steps/1 -> HTTP 404", 404)
     )
     tools._get_api = lambda: fake_api
@@ -71,8 +51,8 @@ async def test_get_sample_records_maps_wdk_404_to_actionable_error() -> None:
 
 @pytest.mark.asyncio
 async def test_get_sample_records_returns_records_total_and_attributes() -> None:
-    tools = ResultTools(_FakeSession())
-    fake_api = _FakeStrategyAPI(
+    tools = ResultTools(FakeResultToolsSession())
+    fake_api = FakeStrategyAPI(
         response={
             "records": [{"record_primary_key": "A", "display_name": "alpha"}],
             "meta": {"totalCount": 17},

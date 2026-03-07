@@ -1,0 +1,245 @@
+"""Tests for citation domain types and utilities."""
+
+from __future__ import annotations
+
+from veupath_chatbot.domain.research.citations import (
+    Citation,
+    _new_citation_id,
+    _now_iso,
+    _slug_token,
+    _suggest_citation_tag,
+    ensure_unique_citation_tags,
+)
+
+# ---------------------------------------------------------------------------
+# _slug_token
+# ---------------------------------------------------------------------------
+
+
+class TestSlugToken:
+    def test_basic_slug(self) -> None:
+        assert _slug_token("Hello World!") == "helloworld"
+
+    def test_truncates_to_max_len(self) -> None:
+        result = _slug_token("abcdefghijklmnopqrstuvwxyz", max_len=5)
+        assert result == "abcde"
+
+    def test_none_input(self) -> None:
+        assert _slug_token(None) == ""
+
+    def test_empty_string(self) -> None:
+        assert _slug_token("") == ""
+
+    def test_whitespace_only(self) -> None:
+        assert _slug_token("   ") == ""
+
+    def test_strips_non_alphanumeric(self) -> None:
+        assert _slug_token("hello-world_123!") == "helloworld123"
+
+
+# ---------------------------------------------------------------------------
+# _suggest_citation_tag
+# ---------------------------------------------------------------------------
+
+
+class TestSuggestCitationTag:
+    def test_author_and_year(self) -> None:
+        tag = _suggest_citation_tag(
+            source="web",
+            title="Some Paper",
+            authors=["Smith, John"],
+            year=2020,
+            doi=None,
+            pmid=None,
+            url=None,
+        )
+        assert tag == "smith2020"
+
+    def test_author_no_year(self) -> None:
+        tag = _suggest_citation_tag(
+            source="web",
+            title="Some Paper",
+            authors=["Smith, John"],
+            year=None,
+            doi=None,
+            pmid=None,
+            url=None,
+        )
+        assert tag == "smith"
+
+    def test_title_first_word_with_year(self) -> None:
+        tag = _suggest_citation_tag(
+            source="web",
+            title="Malaria treatment overview",
+            authors=None,
+            year=2021,
+            doi=None,
+            pmid=None,
+            url=None,
+        )
+        assert tag == "malaria2021"
+
+    def test_title_slug_fallback(self) -> None:
+        tag = _suggest_citation_tag(
+            source="web",
+            title="Malaria",
+            authors=None,
+            year=None,
+            doi=None,
+            pmid=None,
+            url=None,
+        )
+        assert tag == "malaria"
+
+    def test_doi_fallback(self) -> None:
+        tag = _suggest_citation_tag(
+            source="web",
+            title="",
+            authors=None,
+            year=None,
+            doi="10.1234/abc",
+            pmid=None,
+            url=None,
+        )
+        assert tag == "101234abc"
+
+    def test_pmid_fallback(self) -> None:
+        tag = _suggest_citation_tag(
+            source="web",
+            title="",
+            authors=None,
+            year=None,
+            doi=None,
+            pmid="12345678",
+            url=None,
+        )
+        assert tag == "12345678"
+
+    def test_source_fallback(self) -> None:
+        tag = _suggest_citation_tag(
+            source="web",
+            title="",
+            authors=None,
+            year=None,
+            doi=None,
+            pmid=None,
+            url=None,
+        )
+        assert tag == "web"
+
+
+# ---------------------------------------------------------------------------
+# ensure_unique_citation_tags
+# ---------------------------------------------------------------------------
+
+
+class TestEnsureUniqueCitationTags:
+    def test_no_duplicates_unchanged(self) -> None:
+        citations = [
+            {"tag": "smith2020"},
+            {"tag": "jones2021"},
+        ]
+        ensure_unique_citation_tags(citations)
+        assert citations[0]["tag"] == "smith2020"
+        assert citations[1]["tag"] == "jones2021"
+
+    def test_duplicate_tags_get_suffixes(self) -> None:
+        citations = [
+            {"tag": "smith2020"},
+            {"tag": "smith2020"},
+            {"tag": "smith2020"},
+        ]
+        ensure_unique_citation_tags(citations)
+        tags = [c["tag"] for c in citations]
+        assert len(set(tags)) == 3
+        assert tags[0] == "smith2020"
+        assert tags[1] == "smith2020a"
+        assert tags[2] == "smith2020b"
+
+    def test_empty_tag_becomes_ref(self) -> None:
+        citations = [{"tag": ""}]
+        ensure_unique_citation_tags(citations)
+        assert citations[0]["tag"] == "ref"
+
+    def test_many_duplicates_use_numeric_suffix(self) -> None:
+        # More than 26 duplicates should use numeric suffixes
+        citations = [{"tag": "x"} for _ in range(30)]
+        ensure_unique_citation_tags(citations)
+        tags = [c["tag"] for c in citations]
+        assert len(set(tags)) == 30  # all unique
+
+    def test_skips_non_dicts(self) -> None:
+        citations = [{"tag": "ok"}, "not a dict", {"tag": "ok"}]  # type: ignore[list-item]
+        ensure_unique_citation_tags(citations)  # type: ignore[arg-type]
+        assert citations[0]["tag"] == "ok"
+        assert citations[2]["tag"] == "oka"  # type: ignore[index]
+
+
+# ---------------------------------------------------------------------------
+# Citation dataclass
+# ---------------------------------------------------------------------------
+
+
+class TestCitation:
+    def test_to_dict_includes_all_fields(self) -> None:
+        c = Citation(
+            id="test_123",
+            source="pubmed",
+            title="Test Paper",
+            url="https://example.com",
+            authors=["Smith J"],
+            year=2020,
+            doi="10.1234/x",
+            pmid="123",
+            snippet="A snippet.",
+            accessed_at="2026-01-01T00:00:00+00:00",
+        )
+        d = c.to_dict()
+        assert d["id"] == "test_123"
+        assert d["source"] == "pubmed"
+        assert d["title"] == "Test Paper"
+        assert d["url"] == "https://example.com"
+        assert d["authors"] == ["Smith J"]
+        assert d["year"] == 2020
+        assert d["doi"] == "10.1234/x"
+        assert d["pmid"] == "123"
+        assert d["snippet"] == "A snippet."
+        assert d["accessedAt"] == "2026-01-01T00:00:00+00:00"
+        assert "tag" in d  # auto-generated
+
+    def test_to_dict_defaults(self) -> None:
+        c = Citation(id="x", source="web", title="T")
+        d = c.to_dict()
+        assert d["url"] is None
+        assert d["authors"] is None
+        assert d["year"] is None
+        assert d["doi"] is None
+        assert d["pmid"] is None
+
+    def test_frozen(self) -> None:
+        c = Citation(id="x", source="web", title="T")
+        with __import__("pytest").raises(AttributeError):
+            c.id = "y"  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+
+
+class TestNewCitationId:
+    def test_format(self) -> None:
+        cid = _new_citation_id("test")
+        assert cid.startswith("test_")
+        assert len(cid) == len("test_") + 12
+
+    def test_uniqueness(self) -> None:
+        ids = {_new_citation_id("x") for _ in range(100)}
+        assert len(ids) == 100
+
+
+class TestNowIso:
+    def test_returns_iso_string(self) -> None:
+        result = _now_iso()
+        assert "T" in result
+        assert "+" in result or "Z" in result

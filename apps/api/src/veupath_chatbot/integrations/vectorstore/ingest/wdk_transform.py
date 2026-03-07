@@ -33,6 +33,9 @@ def _preview_vocab(vocab: JSONValue, *, limit: int = 50) -> tuple[list[str], boo
     else:
         return [], False
     for entry in flatten_vocab(vocab_input, prefer_term=False):
+        if len(values) >= limit:
+            truncated = True
+            break
         candidate = entry.get("display") or entry.get("value")
         if not candidate:
             continue
@@ -41,9 +44,6 @@ def _preview_vocab(vocab: JSONValue, *, limit: int = 50) -> tuple[list[str], boo
             continue
         seen.add(s)
         values.append(s)
-        if len(values) >= limit:
-            truncated = True
-            break
     return values, truncated
 
 

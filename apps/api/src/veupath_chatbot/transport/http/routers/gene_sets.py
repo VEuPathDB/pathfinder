@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Query, Request
@@ -27,6 +27,7 @@ from veupath_chatbot.transport.http.schemas.gene_sets import (
     RunGeneSetAnalysisRequest,
     SetOperationRequest,
 )
+from veupath_chatbot.transport.http.schemas.steps import RecordDetailRequest
 
 router = APIRouter(prefix="/api/v1/gene-sets", tags=["gene-sets"])
 logger = get_logger(__name__)
@@ -342,10 +343,10 @@ async def get_gene_set_attributes(
 async def get_gene_set_records(
     gene_set_id: str,
     user_id: CurrentUser,
-    offset: int = 0,
-    limit: int = 50,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
     sort: str | None = None,
-    dir: str = "ASC",
+    dir: Literal["ASC", "DESC"] = "ASC",
     attributes: str | None = None,
     filter_attribute: str | None = Query(None, alias="filterAttribute"),
     filter_value: str | None = Query(None, alias="filterValue"),
@@ -402,21 +403,15 @@ async def get_gene_set_records(
 @router.post("/{gene_set_id}/results/record")
 async def get_gene_set_record_detail(
     gene_set_id: str,
-    request_body: dict[str, object],
+    body: RecordDetailRequest,
     user_id: CurrentUser,
 ) -> JSONObject:
     """Get a single record's full details by primary key."""
     gs = await _get_gene_set_or_404(user_id, gene_set_id)
     svc = _require_svc(gs)
 
-    raw_pk = request_body.get("primaryKey") or request_body.get("primary_key") or []
-    if not isinstance(raw_pk, list) or not raw_pk:
-        raise ValidationError(title="Invalid primary key: must be a non-empty array")
-
     pk_parts: list[JSONObject] = [
-        {"name": str(part.get("name", "")), "value": str(part.get("value", ""))}
-        for part in raw_pk
-        if isinstance(part, dict)
+        {"name": part.name, "value": part.value} for part in body.primary_key
     ]
 
     return await svc.get_record_detail(pk_parts, gs.site_id)

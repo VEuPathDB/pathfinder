@@ -19,13 +19,20 @@ _background_tasks: set[asyncio.Task[Any]] = set()
 
 def spawn(
     coro: Coroutine[Any, Any, Any], *, name: str | None = None
-) -> asyncio.Task[Any]:
+) -> asyncio.Task[Any] | None:
     """Schedule *coro* as a background task with reference retention.
 
     The returned ``Task`` is kept alive until completion, after which it
     is automatically discarded.
+
+    If no event loop is running (e.g. called from a sync context outside
+    of ``async``), the coroutine is closed and ``None`` is returned.
     """
-    task = asyncio.create_task(coro, name=name)
+    try:
+        task = asyncio.create_task(coro, name=name)
+    except RuntimeError:
+        coro.close()
+        return None
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return task

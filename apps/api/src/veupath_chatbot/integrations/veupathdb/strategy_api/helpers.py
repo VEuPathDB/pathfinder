@@ -4,8 +4,6 @@ Contains :class:`StepTreeNode` for building step trees, internal strategy
 name tagging utilities, and shared constants.
 """
 
-from __future__ import annotations
-
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 from veupath_chatbot.platform.types import JSONObject
 

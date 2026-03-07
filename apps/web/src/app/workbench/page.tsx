@@ -6,7 +6,7 @@ import { TopBar } from "@/app/components/TopBar";
 import { LoginModal } from "@/app/components/LoginModal";
 import { SettingsPage } from "@/features/settings/components/SettingsPage";
 import { useAuthCheck } from "@/app/hooks/useAuthCheck";
-import { refreshAuth } from "@/lib/api/client";
+import { useAuthRefresh } from "@/app/hooks/useAuthRefresh";
 import { useSiteTheme } from "@/features/sites/hooks/useSiteTheme";
 import { WorkbenchSidebar } from "@/features/workbench/components/WorkbenchSidebar";
 import { WorkbenchMain } from "@/features/workbench/components/WorkbenchMain";
@@ -30,8 +30,7 @@ export default function WorkbenchPage() {
   const veupathdbSignedIn = useSessionStore((s) => s.veupathdbSignedIn);
   const { authLoading, apiError, retry: retryAuth } = useAuthCheck();
   useSiteTheme(selectedSite);
-  const authRefreshed = useSessionStore((s) => s.authRefreshed);
-  const setAuthRefreshed = useSessionStore((s) => s.setAuthRefreshed);
+  useAuthRefresh();
 
   const handleSiteChange = useCallback(
     (nextSite: string) => {
@@ -39,17 +38,6 @@ export default function WorkbenchPage() {
     },
     [setSelectedSite],
   );
-
-  const bumpAuthVersion = useSessionStore((s) => s.bumpAuthVersion);
-  useEffect(() => {
-    if (!veupathdbSignedIn || authRefreshed) return;
-    setAuthRefreshed(true);
-    refreshAuth()
-      .then(() => bumpAuthVersion())
-      .catch((err) => {
-        console.error("[refreshAuth]", err);
-      });
-  }, [veupathdbSignedIn, authRefreshed, setAuthRefreshed, bumpAuthVersion]);
 
   const [showSettings, setShowSettings] = useState(false);
   const geneSearchOpen = useWorkbenchStore((s) => s.geneSearchOpen);

@@ -8,19 +8,16 @@ from typing import cast
 
 import httpx
 
-from veupath_chatbot.domain.research.citations import (
-    Citation,
-    _new_citation_id,
-    _now_iso,
-    ensure_unique_citation_tags,
-)
+from veupath_chatbot.domain.research.citations import ensure_unique_citation_tags
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.services.research.clients._base import make_citation
 from veupath_chatbot.services.research.utils import (
+    BROWSER_USER_AGENT,
     candidate_queries,
     decode_ddg_redirect,
+    fetch_page_summary,
     looks_blocked,
     strip_tags,
-    truncate_text,
 )
 
 
@@ -47,14 +44,11 @@ class WebSearchService:
 
         results, effective_query, diag = await self._ddg_html_search(q, limit=limit)
         if include_summary and results:
+            dict_results = [r for r in results if isinstance(r, dict)]
             async with httpx.AsyncClient(
                 timeout=min(self._timeout, 15.0),
                 headers={
-                    "User-Agent": (
-                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/122.0.0.0 Safari/537.36"
-                    ),
+                    "User-Agent": BROWSER_USER_AGENT,
                     "Accept": (
                         "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
                     ),
@@ -63,21 +57,16 @@ class WebSearchService:
             ) as client:
                 summaries = await asyncio.gather(
                     *[
-                        self._fetch_page_summary(
+                        fetch_page_summary(
                             client,
-                            (r.get("url") if isinstance(r, dict) else None)
-                            if isinstance(r, dict)
-                            else None,
+                            r.get("url"),
                             max_chars=summary_max_chars,
                         )
-                        for r in results
-                        if isinstance(r, dict)
+                        for r in dict_results
                     ],
                     return_exceptions=True,
                 )
-            for r, s in zip(results, summaries, strict=False):
-                if not isinstance(r, dict):
-                    continue
+            for r, s in zip(dict_results, summaries, strict=True):
                 summary = s.strip() if isinstance(s, str) and s.strip() else None
                 r["summary"] = cast(JSONValue, summary)
                 snip = r.get("snippet")
@@ -98,14 +87,13 @@ class WebSearchService:
             snippet_raw = r.get("summary") or r.get("snippet")
             snippet = snippet_raw if isinstance(snippet_raw, str) else None
             citations.append(
-                Citation(
-                    id=_new_citation_id("web"),
+                make_citation(
                     source="web",
+                    id_prefix="web",
                     title=title,
                     url=url_raw if isinstance(url_raw, str) else None,
                     snippet=snippet,
-                    accessed_at=_now_iso(),
-                ).to_dict()
+                )
             )
         ensure_unique_citation_tags(citations)
         payload: JSONObject = {
@@ -120,64 +108,13 @@ class WebSearchService:
             payload["error"] = "search_blocked"
         return payload
 
-    async def _fetch_page_summary(
-        self, client: httpx.AsyncClient, url: JSONValue, *, max_chars: int
-    ) -> str | None:
-        """Fetch and extract a summary from a web page."""
-        if not isinstance(url, str) or not url.strip():
-            return None
-        u = url.strip()
-        if u.lower().endswith(".pdf"):
-            return None
-        if "scholar.google." in u:
-            return None
-
-        try:
-            resp = await client.get(
-                u,
-                follow_redirects=True,
-                headers={"Referer": "https://duckduckgo.com/"},
-            )
-            resp.raise_for_status()
-            html = resp.text or ""
-        except Exception:
-            return None
-
-        meta_patterns = [
-            r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']',
-            r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']',
-            r'<meta[^>]+name=["\']twitter:description["\'][^>]+content=["\']([^"\']+)["\']',
-        ]
-        for pat in meta_patterns:
-            m = re.search(pat, html, flags=re.IGNORECASE)
-            if m:
-                txt = strip_tags(m.group(1))
-                return truncate_text(txt, max_chars) if txt else None
-
-        paras = re.findall(r"<p[^>]*>(.*?)</p>", html, flags=re.IGNORECASE | re.DOTALL)
-        best: str | None = None
-        for p in paras:
-            txt = strip_tags(p)
-            low = txt.lower()
-            if len(txt) < 60:
-                continue
-            if "toggle navigation" in low or "main navigation" in low:
-                continue
-            if best is None or len(txt) > len(best):
-                best = txt
-        return truncate_text(best, max_chars) if best else None
-
     async def _ddg_html_search(
         self, q: str, *, limit: int
     ) -> tuple[JSONArray, str, JSONObject]:
         """Perform DuckDuckGo HTML search with fallback query variations."""
         url = "https://html.duckduckgo.com/html/"
         headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            ),
+            "User-Agent": BROWSER_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
         }
@@ -193,7 +130,7 @@ class WebSearchService:
                 if len(parsed) >= limit:
                     break
                 href = m.group(1)
-                title = re.sub(r"<[^>]+>", "", m.group(2)).strip()
+                title = strip_tags(m.group(2))
                 if not title:
                     continue
                 window = html[m.end() : m.end() + 2000]
@@ -203,7 +140,7 @@ class WebSearchService:
                     flags=re.IGNORECASE,
                 )
                 snippet_html = m_snip.group(1) if m_snip else ""
-                snippet = re.sub(r"<[^>]+>", "", snippet_html).strip() or None
+                snippet = strip_tags(snippet_html) or None
                 parsed.append(
                     {
                         "title": title,

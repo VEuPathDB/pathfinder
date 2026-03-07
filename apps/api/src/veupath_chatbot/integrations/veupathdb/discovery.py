@@ -3,6 +3,7 @@
 import asyncio
 
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
+from veupath_chatbot.integrations.veupathdb.param_utils import wdk_entity_name
 from veupath_chatbot.integrations.veupathdb.site_router import get_site_router
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONObject
@@ -55,12 +56,7 @@ class SearchCatalog:
                         searches: JSONArray | None = []
                     elif isinstance(rt, dict):
                         rt_dict: JSONObject = rt
-                        # WDK uses JsonKeys.URL_SEGMENT = "urlSegment" as the
-                        # programmatic identifier for record types.
-                        rt_name_raw = rt_dict.get("urlSegment")
-                        rt_name = (
-                            str(rt_name_raw) if isinstance(rt_name_raw, str) else ""
-                        )
+                        rt_name = wdk_entity_name(rt_dict)
                         self._record_types.append(rt_dict)
                         searches_raw = (
                             rt_dict.get("searches") if expanded_supported else None
@@ -119,12 +115,10 @@ class SearchCatalog:
 
         """
         searches = self.get_searches(record_type)
-        for search_raw in searches:
-            if not isinstance(search_raw, dict):
+        for search in searches:
+            if not isinstance(search, dict):
                 continue
-            search: JSONObject = search_raw
-            url_segment_raw = search.get("urlSegment")
-            if url_segment_raw == search_name:
+            if wdk_entity_name(search) == search_name:
                 return search
         return None
 

@@ -40,6 +40,10 @@ def compute_rank_metrics(
     if k_values is None:
         k_values = DEFAULT_K_VALUES
 
+    # Deduplicate while preserving order — duplicate IDs would inflate
+    # cumulative_hits and produce recall > 1.0.
+    result_ids = list(dict.fromkeys(result_ids))
+
     total = len(result_ids)
     total_pos = len(positive_ids)
     if total == 0 or total_pos == 0:

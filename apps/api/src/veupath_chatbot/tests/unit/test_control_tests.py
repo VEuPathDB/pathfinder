@@ -6,7 +6,7 @@ All WDK calls are mocked. These tests validate:
 - _get_total_count_for_step wraps get_step_count correctly
 - _run_intersection_control wires steps, creates strategy, fetches answer
 - resolve_controls_param_type correctly detects input-dataset params
-- _extract_record_ids extracts IDs from WDK answer records
+- extract_record_ids extracts IDs from WDK answer records
 - _encode_id_list formats correctly
 - run_positive_negative_controls composes results
 - dataset creation path for input-dataset params
@@ -21,14 +21,16 @@ import pytest
 
 from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
 from veupath_chatbot.platform.types import JSONArray, JSONObject
-from veupath_chatbot.services.control_tests import (
+from veupath_chatbot.services.control_helpers import (
     _encode_id_list,
-    _extract_record_ids,
     _get_total_count_for_step,
+)
+from veupath_chatbot.services.control_tests import (
     _run_intersection_control,
     resolve_controls_param_type,
     run_positive_negative_controls,
 )
+from veupath_chatbot.services.wdk.helpers import extract_record_ids
 
 
 def _make_mock_api(
@@ -137,7 +139,7 @@ class TestExtractRecordIds:
             {"id": [{"name": "source_id", "value": "GENE1"}]},
             {"id": [{"name": "source_id", "value": "GENE2"}]},
         ]
-        assert _extract_record_ids(records) == ["GENE1", "GENE2"]
+        assert extract_record_ids(records) == ["GENE1", "GENE2"]
 
     def test_extracts_from_preferred_key(self) -> None:
         records: JSONArray = [
@@ -149,7 +151,7 @@ class TestExtractRecordIds:
                 },
             ),
         ]
-        assert _extract_record_ids(records, preferred_key="gene_id") == ["ATTR1"]
+        assert extract_record_ids(records, preferred_key="gene_id") == ["ATTR1"]
 
     def test_falls_back_to_id_when_preferred_missing(self) -> None:
         records: JSONArray = [
@@ -158,11 +160,11 @@ class TestExtractRecordIds:
                 "attributes": {"other": "X"},
             },
         ]
-        assert _extract_record_ids(records, preferred_key="gene_id") == ["PK1"]
+        assert extract_record_ids(records, preferred_key="gene_id") == ["PK1"]
 
     def test_returns_empty_for_non_list(self) -> None:
-        assert _extract_record_ids(None) == []
-        assert _extract_record_ids("not a list") == []
+        assert extract_record_ids(None) == []
+        assert extract_record_ids("not a list") == []
 
     def test_skips_malformed_records(self) -> None:
         records: JSONArray = [
@@ -171,7 +173,7 @@ class TestExtractRecordIds:
             {"id": []},
             {"id": [{"name": "source_id", "value": "GOOD"}]},
         ]
-        assert _extract_record_ids(records) == ["GOOD"]
+        assert extract_record_ids(records) == ["GOOD"]
 
     def test_composite_primary_key_extracts_first(self) -> None:
         """For composite keys (e.g., transcript), first PK value is extracted."""
@@ -183,7 +185,7 @@ class TestExtractRecordIds:
                 ],
             },
         ]
-        assert _extract_record_ids(records) == ["PF3D7_0209000"]
+        assert extract_record_ids(records) == ["PF3D7_0209000"]
 
 
 class TestGetTotalCountForStep:

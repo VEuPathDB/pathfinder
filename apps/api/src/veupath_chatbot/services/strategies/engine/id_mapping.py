@@ -6,6 +6,10 @@ from typing import cast
 
 from veupath_chatbot.domain.strategy.ast import PlanStepNode
 from veupath_chatbot.integrations.veupathdb.discovery import get_discovery_service
+from veupath_chatbot.integrations.veupathdb.param_utils import (
+    wdk_entity_name,
+    wdk_search_matches,
+)
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 
 from .base import StrategyToolsBase
@@ -26,22 +30,11 @@ class IdMappingMixin(StrategyToolsBase):
         def normalize(value: str) -> str:
             return value.strip().lower()
 
-        def rt_name(rt: str | JSONObject) -> str:
-            if isinstance(rt, str):
-                return rt
-            if isinstance(rt, dict):
-                url_seg_raw = rt.get("urlSegment")
-                name_raw = rt.get("name")
-                url_seg = url_seg_raw if isinstance(url_seg_raw, str) else None
-                name = name_raw if isinstance(name_raw, str) else None
-                return str(url_seg or name or "")
-            return ""
-
         normalized = normalize(record_type)
         exact: list[JSONValue] = []
         for rt in record_types:
             if isinstance(rt, (str, dict)):
-                if normalize(rt_name(rt)) == normalized:
+                if normalize(wdk_entity_name(rt)) == normalized:
                     exact.append(rt)
                 elif isinstance(rt, dict):
                     name_raw = rt.get("name")
@@ -89,19 +82,10 @@ class IdMappingMixin(StrategyToolsBase):
         discovery = get_discovery_service()
         record_types = await discovery.get_record_types(self.session.site_id)
 
-        def matches(search: JSONValue) -> bool:
-            if not isinstance(search, dict):
-                return False
-            url_seg_raw = search.get("urlSegment")
-            name_raw = search.get("name")
-            url_seg = url_seg_raw if isinstance(url_seg_raw, str) else None
-            name = name_raw if isinstance(name_raw, str) else None
-            return url_seg == search_name or name == search_name
-
         if resolved:
             try:
                 searches = await discovery.get_searches(self.session.site_id, resolved)
-                if any(matches(s) for s in searches):
+                if any(wdk_search_matches(s, search_name) for s in searches):
                     return resolved
             except Exception:
                 pass
@@ -112,19 +96,14 @@ class IdMappingMixin(StrategyToolsBase):
             return None if require_match else resolved
 
         for rt in record_types:
-            if isinstance(rt, str):
-                rt_name = rt
-            elif isinstance(rt, dict):
-                rt_name = str(rt.get("urlSegment", rt.get("name", "")))
-            else:
-                continue
+            rt_name = wdk_entity_name(rt)
             if not rt_name:
                 continue
             try:
                 searches = await discovery.get_searches(self.session.site_id, rt_name)
             except Exception:
                 continue
-            if any(matches(s) for s in searches):
+            if any(wdk_search_matches(s, search_name) for s in searches):
                 return rt_name
 
         return None if require_match else resolved
@@ -138,28 +117,14 @@ class IdMappingMixin(StrategyToolsBase):
         except Exception:
             return None
 
-        def matches(search: JSONValue) -> bool:
-            if not isinstance(search, dict):
-                return False
-            url_seg_raw = search.get("urlSegment")
-            name_raw = search.get("name")
-            url_seg = url_seg_raw if isinstance(url_seg_raw, str) else None
-            name = name_raw if isinstance(name_raw, str) else None
-            return url_seg == search_name or name == search_name
-
         for rt in record_types:
-            if isinstance(rt, str):
-                rt_name = rt
-            elif isinstance(rt, dict):
-                rt_name = str(rt.get("urlSegment", rt.get("name", "")))
-            else:
-                continue
+            rt_name = wdk_entity_name(rt)
             if not rt_name or (exclude and rt_name == exclude):
                 continue
             try:
                 searches = await discovery.get_searches(self.session.site_id, rt_name)
             except Exception:
                 continue
-            if any(matches(s) for s in searches):
+            if any(wdk_search_matches(s, search_name) for s in searches):
                 return rt_name
         return None

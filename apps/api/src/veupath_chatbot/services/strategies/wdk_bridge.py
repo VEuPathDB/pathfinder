@@ -40,6 +40,7 @@ from veupath_chatbot.platform.types import (
     JSONObject,
     as_json_object,
 )
+from veupath_chatbot.services.catalog.param_resolution import _unwrap_search_data
 from veupath_chatbot.services.control_helpers import delete_temp_strategy
 from veupath_chatbot.services.experiment.helpers import extract_wdk_id
 
@@ -515,10 +516,7 @@ async def _normalize_synced_parameters(
                     )
                     spec_cache[cache_key] = {}
                     continue
-            if isinstance(details, dict):
-                search_data = details.get("searchData")
-                if isinstance(search_data, dict):
-                    details = search_data
+            details = _unwrap_search_data(details) or {}
             spec_cache[cache_key] = details if isinstance(details, dict) else {}
 
         specs = adapt_param_specs(spec_cache.get(cache_key) or {})

@@ -23,6 +23,7 @@ import {
   ReferenceArea,
   ReferenceLine,
 } from "recharts";
+import type { TooltipProps } from "recharts";
 import { CHART_COLORS } from "@/lib/utils/chartTheme";
 
 interface ScoreChartDatum {
@@ -30,6 +31,11 @@ interface ScoreChartDatum {
   score: number;
   bestSoFar: number;
 }
+
+const tooltipFormatter: NonNullable<TooltipProps["formatter"]> = (value, name) => [
+  typeof value === "number" && value != null ? value.toFixed(4) : "--",
+  name === "score" ? "Score" : "Best so far",
+];
 
 const CHART_HEIGHT = 320;
 
@@ -154,10 +160,7 @@ export function OptimizationChart({
                   border: "1px solid hsl(var(--border))",
                 }}
                 labelFormatter={(v) => `Trial ${v}`}
-                formatter={(value: number | undefined, name: string | undefined) => [
-                  value != null ? value.toFixed(4) : "--",
-                  name === "score" ? "Score" : "Best so far",
-                ]}
+                formatter={tooltipFormatter}
               />
               <Line
                 type="monotone"

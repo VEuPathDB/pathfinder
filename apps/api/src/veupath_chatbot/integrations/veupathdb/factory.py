@@ -1,7 +1,5 @@
 """Integration entrypoints for WDK clients and services."""
 
-from __future__ import annotations
-
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 from veupath_chatbot.integrations.veupathdb.discovery import (
     DiscoveryService,

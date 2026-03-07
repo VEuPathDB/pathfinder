@@ -42,12 +42,12 @@ class RefinementToolsMixin:
 
     Classes using this mixin must provide:
     - site_id: str
-    - _get_experiment() -> Experiment | None
+    - _get_experiment() -> Experiment | None  (async)
     """
 
     site_id: str
 
-    def _get_experiment(self) -> Experiment | None: ...
+    async def _get_experiment(self) -> Experiment | None: ...
 
     @ai_function()
     async def refine_with_search(
@@ -68,7 +68,7 @@ class RefinementToolsMixin:
         strategy is updated so subsequent queries reflect the refined results.
         Call re_evaluate_controls afterwards to see the impact on metrics.
         """
-        exp = self._get_experiment()
+        exp = await self._get_experiment()
         if not exp or not exp.wdk_strategy_id or not exp.wdk_step_id:
             return {"error": "Experiment has no WDK strategy"}
 
@@ -107,7 +107,7 @@ class RefinementToolsMixin:
         or MINUS to exclude them.
         Call re_evaluate_controls afterwards to see the impact on metrics.
         """
-        exp = self._get_experiment()
+        exp = await self._get_experiment()
         if not exp or not exp.wdk_strategy_id or not exp.wdk_step_id:
             return {"error": "Experiment has no WDK strategy"}
 
@@ -149,7 +149,7 @@ class RefinementToolsMixin:
         and negative control genes appear in the current result set.
         Use this after refining the strategy to see the impact on performance.
         """
-        exp = self._get_experiment()
+        exp = await self._get_experiment()
         if not exp or not exp.wdk_step_id:
             return {"error": "Experiment has no WDK strategy"}
 

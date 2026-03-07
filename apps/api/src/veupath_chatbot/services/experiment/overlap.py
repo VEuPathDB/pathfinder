@@ -19,9 +19,7 @@ def compute_gene_set_overlap(
     gene_sets: dict[str, set[str]] = {}
     labels: dict[str, str] = {}
     for exp in experiments:
-        genes = {g.id for g in exp.true_positive_genes} | {
-            g.id for g in exp.false_positive_genes
-        }
+        genes = exp.result_gene_ids()
         gene_sets[exp.id] = genes
         labels[exp.id] = exp.config.name or exp.id
 

@@ -7,10 +7,13 @@ from uuid import UUID, uuid4
 
 from kani import AIParam, ai_function
 
+from veupath_chatbot.platform.errors import ErrorCode
 from veupath_chatbot.platform.logging import get_logger
+from veupath_chatbot.platform.tool_errors import tool_error
 from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.services.experiment.types import EnrichmentAnalysisType
 from veupath_chatbot.services.gene_sets.store import get_gene_set_store
-from veupath_chatbot.services.gene_sets.types import GeneSet
+from veupath_chatbot.services.gene_sets.types import GeneSet, GeneSetSource
 
 logger = get_logger(__name__)
 
@@ -71,7 +74,17 @@ class WorkbenchToolsMixin:
 
         The created gene set will appear in the user's Workbench sidebar.
         """
-        source = "strategy" if wdk_strategy_id is not None else "paste"
+        if not name or not name.strip():
+            return tool_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Gene set name must be a non-empty string.",
+            )
+        if not gene_ids:
+            return tool_error(
+                ErrorCode.VALIDATION_ERROR,
+                "gene_ids must contain at least one gene ID.",
+            )
+        source: GeneSetSource = "strategy" if wdk_strategy_id is not None else "paste"
         gs = GeneSet(
             id=str(uuid4()),
             name=name,
@@ -134,11 +147,11 @@ class WorkbenchToolsMixin:
         from veupath_chatbot.services.wdk.enrichment_service import EnrichmentService
 
         store = get_gene_set_store()
-        gs = store.get(gene_set_id)
+        gs = await store.aget(gene_set_id)
         if gs is None:
             return {"error": f"Gene set '{gene_set_id}' not found."}
 
-        types = enrichment_types or [
+        types: list[EnrichmentAnalysisType] = enrichment_types or [
             "go_function",
             "go_process",
             "go_component",
@@ -187,9 +200,9 @@ class WorkbenchToolsMixin:
         """
         store = get_gene_set_store()
         if self.user_id is not None:
-            sets = store.list_for_user(self.user_id, site_id=self.site_id)
+            sets = await store.alist_for_user(self.user_id, site_id=self.site_id)
         else:
-            sets = store.list_all(site_id=self.site_id)
+            sets = await store.alist_all(site_id=self.site_id)
         return {
             "geneSets": [
                 {

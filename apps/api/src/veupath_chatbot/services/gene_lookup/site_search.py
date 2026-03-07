@@ -51,8 +51,8 @@ def parse_site_search_docs(docs: list[object]) -> list[JSONObject]:
         if isinstance(found, dict):
             for field_key, field_values in found.items():
                 if isinstance(field_values, list) and field_values:
-                    clean_key = field_key.replace("TEXT__", "").replace(
-                        "MULTITEXT__", ""
+                    clean_key = field_key.replace("MULTITEXT__", "").replace(
+                        "TEXT__", ""
                     )
                     matched_fields.append(clean_key)
 

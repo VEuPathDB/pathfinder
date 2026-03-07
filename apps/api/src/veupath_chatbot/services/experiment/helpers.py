@@ -53,7 +53,7 @@ def safe_float(val: object, default: float = 0.0) -> float:
     return result
 
 
-def extract_wdk_id(payload: JSONObject | None, key: str = "id") -> int | None:
+def extract_wdk_id(payload: object, key: str = "id") -> int | None:
     """Extract an integer ID from a WDK JSON response.
 
     WDK formatters (``StepFormatter``, ``StrategyService``, etc.) emit

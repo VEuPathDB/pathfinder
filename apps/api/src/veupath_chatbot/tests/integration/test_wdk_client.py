@@ -45,7 +45,7 @@ def client() -> VEuPathDBClient:
 
 @respx.mock
 async def test_get_record_types(client: VEuPathDBClient) -> None:
-    """GET /record-types returns a parsed JSON list of record type objects."""
+    """GET /record-types returns a parsed JSON list of record type strings."""
     expected = record_types_response()
     respx.get(f"{BASE}/record-types").mock(
         return_value=Response(200, json=expected),
@@ -55,8 +55,8 @@ async def test_get_record_types(client: VEuPathDBClient) -> None:
 
     assert result == expected
     assert isinstance(result, list)
-    assert len(result) == 2
-    assert result[0]["urlSegment"] == "gene"
+    assert len(result) == 6
+    assert result[0] == "transcript"
 
 
 @respx.mock
@@ -71,25 +71,31 @@ async def test_get_searches(client: VEuPathDBClient) -> None:
 
     assert result == expected
     assert len(result) == 4
-    assert any(s["urlSegment"] == "GenesByTaxon" for s in result)
+    assert any(
+        isinstance(s, dict) and s.get("urlSegment") == "GenesByTaxon" for s in result
+    )
 
 
 @respx.mock
 async def test_get_search_details(client: VEuPathDBClient) -> None:
-    """GET /record-types/gene/searches/GenesByTaxon?expandParams=true returns details."""
+    """GET /record-types/transcript/searches/GenesByTaxon?expandParams=true returns details."""
     expected = search_details_response("GenesByTaxon")
     route = respx.get(
-        f"{BASE}/record-types/gene/searches/GenesByTaxon",
+        f"{BASE}/record-types/transcript/searches/GenesByTaxon",
         params={"expandParams": "true"},
     ).mock(return_value=Response(200, json=expected))
 
-    result = await client.get_search_details("gene", "GenesByTaxon")
+    result = await client.get_search_details("transcript", "GenesByTaxon")
 
     assert route.called
     assert result == expected
-    assert result["name"] == "GenesByTaxon"
+    # Real WDK wraps everything in {searchData, validation} at top level.
     assert "searchData" in result
-    assert "parameters" in result["searchData"]
+    assert "validation" in result
+    search_data = result["searchData"]
+    assert isinstance(search_data, dict)
+    assert search_data["urlSegment"] == "GenesByTaxon"
+    assert "parameters" in search_data
 
 
 @respx.mock

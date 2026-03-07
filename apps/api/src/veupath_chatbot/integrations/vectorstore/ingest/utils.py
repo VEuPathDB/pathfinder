@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from itertools import batched
+from typing import Any, cast
 
 from qdrant_client import AsyncQdrantClient
+from veupath_chatbot.integrations.embeddings.openai_embeddings import OpenAIEmbeddings
+from veupath_chatbot.integrations.vectorstore.qdrant_store import QdrantStore
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.platform.types import JSONObject, JSONValue
 
 logger = get_logger(__name__)
 
@@ -63,3 +66,31 @@ async def existing_point_ids(
             existing.add(str(p.id))
 
     return existing
+
+
+async def embed_and_upsert(
+    *,
+    store: QdrantStore,
+    embedder: OpenAIEmbeddings,
+    collection: str,
+    ids: list[str | JSONValue],
+    texts: list[str],
+    payloads: list[JSONObject],
+) -> None:
+    """Embed *texts*, pair with *ids*/*payloads*, and upsert to *collection*.
+
+    This is the shared core of both WDK and public-strategy indexing pipelines.
+    """
+    if not texts:
+        return
+    vectors = await embedder.embed_texts(texts)
+    await store.upsert(
+        collection=collection,
+        points=[
+            cast(
+                Any,
+                {"id": pid, "vector": v, "payload": payload},
+            )
+            for pid, v, payload in zip(ids, vectors, payloads, strict=True)
+        ],
+    )

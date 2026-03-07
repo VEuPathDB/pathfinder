@@ -46,9 +46,7 @@ def experiment_to_json(exp: Experiment) -> JSONObject:
         config["enableStepAnalysis"] = True
         config["stepAnalysisPhases"] = list(exp.config.step_analysis_phases)
     if exp.config.optimization_specs:
-        config["optimizationSpecs"] = [
-            to_json(s) for s in exp.config.optimization_specs
-        ]
+        config["optimizationSpecs"] = to_json(exp.config.optimization_specs)
     if exp.config.parameter_display_values:
         config["parameterDisplayValues"] = cast(
             JSONObject, exp.config.parameter_display_values
@@ -56,9 +54,9 @@ def experiment_to_json(exp: Experiment) -> JSONObject:
     if exp.config.control_set_id:
         config["controlSetId"] = exp.config.control_set_id
     if exp.config.threshold_knobs:
-        config["thresholdKnobs"] = [to_json(k) for k in exp.config.threshold_knobs]
+        config["thresholdKnobs"] = to_json(exp.config.threshold_knobs)
     if exp.config.operator_knobs:
-        config["operatorKnobs"] = [to_json(k) for k in exp.config.operator_knobs]
+        config["operatorKnobs"] = to_json(exp.config.operator_knobs)
     if exp.config.threshold_knobs or exp.config.operator_knobs:
         config["treeOptimizationObjective"] = exp.config.tree_optimization_objective
         config["treeOptimizationBudget"] = exp.config.tree_optimization_budget
@@ -77,11 +75,11 @@ def experiment_to_json(exp: Experiment) -> JSONObject:
         "status": exp.status,
         "metrics": to_json(exp.metrics),
         "crossValidation": to_json(exp.cross_validation),
-        "enrichmentResults": [to_json(er) for er in exp.enrichment_results],
-        "truePositiveGenes": [to_json(g) for g in exp.true_positive_genes],
-        "falseNegativeGenes": [to_json(g) for g in exp.false_negative_genes],
-        "falsePositiveGenes": [to_json(g) for g in exp.false_positive_genes],
-        "trueNegativeGenes": [to_json(g) for g in exp.true_negative_genes],
+        "enrichmentResults": to_json(exp.enrichment_results),
+        "truePositiveGenes": to_json(exp.true_positive_genes),
+        "falseNegativeGenes": to_json(exp.false_negative_genes),
+        "falsePositiveGenes": to_json(exp.false_positive_genes),
+        "trueNegativeGenes": to_json(exp.true_negative_genes),
         "error": exp.error,
         "totalTimeSeconds": to_json(exp.total_time_seconds, _round=2),
         "createdAt": exp.created_at,

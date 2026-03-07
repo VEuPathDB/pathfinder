@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from veupath_chatbot.integrations.veupathdb.site_search import strip_html_tags
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
@@ -10,6 +12,31 @@ from .organism import normalize_organism
 from .wdk import resolve_gene_ids
 
 logger = get_logger(__name__)
+
+# Fields to fill from WDK metadata when absent in the original result.
+# Each entry is (field_name, transform_fn).
+_ENRICHMENT_FIELDS: list[tuple[str, Callable[[str], str]]] = [
+    ("organism", normalize_organism),
+    ("product", strip_html_tags),
+    ("geneName", strip_html_tags),
+    ("geneType", str),
+    ("location", str),
+]
+
+
+def _merge_meta(merged: dict[str, object], meta: JSONObject) -> None:
+    """Fill empty fields in *merged* from *meta*, applying transforms."""
+    for field, transform in _ENRICHMENT_FIELDS:
+        if not merged.get(field) and meta.get(field):
+            merged[field] = transform(str(meta[field]))
+    if not merged.get("displayName"):
+        merged["displayName"] = str(
+            merged.get("geneName")
+            or merged.get("product")
+            or meta.get("product")
+            or merged.get("geneId")
+            or ""
+        )
 
 
 async def enrich_sparse_gene_results(
@@ -73,24 +100,7 @@ async def enrich_sparse_gene_results(
             continue
 
         merged = dict(r)
-        if not merged.get("organism") and meta.get("organism"):
-            merged["organism"] = normalize_organism(str(meta["organism"]))
-        if not merged.get("product") and meta.get("product"):
-            merged["product"] = strip_html_tags(str(meta["product"]))
-        if not merged.get("geneName") and meta.get("geneName"):
-            merged["geneName"] = strip_html_tags(str(meta["geneName"]))
-        if not merged.get("geneType") and meta.get("geneType"):
-            merged["geneType"] = str(meta["geneType"])
-        if not merged.get("location") and meta.get("location"):
-            merged["location"] = str(meta["location"])
-        if not merged.get("displayName"):
-            merged["displayName"] = str(
-                merged.get("geneName")
-                or merged.get("product")
-                or meta.get("product")
-                or gene_id
-                or ""
-            )
+        _merge_meta(merged, meta)
         enriched.append(merged)
 
     return enriched[:limit]

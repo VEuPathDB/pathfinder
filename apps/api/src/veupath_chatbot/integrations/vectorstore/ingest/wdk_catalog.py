@@ -5,10 +5,8 @@ import asyncio
 import os
 
 from qdrant_client import AsyncQdrantClient
-from veupath_chatbot.integrations.embeddings.openai_embeddings import (
-    OpenAIEmbeddings,
-    embed_one,
-)
+from veupath_chatbot.integrations.embeddings.openai_embeddings import OpenAIEmbeddings
+from veupath_chatbot.integrations.vectorstore.bootstrap import get_embedding_dim
 from veupath_chatbot.integrations.vectorstore.collections import (
     WDK_RECORD_TYPES_V1,
     WDK_SEARCHES_V1,
@@ -113,16 +111,10 @@ async def ingest_wdk_catalog(
         raise RuntimeError("openai_api_key is required for embeddings ingestion")
 
     store = QdrantStore.from_settings()
-    dim = len(await embed_one(text="dimension probe", model=settings.embeddings_model))
+    dim = await get_embedding_dim(settings.embeddings_model)
 
     if reset:
-        reset_client = store._client()
-        try:
-            for name in (WDK_SEARCHES_V1, WDK_RECORD_TYPES_V1):
-                if await reset_client.collection_exists(collection_name=name):
-                    await reset_client.delete_collection(collection_name=name)
-        finally:
-            await reset_client.close()
+        await store.reset_collections(WDK_SEARCHES_V1, WDK_RECORD_TYPES_V1)
 
     await store.ensure_collection(name=WDK_RECORD_TYPES_V1, vector_size=dim)
     await store.ensure_collection(name=WDK_SEARCHES_V1, vector_size=dim)
@@ -140,8 +132,7 @@ async def ingest_wdk_catalog(
     all_sites = [s.id for s in router.list_sites()]
     selected = all_sites if not sites else [s for s in all_sites if s in set(sites)]
 
-    qdrant_client = store._client()
-    try:
+    async with store.connect() as qdrant_client:
         for site_id in selected:
             logger.info("WDK ingest site", siteId=site_id)
             await ingest_site(
@@ -153,8 +144,6 @@ async def ingest_wdk_catalog(
                 batch_size=max(8, int(batch_size)),
                 skip_existing=bool(skip_existing) and (not bool(reset)),
             )
-    finally:
-        await qdrant_client.close()
 
 
 async def _cli_async(argv: list[str] | None = None) -> None:

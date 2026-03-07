@@ -3,36 +3,19 @@
 import asyncio
 from typing import cast
 
-from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
-from veupath_chatbot.integrations.veupathdb.strategy_api.helpers import (
-    resolve_wdk_user_id,
-)
+from veupath_chatbot.integrations.veupathdb.strategy_api.base import StrategyAPIBase
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONObject
 
 logger = get_logger(__name__)
 
 
-class TemporaryResultsAPI:
-    """API for creating and managing temporary result downloads."""
+class TemporaryResultsAPI(StrategyAPIBase):
+    """API for creating and managing temporary result downloads.
 
-    def __init__(self, client: VEuPathDBClient) -> None:
-        self.client = client
-        self.user_id: str = "current"
-        self._session_initialized = False
-
-    async def _ensure_session(self) -> None:
-        """Resolve the concrete WDK user id once."""
-        if self._session_initialized:
-            return
-        resolved = await resolve_wdk_user_id(self.client)
-        if resolved:
-            self.user_id = resolved
-            logger.info(
-                "Resolved WDK user id for temporary results",
-                resolved_user_id=self.user_id,
-            )
-        self._session_initialized = True
+    Inherits session management (``client``, ``user_id``, ``_ensure_session``)
+    from :class:`StrategyAPIBase`.
+    """
 
     async def create_temporary_result(
         self,
@@ -174,12 +157,5 @@ class TemporaryResultsAPI:
         if attributes:
             report_config["attributes"] = cast(JSONArray, attributes)
 
-        # Use standard report endpoint for preview.
         await self._ensure_session()
-        return cast(
-            JSONObject,
-            await self.client.post(
-                f"/users/{self.user_id}/steps/{step_id}/reports/standard",
-                json={"reportConfig": report_config},
-            ),
-        )
+        return await self._standard_report(step_id, report_config)

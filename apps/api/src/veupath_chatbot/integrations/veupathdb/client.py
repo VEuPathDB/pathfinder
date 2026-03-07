@@ -124,7 +124,7 @@ class VEuPathDBClient:
             self._client = None
 
     @retry(
-        retry=retry_if_exception_type((httpx.TransportError, httpx.TimeoutException)),
+        retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
     )
@@ -135,7 +135,11 @@ class VEuPathDBClient:
         params: JSONObject | None = None,
         json: JSONObject | None = None,
     ) -> JSONValue:
-        """Make HTTP request with retry logic."""
+        """Make HTTP request with retry logic.
+
+        Retries on transient transport errors (timeouts, connection failures).
+        HTTP status errors (4xx/5xx) and other request errors are not retried.
+        """
         client = await self._get_client()
 
         logger.debug(
@@ -153,22 +157,21 @@ class VEuPathDBClient:
                 or settings.veupathdb_auth_token
             )
             # WDK authenticates via an ``Authorization`` cookie (not a header).
-            # The VEuPathDB login endpoint sets this cookie on successful auth;
-            # we forward it on every WDK request.
-            extra_cookies = {"Authorization": auth_token} if auth_token else None
+            # Set the cookie on the client instance (not per-request) because
+            # httpx has deprecated per-request ``cookies=``.
+            if auth_token:
+                client.cookies.set("Authorization", auth_token)
             httpx_params = _convert_params_for_httpx(params)
             response = await client.request(
                 method=method,
                 url=path,
                 params=httpx_params,
                 json=json,
-                cookies=extra_cookies,
             )
             response.raise_for_status()
             if not response.content or not response.text.strip():
                 return None
             result = response.json()
-            # Ensure we return proper JSONValue type
             if result is None:
                 return None
             return cast(JSONValue, result)
@@ -186,6 +189,9 @@ class VEuPathDBClient:
                 f"{method} {path} -> HTTP {e.response.status_code}: {e.response.text[:200]}",
                 status=e.response.status_code,
             ) from e
+        except httpx.TimeoutException, httpx.ConnectError:
+            # Let tenacity retry these transient errors.
+            raise
         except httpx.RequestError as e:
             logger.error("VEuPathDB request error", error=str(e), path=path)
             raise WDKError(f"Request failed: {e}", status=502) from e

@@ -9,19 +9,32 @@ All experiment SSE generators share a common pattern:
 This module extracts that pattern into ``sse_stream()``.
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
+import traceback
 from collections.abc import AsyncIterator, Awaitable, Callable
 
+from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
+
+logger = get_logger(__name__)
 
 SSE_HEADERS: dict[str, str] = {
     "Cache-Control": "no-cache",
     "Connection": "keep-alive",
     "X-Accel-Buffering": "no",
 }
+
+# Sentinel pushed to the queue when the producer crashes so the consumer
+# never blocks indefinitely on ``queue.get()``.
+_INTERNAL_ERROR_EVENT_TYPE = "internal_error"
+
+
+def _format_sse_frame(event: JSONObject) -> str:
+    """Format a single event dict as an SSE text frame."""
+    event_type = event.get("type", "experiment_progress")
+    data = event.get("data", {})
+    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
 
 async def sse_stream(
@@ -31,26 +44,44 @@ async def sse_stream(
     """Generic SSE event stream driven by an async producer function.
 
     :param producer: An async callable that receives a ``send(event)`` callback
-        and pushes ``{"type": ..., "data": ...}`` dicts into it.  The producer
-        MUST push at least one event whose ``"type"`` is in *end_event_types*
-        before returning (even on error).
+        and pushes ``{"type": ..., "data": ...}`` dicts into it.
     :param end_event_types: Set of event type strings that signal end-of-stream.
         When the consumer sees one of these, it yields the final SSE frame and
         stops iterating.
+
+    If the producer raises without sending an end event, an ``internal_error``
+    event is injected automatically so the consumer never hangs.
     """
     queue: asyncio.Queue[JSONObject] = asyncio.Queue()
+    terminal_types = end_event_types | {_INTERNAL_ERROR_EVENT_TYPE}
 
     async def _send(event: JSONObject) -> None:
         await queue.put(event)
 
-    task = asyncio.create_task(producer(_send))
+    async def _guarded_producer() -> None:
+        try:
+            await producer(_send)
+        except Exception as exc:
+            logger.error(
+                "SSE producer crashed: %s\n%s",
+                exc,
+                traceback.format_exc(),
+            )
+            await queue.put(
+                {
+                    "type": _INTERNAL_ERROR_EVENT_TYPE,
+                    "data": {"error": str(exc)},
+                }
+            )
+
+    task = asyncio.create_task(_guarded_producer())
     try:
         while True:
             event = await queue.get()
+            frame = _format_sse_frame(event)
+            yield frame
             event_type = event.get("type", "experiment_progress")
-            data = event.get("data", {})
-            yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
-            if event_type in end_event_types:
+            if event_type in terminal_types:
                 break
     finally:
         task.cancel()

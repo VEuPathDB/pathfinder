@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 
 from veupath_chatbot.integrations.embeddings.openai_embeddings import embed_one
+from veupath_chatbot.integrations.vectorstore.bootstrap import get_embedding_dim
 from veupath_chatbot.integrations.vectorstore.collections import (
     WDK_DEPENDENT_VOCAB_CACHE_V1,
 )
@@ -27,7 +28,7 @@ async def ensure_dependent_vocab_collection(store: QdrantStore) -> None:
     store vectors to keep Qdrant schema consistent and allow optional similarity later.
     """
     s = get_settings()
-    dim = len(await embed_one(text="dependent-vocab-cache", model=s.embeddings_model))
+    dim = await get_embedding_dim(s.embeddings_model)
     await store.ensure_collection(name=WDK_DEPENDENT_VOCAB_CACHE_V1, vector_size=dim)
 
 
@@ -65,14 +66,14 @@ async def get_dependent_vocab_authoritative_cached(
         response = await client.get_refreshed_dependent_params(
             record_type, search_name, param_name, wdk_context
         )
-    except WDKError as exc:
+    except WDKError:
         if site_id != "veupathdb":
             portal_client = get_wdk_client("veupathdb")
             response = await portal_client.get_refreshed_dependent_params(
                 record_type, search_name, param_name, wdk_context
             )
         else:
-            raise exc
+            raise
 
     payload: JSONObject = {
         "siteId": site_id,

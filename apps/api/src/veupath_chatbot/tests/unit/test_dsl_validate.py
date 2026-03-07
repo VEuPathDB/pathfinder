@@ -1,9 +1,10 @@
 """Tests for strategy DSL validation."""
 
 from veupath_chatbot.domain.strategy.ast import PlanStepNode, StrategyAST
-from veupath_chatbot.domain.strategy.ops import CombineOp
+from veupath_chatbot.domain.strategy.ops import ColocationParams, CombineOp
 from veupath_chatbot.domain.strategy.validate import (
     StrategyValidator,
+    ValidationResult,
     validate_strategy,
 )
 
@@ -94,3 +95,168 @@ class TestStrategyValidator:
         result = validator.validate(strategy)
         assert not result.valid
         assert any(e.code == "UNKNOWN_SEARCH" for e in result.errors)
+
+    def test_validate_combine_missing_operator(self) -> None:
+        left = PlanStepNode(search_name="S1", parameters={})
+        right = PlanStepNode(search_name="S2", parameters={})
+        combine = PlanStepNode(
+            search_name="bool",
+            primary_input=left,
+            secondary_input=right,
+            operator=None,
+        )
+        strategy = StrategyAST(record_type="gene", root=combine)
+        result = validate_strategy(strategy)
+        assert not result.valid
+        assert any(e.code == "MISSING_OPERATOR" for e in result.errors)
+
+    def test_validate_colocate_missing_params(self) -> None:
+        left = PlanStepNode(search_name="S1", parameters={})
+        right = PlanStepNode(search_name="S2", parameters={})
+        combine = PlanStepNode(
+            search_name="bool",
+            primary_input=left,
+            secondary_input=right,
+            operator=CombineOp.COLOCATE,
+            colocation_params=None,
+        )
+        strategy = StrategyAST(record_type="gene", root=combine)
+        result = validate_strategy(strategy)
+        assert not result.valid
+        assert any(e.code == "MISSING_COLOCATION_PARAMS" for e in result.errors)
+
+    def test_validate_colocate_invalid_params(self) -> None:
+        left = PlanStepNode(search_name="S1", parameters={})
+        right = PlanStepNode(search_name="S2", parameters={})
+        combine = PlanStepNode(
+            search_name="bool",
+            primary_input=left,
+            secondary_input=right,
+            operator=CombineOp.COLOCATE,
+            colocation_params=ColocationParams(upstream=-1, downstream=0),
+        )
+        strategy = StrategyAST(record_type="gene", root=combine)
+        result = validate_strategy(strategy)
+        assert not result.valid
+        assert any(e.code == "INVALID_COLOCATION_PARAMS" for e in result.errors)
+
+    def test_validate_colocate_valid(self) -> None:
+        left = PlanStepNode(search_name="S1", parameters={})
+        right = PlanStepNode(search_name="S2", parameters={})
+        combine = PlanStepNode(
+            search_name="bool",
+            primary_input=left,
+            secondary_input=right,
+            operator=CombineOp.COLOCATE,
+            colocation_params=ColocationParams(
+                upstream=100, downstream=200, strand="same"
+            ),
+        )
+        strategy = StrategyAST(record_type="gene", root=combine)
+        result = validate_strategy(strategy)
+        assert result.valid
+
+    def test_validate_empty_strategy(self) -> None:
+        strategy = StrategyAST(record_type="gene", root=None)
+        result = validate_strategy(strategy)
+        assert not result.valid
+        assert any(e.code == "EMPTY_STRATEGY" for e in result.errors)
+
+    def test_recursive_validation_of_children(self) -> None:
+        """Child nodes with missing searchName should be flagged."""
+        left = PlanStepNode(search_name="", parameters={})
+        right = PlanStepNode(search_name="S2", parameters={})
+        combine = PlanStepNode(
+            search_name="bool",
+            primary_input=left,
+            secondary_input=right,
+            operator=CombineOp.INTERSECT,
+        )
+        strategy = StrategyAST(record_type="gene", root=combine)
+        result = validate_strategy(strategy)
+        assert not result.valid
+        assert any(
+            e.code == "MISSING_SEARCH_NAME" and "primaryInput" in e.path
+            for e in result.errors
+        )
+
+    def test_recursive_validation_of_secondary_child(self) -> None:
+        left = PlanStepNode(search_name="S1", parameters={})
+        right = PlanStepNode(search_name="", parameters={})
+        combine = PlanStepNode(
+            search_name="bool",
+            primary_input=left,
+            secondary_input=right,
+            operator=CombineOp.INTERSECT,
+        )
+        strategy = StrategyAST(record_type="gene", root=combine)
+        result = validate_strategy(strategy)
+        assert not result.valid
+        assert any(
+            e.code == "MISSING_SEARCH_NAME" and "secondaryInput" in e.path
+            for e in result.errors
+        )
+
+    def test_unknown_search_in_child(self) -> None:
+        """Available searches should be checked recursively in children."""
+        validator = StrategyValidator(
+            available_searches={"gene": ["S1"]},
+        )
+        left = PlanStepNode(search_name="S1", parameters={})
+        right = PlanStepNode(search_name="UnknownSearch", parameters={})
+        combine = PlanStepNode(
+            search_name="bool",
+            primary_input=left,
+            secondary_input=right,
+            operator=CombineOp.INTERSECT,
+        )
+        strategy = StrategyAST(record_type="gene", root=combine)
+        result = validator.validate(strategy)
+        assert not result.valid
+        # "bool" root is also unknown, but secondaryInput child should be flagged
+        assert any(
+            e.code == "UNKNOWN_SEARCH" and "secondaryInput" in e.path
+            for e in result.errors
+        )
+
+    def test_multiple_errors_accumulated(self) -> None:
+        """Multiple errors should all appear."""
+        strategy = StrategyAST(record_type="", root=None)
+        result = validate_strategy(strategy)
+        assert not result.valid
+        codes = {e.code for e in result.errors}
+        assert "MISSING_RECORD_TYPE" in codes
+        assert "EMPTY_STRATEGY" in codes
+
+    def test_colocate_both_negative_distances(self) -> None:
+        left = PlanStepNode(search_name="S1", parameters={})
+        right = PlanStepNode(search_name="S2", parameters={})
+        combine = PlanStepNode(
+            search_name="bool",
+            primary_input=left,
+            secondary_input=right,
+            operator=CombineOp.COLOCATE,
+            colocation_params=ColocationParams(upstream=-1, downstream=-2),
+        )
+        strategy = StrategyAST(record_type="gene", root=combine)
+        result = validate_strategy(strategy)
+        assert not result.valid
+        colocation_errors = [
+            e for e in result.errors if e.code == "INVALID_COLOCATION_PARAMS"
+        ]
+        assert len(colocation_errors) == 2
+
+
+class TestValidationResult:
+    def test_success(self) -> None:
+        result = ValidationResult.success()
+        assert result.valid is True
+        assert result.errors == []
+
+    def test_failure(self) -> None:
+        from veupath_chatbot.domain.strategy.validate import ValidationError
+
+        err = ValidationError(path="root", message="bad", code="BAD")
+        result = ValidationResult.failure([err])
+        assert result.valid is False
+        assert len(result.errors) == 1

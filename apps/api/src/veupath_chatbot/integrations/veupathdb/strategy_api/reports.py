@@ -4,13 +4,11 @@ Provides :class:`ReportsMixin` with methods to run reports, fetch answers,
 manage filters, and execute step analyses.
 """
 
-from __future__ import annotations
-
 import asyncio
 from typing import cast
 
 from veupath_chatbot.integrations.veupathdb.strategy_api.base import StrategyAPIBase
-from veupath_chatbot.platform.errors import InternalError
+from veupath_chatbot.platform.errors import InternalError, WDKError
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
 
@@ -99,15 +97,13 @@ class ReportsMixin(StrategyAPIBase):
         # will run analyses.  A zero-record standard report forces WDK to
         # compute and cache the answer for the step (and all sub-steps).
         logger.info("Warming up step answer", step_id=step_id)
-        warmup = await self.client.post(
-            f"/users/{self.user_id}/steps/{step_id}/reports/standard",
-            json={"reportConfig": {"pagination": {"offset": 0, "numRecords": 0}}},
+        warmup = await self._standard_report(
+            step_id, {"pagination": {"offset": 0, "numRecords": 0}}
         )
         warmup_count = None
-        if isinstance(warmup, dict):
-            meta = warmup.get("meta")
-            if isinstance(meta, dict):
-                warmup_count = meta.get("totalCount")
+        meta = warmup.get("meta")
+        if isinstance(meta, dict):
+            warmup_count = meta.get("totalCount")
         logger.info("Step answer warmed up", step_id=step_id, total_count=warmup_count)
 
         # Phase 1: Create the analysis instance
@@ -262,24 +258,15 @@ class ReportsMixin(StrategyAPIBase):
     ) -> JSONObject:
         """Get answer records for a step via the standard report endpoint.
 
+        Convenience wrapper around :meth:`get_step_records`.
+
         :param step_id: Step ID.
         :param attributes: Attributes to include in response.
         :param pagination: Offset and numRecords.
         :returns: Answer data with records.
         """
-        report_config: JSONObject = {}
-        if attributes:
-            report_config["attributes"] = cast(JSONValue, attributes)
-        if pagination:
-            report_config["pagination"] = cast(JSONValue, pagination)
-
-        await self._ensure_session()
-        return cast(
-            JSONObject,
-            await self.client.post(
-                f"/users/{self.user_id}/steps/{step_id}/reports/standard",
-                json={"reportConfig": report_config},
-            ),
+        return await self.get_step_records(
+            step_id, attributes=attributes, pagination=pagination
         )
 
     async def get_step_records(
@@ -310,13 +297,7 @@ class ReportsMixin(StrategyAPIBase):
             report_config["sorting"] = cast(JSONValue, sorting)
 
         await self._ensure_session()
-        return cast(
-            JSONObject,
-            await self.client.post(
-                f"/users/{self.user_id}/steps/{step_id}/reports/standard",
-                json={"reportConfig": report_config},
-            ),
-        )
+        return await self._standard_report(step_id, report_config)
 
     async def get_record_type_info(self, record_type: str) -> JSONObject:
         """Get expanded record type info including attributes and tables.
@@ -385,8 +366,6 @@ class ReportsMixin(StrategyAPIBase):
         :param column_name: Attribute/column name.
         :returns: ``{histogram: [...], statistics: {...}}``
         """
-        from veupath_chatbot.platform.errors import WDKError
-
         await self._ensure_session()
         try:
             result = await self.client.post(
@@ -410,16 +389,9 @@ class ReportsMixin(StrategyAPIBase):
         (``JsonKeys.TOTAL_COUNT``).
         """
         await self._ensure_session()
-        answer = await self.client.post(
-            f"/users/{self.user_id}/steps/{step_id}/reports/standard",
-            json={
-                "reportConfig": {"pagination": {"offset": 0, "numRecords": 0}},
-            },
+        answer = await self._standard_report(
+            step_id, {"pagination": {"offset": 0, "numRecords": 0}}
         )
-        if not isinstance(answer, dict):
-            raise ValueError(
-                f"Step count: expected dict response, got {type(answer).__name__}"
-            )
         meta_raw = answer.get("meta")
         if not isinstance(meta_raw, dict):
             raise ValueError("Step count: response missing 'meta' dict")

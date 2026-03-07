@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
 
 from qdrant_client import AsyncQdrantClient
 from veupath_chatbot.integrations.embeddings.openai_embeddings import OpenAIEmbeddings
@@ -11,6 +10,7 @@ from veupath_chatbot.integrations.vectorstore.collections import (
     WDK_SEARCHES_V1,
 )
 from veupath_chatbot.integrations.vectorstore.ingest.utils import (
+    embed_and_upsert,
     existing_point_ids,
     extract_search_name,
 )
@@ -92,24 +92,25 @@ async def _upsert_docs_batch(
 ) -> None:
     if not docs:
         return
+    ids: list[object] = []
     texts: list[str] = []
-    valid_docs: list[JSONObject] = []
+    payloads: list[JSONObject] = []
     for d in docs:
         if isinstance(d, dict):
             text_value = d.get("text")
             if isinstance(text_value, str):
+                ids.append(d.get("id"))
                 texts.append(text_value)
-                valid_docs.append(d)
-    vectors = await embedder.embed_texts(texts)
-    await store.upsert(
+                payloads.append(
+                    d.get("payload") if isinstance(d.get("payload"), dict) else {}
+                )
+    await embed_and_upsert(
+        store=store,
+        embedder=embedder,
         collection=collection,
-        points=[
-            cast(
-                Any,
-                {"id": d.get("id"), "vector": v, "payload": d.get("payload", {})},
-            )
-            for d, v in zip(valid_docs, vectors, strict=True)
-        ],
+        ids=ids,
+        texts=texts,
+        payloads=payloads,
     )
 
 
@@ -139,6 +140,11 @@ async def run_search_indexing_pipeline(
     batch_size: int,
     site_id: str,
 ) -> None:
+    # BUG: failed_details uses `nonlocal` from concurrent workers. In asyncio
+    # this is safe (single-threaded event loop), but the read-modify-write
+    # (`failed_details += 1`) is only safe because `await` doesn't yield mid-
+    # increment. If this code ever moved to threads, this would be a data race.
+    # Not a live bug today, but fragile.
     failed_details: int = 0
     jobs: asyncio.Queue[tuple[str, JSONObject] | None] = asyncio.Queue()
     docs: asyncio.Queue[JSONObject | None] = asyncio.Queue()

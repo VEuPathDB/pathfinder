@@ -3,25 +3,21 @@
 from __future__ import annotations
 
 import re
-from typing import cast
 
 import httpx
 
-from veupath_chatbot.domain.research.citations import (
-    Citation,
-    _new_citation_id,
-    _now_iso,
-    ensure_unique_citation_tags,
+from veupath_chatbot.platform.types import JSONArray, JSONObject
+from veupath_chatbot.services.research.clients._base import (
+    API_USER_AGENT,
+    BaseClient,
+    build_response,
+    make_citation,
 )
-from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
 from veupath_chatbot.services.research.utils import strip_tags, truncate_text
 
 
-class ArxivClient:
+class ArxivClient(BaseClient):
     """Client for arXiv API."""
-
-    def __init__(self, *, timeout_seconds: float = 15.0) -> None:
-        self._timeout = timeout_seconds
 
     async def search(
         self, query: str, *, limit: int, abstract_max_chars: int
@@ -33,10 +29,9 @@ class ArxivClient:
             "start": "0",
             "max_results": str(limit),
         }
-        headers = {
-            "User-Agent": "pathfinder-planner/1.0 (+https://pathfinder.veupathdb.org)"
-        }
-        async with httpx.AsyncClient(timeout=self._timeout, headers=headers) as client:
+        async with httpx.AsyncClient(
+            timeout=self._timeout, headers={"User-Agent": API_USER_AGENT}
+        ) as client:
             resp = await client.get(url, params=params, follow_redirects=True)
             resp.raise_for_status()
             xml = resp.text or ""
@@ -76,19 +71,14 @@ class ArxivClient:
                 }
             )
             citations.append(
-                Citation(
-                    id=_new_citation_id("arxiv"),
+                make_citation(
                     source="arxiv",
+                    id_prefix="arxiv",
                     title=title or (url_item or "arXiv result"),
                     url=url_item,
                     snippet=abstract,
-                    accessed_at=_now_iso(),
-                ).to_dict()
+                )
             )
-        ensure_unique_citation_tags(citations)
-        return {
-            "query": query,
-            "source": "arxiv",
-            "results": results,
-            "citations": cast(JSONValue, citations),
-        }
+        return build_response(
+            query=query, source="arxiv", results=results, citations=citations
+        )

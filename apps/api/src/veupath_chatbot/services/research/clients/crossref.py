@@ -6,20 +6,16 @@ from typing import cast
 
 import httpx
 
-from veupath_chatbot.domain.research.citations import (
-    Citation,
-    _new_citation_id,
-    _now_iso,
-    ensure_unique_citation_tags,
-)
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.services.research.clients._base import (
+    BaseClient,
+    build_response,
+    make_citation,
+)
 
 
-class CrossrefClient:
+class CrossrefClient(BaseClient):
     """Client for Crossref API."""
-
-    def __init__(self, *, timeout_seconds: float = 15.0) -> None:
-        self._timeout = timeout_seconds
 
     async def search(
         self, query: str, *, limit: int, abstract_max_chars: int
@@ -96,22 +92,17 @@ class CrossrefClient:
                 }
             )
             citations.append(
-                Citation(
-                    id=_new_citation_id("crossref"),
+                make_citation(
                     source="crossref",
+                    id_prefix="crossref",
                     title=title or (url_item or "Crossref result"),
                     url=url_item or (f"https://doi.org/{doi}" if doi else None),
                     authors=authors,
                     year=year_i,
                     doi=doi,
                     snippet=journal,
-                    accessed_at=_now_iso(),
-                ).to_dict()
+                )
             )
-        ensure_unique_citation_tags(citations)
-        return {
-            "query": query,
-            "source": "crossref",
-            "results": results,
-            "citations": cast(JSONValue, citations),
-        }
+        return build_response(
+            query=query, source="crossref", results=results, citations=citations
+        )

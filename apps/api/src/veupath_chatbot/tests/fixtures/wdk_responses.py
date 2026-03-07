@@ -36,40 +36,61 @@ def user_current_response(user_id: int = 12345) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# /record-types
+# /record-types  (non-expanded: plain strings; expanded: objects with urlSegment)
 # ---------------------------------------------------------------------------
 def record_types_response() -> list:
-    """GET /record-types -- list of available record types."""
+    """GET /record-types -- plain string list of available record types.
+
+    The real WDK endpoint returns a flat list of strings when called
+    without ``?format=expanded``.  With ``?format=expanded`` it returns
+    objects with ``urlSegment``, ``fullName``, ``displayName``, etc.
+    """
+    return [
+        "transcript",
+        "gene",
+        "organism",
+        "popsetSequence",
+        "sample",
+        "genomic-sequence",
+    ]
+
+
+def record_types_expanded_response() -> list:
+    """GET /record-types?format=expanded -- objects with full metadata."""
     return [
         {
-            "urlSegment": "gene",
-            "name": "GeneRecordClasses.GeneRecordClass",
-            "displayName": "Genes",
+            "urlSegment": "transcript",
+            "fullName": "TranscriptRecordClasses.TranscriptRecordClass",
+            "displayName": "Gene",
             "displayNamePlural": "Genes",
             "shortDisplayName": "Gene",
             "shortDisplayNamePlural": "Genes",
-            "nativeDisplayName": "gene",
-            "nativeDisplayNamePlural": "genes",
-            "nativeShortDisplayName": "gene",
-            "nativeShortDisplayNamePlural": "genes",
-            "iconName": "gene",
-            "description": "A region of the genome encoding a gene product",
+            "nativeDisplayName": "Transcript",
+            "nativeDisplayNamePlural": "Transcripts",
+            "nativeShortDisplayName": "Transcript",
+            "nativeShortDisplayNamePlural": "Transcripts",
+            "description": "",
             "hasAllRecordsQuery": True,
+            "recordIdAttributeName": "primary_key",
+            "primaryKeyColumnRefs": ["gene_source_id", "source_id", "project_id"],
+            "useBasket": True,
         },
         {
-            "urlSegment": "transcript",
-            "name": "TranscriptRecordClasses.TranscriptRecordClass",
-            "displayName": "Transcripts",
-            "displayNamePlural": "Transcripts",
-            "shortDisplayName": "Transcript",
-            "shortDisplayNamePlural": "Transcripts",
-            "nativeDisplayName": "transcript",
-            "nativeDisplayNamePlural": "transcripts",
-            "nativeShortDisplayName": "transcript",
-            "nativeShortDisplayNamePlural": "transcripts",
-            "iconName": "transcript",
-            "description": "An RNA product of a gene region",
+            "urlSegment": "gene",
+            "fullName": "GeneRecordClasses.GeneRecordClass",
+            "displayName": "Gene",
+            "displayNamePlural": "Genes",
+            "shortDisplayName": "Gene",
+            "shortDisplayNamePlural": "Genes",
+            "nativeDisplayName": "Gene",
+            "nativeDisplayNamePlural": "Genes",
+            "nativeShortDisplayName": "Gene",
+            "nativeShortDisplayNamePlural": "Genes",
+            "description": "",
             "hasAllRecordsQuery": True,
+            "recordIdAttributeName": "source_id",
+            "primaryKeyColumnRefs": ["source_id", "project_id"],
+            "useBasket": True,
         },
     ]
 
@@ -78,43 +99,118 @@ def record_types_response() -> list:
 # /record-types/{recordType}/searches
 # ---------------------------------------------------------------------------
 def searches_response() -> list:
-    """GET /record-types/gene/searches -- list of search questions."""
+    """GET /record-types/transcript/searches -- list of search questions.
+
+    Real WDK search list items have these keys (confirmed via live CURL):
+      urlSegment, fullName, queryName, displayName, shortDisplayName,
+      outputRecordClassName, paramNames, isAnalyzable, isCacheable,
+      defaultAttributes, defaultSorting, defaultSummaryView,
+      dynamicAttributes, filters, groups, properties, summaryViewPlugins,
+      noSummaryOnSingleRecord
+
+    Notably ABSENT from the list endpoint: ``name``, ``isInternal``, ``description``.
+    The ``description`` field appears on *some* searches (transforms) but not others.
+    The ``isInternal`` field is NEVER present in the list -- use ``fullName``
+    starting with ``"InternalQuestions."`` as the indicator.
+    Boolean search ``urlSegment`` uses underscores, not dots.
+    """
     return [
         {
             "urlSegment": "GenesByTaxon",
-            "name": "GenesByTaxon",
-            "displayName": "Taxon",
-            "shortDisplayName": "Taxon",
-            "description": "Find genes by organism/taxon",
-            "isInternal": False,
-            "outputRecordClassName": "GeneRecordClasses.GeneRecordClass",
+            "fullName": "GeneQuestions.GenesByTaxon",
+            "queryName": "GenesByTaxon",
+            "displayName": "Organism",
+            "shortDisplayName": "Organism",
+            "outputRecordClassName": "transcript",
+            "paramNames": ["organism"],
+            "isAnalyzable": True,
+            "isCacheable": True,
+            "noSummaryOnSingleRecord": False,
+            "defaultSummaryView": "_default",
+            "defaultAttributes": ["primary_key", "organism", "gene_product"],
+            "defaultSorting": [
+                {"attributeName": "organism", "direction": "ASC"},
+            ],
+            "dynamicAttributes": [],
+            "filters": [],
+            "groups": [],
+            "properties": {},
+            "summaryViewPlugins": [],
         },
         {
             "urlSegment": "GenesByTextSearch",
-            "name": "GenesByTextSearch",
+            "fullName": "GeneQuestions.GenesByTextSearch",
+            "queryName": "GenesByTextSearch",
             "displayName": "Text search (genes)",
             "shortDisplayName": "Text",
-            "description": "Find genes matching a text expression",
-            "isInternal": False,
-            "outputRecordClassName": "GeneRecordClasses.GeneRecordClass",
+            "outputRecordClassName": "transcript",
+            "paramNames": [
+                "text_expression",
+                "text_fields",
+                "text_search_organism",
+                "document_type",
+            ],
+            "isAnalyzable": True,
+            "isCacheable": True,
+            "noSummaryOnSingleRecord": False,
+            "defaultSummaryView": "_default",
+            "defaultAttributes": ["primary_key", "gene_product"],
+            "defaultSorting": [],
+            "dynamicAttributes": [],
+            "filters": [],
+            "groups": [],
+            "properties": {},
+            "summaryViewPlugins": [],
         },
         {
-            "urlSegment": "boolean_question_GeneRecordClasses.GeneRecordClass",
-            "name": "boolean_question_GeneRecordClasses.GeneRecordClass",
-            "displayName": "Combine",
-            "shortDisplayName": "Combine",
-            "description": "Boolean combination of gene searches",
-            "isInternal": True,
-            "outputRecordClassName": "GeneRecordClasses.GeneRecordClass",
+            # Boolean search: urlSegment uses underscores (not dots).
+            # fullName starts with "InternalQuestions." indicating internal.
+            "urlSegment": "boolean_question_TranscriptRecordClasses_TranscriptRecordClass",
+            "fullName": "InternalQuestions.boolean_question_TranscriptRecordClasses_TranscriptRecordClass",
+            "queryName": "bq_TranscriptRecordClasses_TranscriptRecordClass",
+            "displayName": "Combine Gene results",
+            "shortDisplayName": "Combine Gene results",
+            "outputRecordClassName": "transcript",
+            "paramNames": [
+                "bq_left_op_TranscriptRecordClasses_TranscriptRecordClass",
+                "bq_right_op_TranscriptRecordClasses_TranscriptRecordClass",
+                "bq_operator",
+            ],
+            "isAnalyzable": True,
+            "isCacheable": True,
+            "noSummaryOnSingleRecord": False,
+            "defaultSummaryView": "_default",
+            "defaultAttributes": [],
+            "defaultSorting": [],
+            "dynamicAttributes": [],
+            "filters": [],
+            "groups": [],
+            "properties": {},
+            "summaryViewPlugins": [],
+            # Boolean searches have these extra fields:
+            "allowedPrimaryInputRecordClassNames": ["transcript"],
+            "allowedSecondaryInputRecordClassNames": ["transcript"],
         },
         {
             "urlSegment": "GenesByOrthologs",
-            "name": "GenesByOrthologs",
+            "fullName": "GeneQuestions.GenesByOrthologs",
+            "queryName": "GenesByOrthologs",
             "displayName": "Orthologs",
             "shortDisplayName": "Orthologs",
             "description": "Find genes by ortholog transform",
-            "isInternal": False,
-            "outputRecordClassName": "GeneRecordClasses.GeneRecordClass",
+            "outputRecordClassName": "transcript",
+            "paramNames": ["inputStepId", "organism", "isSyntenic"],
+            "isAnalyzable": True,
+            "isCacheable": True,
+            "noSummaryOnSingleRecord": False,
+            "defaultSummaryView": "_default",
+            "defaultAttributes": ["primary_key", "gene_product"],
+            "defaultSorting": [],
+            "dynamicAttributes": [],
+            "filters": [],
+            "groups": [],
+            "properties": {},
+            "summaryViewPlugins": [],
         },
     ]
 
@@ -123,8 +219,23 @@ def searches_response() -> list:
 # /record-types/{recordType}/searches/{searchName}  (with expandParams)
 # ---------------------------------------------------------------------------
 def search_details_response(search_name: str = "GenesByTaxon") -> dict:
-    """GET /record-types/gene/searches/{searchName}?expandParams=true."""
-    if search_name == "boolean_question_GeneRecordClasses.GeneRecordClass":
+    """GET /record-types/transcript/searches/{searchName}?expandParams=true.
+
+    Real WDK response has TWO top-level keys:
+      ``searchData`` -- the full search metadata including expanded parameters
+      ``validation``  -- ``{level, isValid}``
+
+    There is NO top-level ``name``, ``isInternal``, or ``outputRecordClassName``.
+    Those fields live inside ``searchData``.
+
+    Inside each parameter, default values come from ``initialDisplayValue``
+    (not a ``defaultParamValues`` dict on searchData).
+
+    Vocabulary entries are always 3-element arrays ``[term, display, parent]``
+    (parent is usually ``null``).
+    """
+    boolean_name = "boolean_question_TranscriptRecordClasses_TranscriptRecordClass"
+    if search_name == boolean_name:
         return _boolean_search_details()
     if search_name == "GenesByTextSearch":
         return _text_search_details()
@@ -136,94 +247,141 @@ def search_details_response(search_name: str = "GenesByTaxon") -> dict:
 
 def _taxon_search_details() -> dict:
     return {
-        "urlSegment": "GenesByTaxon",
-        "name": "GenesByTaxon",
-        "displayName": "Taxon",
-        "description": "Find genes by organism/taxon",
-        "isInternal": False,
-        "outputRecordClassName": "GeneRecordClasses.GeneRecordClass",
         "searchData": {
+            "urlSegment": "GenesByTaxon",
+            "fullName": "GeneQuestions.GenesByTaxon",
+            "queryName": "GenesByTaxon",
+            "displayName": "Organism",
+            "shortDisplayName": "Organism",
+            "summary": "Find all genes from one or more species/organism.",
+            "description": "Find all genes from one or more species/organism.",
+            "outputRecordClassName": "transcript",
+            "isAnalyzable": True,
+            "isCacheable": True,
+            "noSummaryOnSingleRecord": False,
+            "defaultSummaryView": "_default",
+            "defaultAttributes": ["primary_key", "organism", "gene_product"],
+            "defaultSorting": [
+                {"attributeName": "organism", "direction": "ASC"},
+            ],
             "paramNames": ["organism"],
-            "defaultParamValues": {
-                "organism": '["Plasmodium falciparum 3D7"]',
-            },
             "parameters": [
                 {
                     "name": "organism",
                     "displayName": "Organism",
                     "type": "multi-pick-vocabulary",
+                    "displayType": "treeBox",
                     "allowEmptyValue": False,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": '["Plasmodium falciparum 3D7"]',
                     "minSelectedCount": 1,
-                    "maxSelectedCount": None,
+                    "maxSelectedCount": -1,
                     "countOnlyLeaves": True,
+                    "depthExpanded": 0,
+                    "dependentParams": [],
+                    "group": "empty",
+                    "properties": {},
+                    # Tree-shaped vocabulary for treeBox display
                     "vocabulary": {
                         "data": {
-                            "display": "Plasmodium",
-                            "term": "Plasmodium",
+                            "display": "@@fake@@",
+                            "term": "@@fake@@",
                         },
                         "children": [
                             {
                                 "data": {
-                                    "display": "Plasmodium falciparum 3D7",
-                                    "term": "Plasmodium falciparum 3D7",
+                                    "display": "Plasmodiidae",
+                                    "term": "Plasmodiidae",
                                 },
-                                "children": [],
-                            },
-                            {
-                                "data": {
-                                    "display": "Plasmodium vivax P01",
-                                    "term": "Plasmodium vivax P01",
-                                },
-                                "children": [],
+                                "children": [
+                                    {
+                                        "data": {
+                                            "display": "Plasmodium falciparum 3D7",
+                                            "term": "Plasmodium falciparum 3D7",
+                                        },
+                                        "children": [],
+                                    },
+                                    {
+                                        "data": {
+                                            "display": "Plasmodium vivax P01",
+                                            "term": "Plasmodium vivax P01",
+                                        },
+                                        "children": [],
+                                    },
+                                ],
                             },
                         ],
                     },
                 },
             ],
+            "dynamicAttributes": [],
+            "filters": [],
+            "groups": [],
+            "properties": {},
+            "summaryViewPlugins": [],
+        },
+        "validation": {
+            "level": "DISPLAYABLE",
+            "isValid": True,
         },
     }
 
 
 def _text_search_details() -> dict:
     return {
-        "urlSegment": "GenesByTextSearch",
-        "name": "GenesByTextSearch",
-        "displayName": "Text search (genes)",
-        "description": "Find genes matching a text expression",
-        "isInternal": False,
-        "outputRecordClassName": "GeneRecordClasses.GeneRecordClass",
         "searchData": {
+            "urlSegment": "GenesByTextSearch",
+            "fullName": "GeneQuestions.GenesByTextSearch",
+            "queryName": "GenesByTextSearch",
+            "displayName": "Text search (genes)",
+            "shortDisplayName": "Text",
+            "summary": "Find genes matching a text expression",
+            "description": "Find genes matching a text expression",
+            "outputRecordClassName": "transcript",
+            "isAnalyzable": True,
+            "isCacheable": True,
+            "noSummaryOnSingleRecord": False,
+            "defaultSummaryView": "_default",
+            "defaultAttributes": ["primary_key", "gene_product"],
+            "defaultSorting": [],
             "paramNames": [
                 "text_expression",
                 "text_fields",
                 "text_search_organism",
                 "document_type",
             ],
-            "defaultParamValues": {
-                "text_expression": "",
-                "text_fields": '["primary_key","Alias"]',
-                "text_search_organism": '["Plasmodium falciparum 3D7"]',
-                "document_type": "gene",
-            },
             "parameters": [
                 {
                     "name": "text_expression",
                     "displayName": "Text expression",
                     "type": "string",
                     "allowEmptyValue": False,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": "",
+                    "dependentParams": [],
+                    "properties": {},
                 },
                 {
                     "name": "text_fields",
                     "displayName": "Fields to search",
                     "type": "multi-pick-vocabulary",
                     "allowEmptyValue": False,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": '["primary_key","Alias"]',
                     "minSelectedCount": 1,
+                    "maxSelectedCount": -1,
+                    "dependentParams": [],
+                    "properties": {},
+                    # Flat list vocabulary: [term, display, parent]
                     "vocabulary": [
-                        ["primary_key", "Gene ID"],
-                        ["Alias", "Gene alias"],
-                        ["product", "Product description"],
-                        ["GOTerms", "GO terms"],
-                        ["Notes", "Notes"],
+                        ["primary_key", "Gene ID", None],
+                        ["Alias", "Gene alias", None],
+                        ["product", "Product description", None],
+                        ["GOTerms", "GO terms", None],
+                        ["Notes", "Notes", None],
                     ],
                 },
                 {
@@ -231,11 +389,18 @@ def _text_search_details() -> dict:
                     "displayName": "Organism",
                     "type": "multi-pick-vocabulary",
                     "allowEmptyValue": False,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": '["Plasmodium falciparum 3D7"]',
                     "minSelectedCount": 1,
+                    "maxSelectedCount": -1,
+                    "dependentParams": [],
+                    "properties": {},
                     "vocabulary": [
                         [
                             "Plasmodium falciparum 3D7",
                             "Plasmodium falciparum 3D7",
+                            None,
                         ],
                     ],
                 },
@@ -244,104 +409,165 @@ def _text_search_details() -> dict:
                     "displayName": "Document type",
                     "type": "single-pick-vocabulary",
                     "allowEmptyValue": False,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": "gene",
+                    "minSelectedCount": 1,
+                    "maxSelectedCount": 1,
+                    "dependentParams": [],
+                    "properties": {},
                     "vocabulary": [
-                        ["gene", "Gene"],
-                        ["est", "EST"],
+                        ["gene", "Gene", None],
+                        ["est", "EST", None],
                     ],
                 },
             ],
+            "dynamicAttributes": [],
+            "filters": [],
+            "groups": [],
+            "properties": {},
+            "summaryViewPlugins": [],
+        },
+        "validation": {
+            "level": "DISPLAYABLE",
+            "isValid": True,
         },
     }
 
 
 def _boolean_search_details() -> dict:
-    suffix = "GeneRecordClasses.GeneRecordClass"
+    # Real PlasmoDB uses underscores in urlSegment and param names (not dots).
+    suffix = "TranscriptRecordClasses_TranscriptRecordClass"
     return {
-        "urlSegment": f"boolean_question_{suffix}",
-        "name": f"boolean_question_{suffix}",
-        "displayName": "Combine",
-        "description": "Boolean combination of gene searches",
-        "isInternal": True,
-        "outputRecordClassName": suffix,
         "searchData": {
+            "urlSegment": f"boolean_question_{suffix}",
+            "fullName": f"InternalQuestions.boolean_question_{suffix}",
+            "queryName": f"bq_{suffix}",
+            "displayName": "Combine Gene results",
+            "shortDisplayName": "Combine Gene results",
+            "outputRecordClassName": "transcript",
+            "isAnalyzable": True,
+            "isCacheable": True,
+            "noSummaryOnSingleRecord": False,
+            "defaultSummaryView": "_default",
+            "defaultAttributes": [],
+            "defaultSorting": [],
             "paramNames": [
-                f"bq_left_op__{suffix}",
-                f"bq_right_op__{suffix}",
+                f"bq_left_op_{suffix}",
+                f"bq_right_op_{suffix}",
                 "bq_operator",
             ],
-            "defaultParamValues": {
-                f"bq_left_op__{suffix}": "",
-                f"bq_right_op__{suffix}": "",
-                "bq_operator": "INTERSECT",
-            },
             "parameters": [
                 {
-                    "name": f"bq_left_op__{suffix}",
+                    "name": f"bq_left_op_{suffix}",
                     "displayName": "Left operand",
                     "type": "input-step",
                     "allowEmptyValue": True,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": "",
+                    "dependentParams": [],
+                    "properties": {},
                 },
                 {
-                    "name": f"bq_right_op__{suffix}",
+                    "name": f"bq_right_op_{suffix}",
                     "displayName": "Right operand",
                     "type": "input-step",
                     "allowEmptyValue": True,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": "",
+                    "dependentParams": [],
+                    "properties": {},
                 },
                 {
                     "name": "bq_operator",
                     "displayName": "Operator",
                     "type": "single-pick-vocabulary",
                     "allowEmptyValue": False,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": "INTERSECT",
+                    "minSelectedCount": 1,
+                    "maxSelectedCount": 1,
+                    "dependentParams": [],
+                    "properties": {},
+                    # Real WDK vocab: [term, display, parent]
                     "vocabulary": [
-                        ["INTERSECT", "Intersect"],
-                        ["UNION", "Union"],
-                        ["MINUS", "Minus"],
-                        ["RMINUS", "Right minus"],
-                        ["LONLY", "Left only"],
-                        ["RONLY", "Right only"],
+                        ["UNION", "UNION", None],
+                        ["INTERSECT", "INTERSECT", None],
+                        ["MINUS", "LEFT_MINUS", None],
+                        ["RMINUS", "RIGHT_MINUS", None],
+                        ["LONLY", "LEFT_ONLY", None],
+                        ["RONLY", "RIGHT_ONLY", None],
                     ],
                 },
             ],
+            "dynamicAttributes": [],
+            "filters": [],
+            "groups": [],
+            "properties": {},
+            "summaryViewPlugins": [],
+        },
+        "validation": {
+            "level": "DISPLAYABLE",
+            "isValid": True,
         },
     }
 
 
 def _orthologs_search_details() -> dict:
     return {
-        "urlSegment": "GenesByOrthologs",
-        "name": "GenesByOrthologs",
-        "displayName": "Orthologs",
-        "description": "Find genes by ortholog transform",
-        "isInternal": False,
-        "outputRecordClassName": "GeneRecordClasses.GeneRecordClass",
         "searchData": {
+            "urlSegment": "GenesByOrthologs",
+            "fullName": "GeneQuestions.GenesByOrthologs",
+            "queryName": "GenesByOrthologs",
+            "displayName": "Orthologs",
+            "shortDisplayName": "Orthologs",
+            "summary": "Find genes by ortholog transform",
+            "description": "Find genes by ortholog transform",
+            "outputRecordClassName": "transcript",
+            "isAnalyzable": True,
+            "isCacheable": True,
+            "noSummaryOnSingleRecord": False,
+            "defaultSummaryView": "_default",
+            "defaultAttributes": ["primary_key", "gene_product"],
+            "defaultSorting": [],
             "paramNames": ["inputStepId", "organism", "isSyntenic"],
-            "defaultParamValues": {
-                "inputStepId": "",
-                "organism": '["Plasmodium falciparum 3D7"]',
-                "isSyntenic": "no",
-            },
             "parameters": [
                 {
                     "name": "inputStepId",
                     "displayName": "Input step",
                     "type": "input-step",
                     "allowEmptyValue": True,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": "",
+                    "dependentParams": [],
+                    "properties": {},
                 },
                 {
                     "name": "organism",
                     "displayName": "Organism",
                     "type": "multi-pick-vocabulary",
                     "allowEmptyValue": False,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": '["Plasmodium falciparum 3D7"]',
                     "minSelectedCount": 1,
+                    "maxSelectedCount": -1,
+                    "dependentParams": [],
+                    "properties": {},
                     "vocabulary": [
                         [
                             "Plasmodium falciparum 3D7",
                             "Plasmodium falciparum 3D7",
+                            None,
                         ],
                         [
                             "Plasmodium vivax P01",
                             "Plasmodium vivax P01",
+                            None,
                         ],
                     ],
                 },
@@ -350,12 +576,28 @@ def _orthologs_search_details() -> dict:
                     "displayName": "Syntenic",
                     "type": "single-pick-vocabulary",
                     "allowEmptyValue": True,
+                    "isVisible": True,
+                    "isReadOnly": False,
+                    "initialDisplayValue": "no",
+                    "minSelectedCount": 1,
+                    "maxSelectedCount": 1,
+                    "dependentParams": [],
+                    "properties": {},
                     "vocabulary": [
-                        ["yes", "yes"],
-                        ["no", "no"],
+                        ["yes", "yes", None],
+                        ["no", "no", None],
                     ],
                 },
             ],
+            "dynamicAttributes": [],
+            "filters": [],
+            "groups": [],
+            "properties": {},
+            "summaryViewPlugins": [],
+        },
+        "validation": {
+            "level": "DISPLAYABLE",
+            "isValid": True,
         },
     }
 
@@ -385,8 +627,20 @@ def strategy_get_response(
 ) -> dict:
     """GET /users/{userId}/strategies/{strategyId} -- full strategy.
 
-    Builds a linear chain strategy by default: step_ids[0] is a leaf,
-    each subsequent step is a combine with its predecessor.
+    Real WDK strategy GET response fields (from WDK source JsonKeys):
+      strategyId, name, description, isSaved, isPublic, isDeleted,
+      isValid, rootStepId, estimatedSize, recordClassName, stepTree,
+      signature, createdTime, lastModifiedTime, author, organization,
+      releaseVersion
+
+    IMPORTANT: The real WDK does NOT include a ``steps`` dict in the
+    strategy response.  Individual step details must be fetched separately
+    via ``GET /users/{userId}/steps/{stepId}``.  Our Pathfinder code uses
+    a separate internal ``steps`` dict, but it is NOT part of the WDK wire
+    format.
+
+    The ``stepTree`` is a recursive structure with ``stepId``,
+    ``primaryInput``, and optionally ``secondaryInput``.
     """
     ids = step_ids or [100, 101, 102]
 
@@ -402,39 +656,6 @@ def strategy_get_response(
 
     step_tree = _build_tree(ids)
 
-    # Build steps map  --  step_id -> step summary
-    steps: dict[str, dict] = {}
-    for i, sid in enumerate(ids):
-        is_combined = i > 0
-        step_entry: dict = {
-            "id": sid,
-            "customName": f"Step {i + 1}",
-            "displayName": f"Step {i + 1}",
-            "isFiltered": False,
-            "estimatedSize": 150 - i * 30,
-            "hasCompleteStepAnalyses": False,
-            "recordClassName": "GeneRecordClasses.GeneRecordClass",
-        }
-        if is_combined:
-            step_entry["searchName"] = (
-                "boolean_question_GeneRecordClasses.GeneRecordClass"
-            )
-            step_entry["searchConfig"] = {
-                "parameters": {
-                    "bq_left_op__GeneRecordClasses.GeneRecordClass": "",
-                    "bq_right_op__GeneRecordClasses.GeneRecordClass": "",
-                    "bq_operator": "INTERSECT",
-                },
-            }
-        else:
-            step_entry["searchName"] = "GenesByTaxon"
-            step_entry["searchConfig"] = {
-                "parameters": {
-                    "organism": '["Plasmodium falciparum 3D7"]',
-                },
-            }
-        steps[str(sid)] = step_entry
-
     return {
         "strategyId": strategy_id,
         "name": "Test strategy",
@@ -445,10 +666,47 @@ def strategy_get_response(
         "isValid": True,
         "rootStepId": ids[-1],
         "estimatedSize": 150,
-        "recordClassName": "GeneRecordClasses.GeneRecordClass",
+        "recordClassName": "TranscriptRecordClasses.TranscriptRecordClass",
         "stepTree": step_tree,
-        "steps": steps,
+        "signature": "abc123def456",
+        "createdTime": "2026-03-01T00:00:00Z",
+        "lastModifiedTime": "2026-03-06T00:00:00Z",
     }
+
+
+def step_get_response(
+    step_id: int = 100,
+    search_name: str = "GenesByTaxon",
+    estimated_size: int = 150,
+    is_boolean: bool = False,
+) -> dict:
+    """GET /users/{userId}/steps/{stepId} -- individual step details.
+
+    Step details are fetched separately from the strategy.
+    """
+    suffix = "TranscriptRecordClasses_TranscriptRecordClass"
+    step: dict = {
+        "id": step_id,
+        "customName": f"Step for {search_name}",
+        "displayName": f"Step for {search_name}",
+        "isFiltered": False,
+        "estimatedSize": estimated_size,
+        "hasCompleteStepAnalyses": False,
+        "recordClassName": "TranscriptRecordClasses.TranscriptRecordClass",
+        "searchName": search_name,
+        "searchConfig": {
+            "parameters": (
+                {
+                    f"bq_left_op_{suffix}": "",
+                    f"bq_right_op_{suffix}": "",
+                    "bq_operator": "INTERSECT",
+                }
+                if is_boolean
+                else {"organism": '["Plasmodium falciparum 3D7"]'}
+            ),
+        },
+    }
+    return step
 
 
 # ---------------------------------------------------------------------------
@@ -458,7 +716,12 @@ def standard_report_response(
     gene_ids: list[str] | None = None,
     total_count: int | None = None,
 ) -> dict:
-    """POST .../reports/standard -- paginated records response."""
+    """POST .../reports/standard -- paginated records response.
+
+    Real WDK record ``id`` field contains all primary key parts.
+    For the transcript record type this is a 3-element list:
+    ``[gene_source_id, source_id, project_id]``.
+    """
     ids = gene_ids if gene_ids is not None else DEFAULT_GENE_IDS
     count = total_count if total_count is not None else len(ids)
 
@@ -468,16 +731,18 @@ def standard_report_response(
             {
                 "id": [
                     {"name": "gene_source_id", "value": gid},
+                    {"name": "source_id", "value": f"{gid}.1"},
+                    {"name": "project_id", "value": "PlasmoDB"},
                 ],
                 "displayName": gid,
-                "recordClassName": "GeneRecordClasses.GeneRecordClass",
+                "recordClassName": "TranscriptRecordClasses.TranscriptRecordClass",
                 "attributes": {
                     "primary_key": gid,
                     "gene_source_id": gid,
                     "gene_name": None,
                     "gene_product": f"hypothetical protein, conserved ({gid})",
                     "gene_type": "protein_coding",
-                    "organism": "Plasmodium falciparum 3D7",
+                    "organism": "<i>Plasmodium falciparum 3D7</i>",
                     "gene_location_text": "Pf3D7_01_v3: 29,510 - 37,126 (+)",
                     "gene_previous_ids": "",
                 },

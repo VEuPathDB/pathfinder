@@ -178,9 +178,9 @@ class Settings(BaseSettings):
 
     def model_post_init(self, __context: object) -> None:
         """Validate settings after initialization."""
-        if self.is_production and "dev-only" in self.api_secret_key:
+        if not self.is_development and "dev-only" in self.api_secret_key:
             raise ValueError(
-                "API_SECRET_KEY must be set to a real secret in production. "
+                "API_SECRET_KEY must be set to a real secret in production and staging. "
                 "The default development key is not allowed."
             )
 

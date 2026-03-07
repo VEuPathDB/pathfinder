@@ -14,6 +14,11 @@ from veupath_chatbot.platform.logging import get_logger
 
 logger = get_logger(__name__)
 
+_KNOWN_DIMS: dict[str, int] = {
+    "text-embedding-3-small": 1536,
+    "text-embedding-3-large": 3072,
+}
+
 
 def _known_embedding_dims(model: str) -> int | None:
     """Best-effort embedding dimension lookup for common OpenAI models.
@@ -24,12 +29,25 @@ def _known_embedding_dims(model: str) -> int | None:
     :param model: OpenAI model name (e.g. text-embedding-3-small).
     :returns: Dimension count or None if unknown.
     """
-    m = (model or "").strip()
-    if m == "text-embedding-3-small":
-        return 1536
-    if m == "text-embedding-3-large":
-        return 3072
-    return None
+    return _KNOWN_DIMS.get((model or "").strip())
+
+
+async def get_embedding_dim(model: str) -> int:
+    """Return embedding dimension for *model*, using cache then OpenAI fallback.
+
+    Prefer this over calling ``embed_one()`` just to discover vector size.
+    """
+    dim = _known_embedding_dims(model)
+    if dim is not None:
+        return dim
+
+    from veupath_chatbot.integrations.embeddings.openai_embeddings import embed_one
+
+    vec = await embed_one(text="dimension probe", model=model)
+    dim = len(vec)
+    # Cache for subsequent calls within the same process.
+    _KNOWN_DIMS[(model or "").strip()] = dim
+    return dim
 
 
 async def ensure_rag_collections() -> None:
@@ -46,22 +64,18 @@ async def ensure_rag_collections() -> None:
 
     store = QdrantStore.from_settings()
 
-    dim = _known_embedding_dims(settings.embeddings_model)
-    if dim is None:
-        # Fallback: compute embedding dimension via a real embedding request.
-        # This requires an API key; if absent, we skip with a clear log message.
-        if not settings.openai_api_key:
-            logger.warning(
-                "RAG enabled but cannot infer embedding dimension; "
-                "set OPENAI_API_KEY or use a known embeddings_model.",
-                embeddings_model=settings.embeddings_model,
-            )
-            return
-        from veupath_chatbot.integrations.embeddings.openai_embeddings import embed_one
-
-        dim = len(
-            await embed_one(text="dimension probe", model=settings.embeddings_model)
+    known = _known_embedding_dims(settings.embeddings_model)
+    if known is not None:
+        dim = known
+    elif settings.openai_api_key:
+        dim = await get_embedding_dim(settings.embeddings_model)
+    else:
+        logger.warning(
+            "RAG enabled but cannot infer embedding dimension; "
+            "set OPENAI_API_KEY or use a known embeddings_model.",
+            embeddings_model=settings.embeddings_model,
         )
+        return
 
     # Ensure the main discovery/example collections exist (even if empty).
     #

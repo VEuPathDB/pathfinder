@@ -139,6 +139,9 @@ class ConversationTools:
         graph.current_strategy = None
         graph.history.clear()
         graph.last_step_id = None
+        graph.wdk_strategy_id = None
+        graph.wdk_step_ids.clear()
+        graph.step_counts.clear()
 
         return {
             "ok": True,

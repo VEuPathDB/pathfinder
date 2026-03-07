@@ -6,21 +6,18 @@ from typing import cast
 
 import httpx
 
-from veupath_chatbot.domain.research.citations import (
-    Citation,
-    _new_citation_id,
-    _now_iso,
-    ensure_unique_citation_tags,
-)
 from veupath_chatbot.platform.types import JSONArray, JSONObject, JSONValue
+from veupath_chatbot.services.research.clients._base import (
+    API_USER_AGENT,
+    BaseClient,
+    build_response,
+    make_citation,
+)
 from veupath_chatbot.services.research.utils import truncate_text
 
 
-class OpenAlexClient:
+class OpenAlexClient(BaseClient):
     """Client for OpenAlex API."""
-
-    def __init__(self, *, timeout_seconds: float = 15.0) -> None:
-        self._timeout = timeout_seconds
 
     async def search(
         self, query: str, *, limit: int, abstract_max_chars: int
@@ -28,10 +25,9 @@ class OpenAlexClient:
         """Search OpenAlex."""
         url = "https://api.openalex.org/works"
         params = {"search": query, "per-page": str(limit)}
-        headers = {
-            "User-Agent": "pathfinder-planner/1.0 (+https://pathfinder.veupathdb.org)"
-        }
-        async with httpx.AsyncClient(timeout=self._timeout, headers=headers) as client:
+        async with httpx.AsyncClient(
+            timeout=self._timeout, headers={"User-Agent": API_USER_AGENT}
+        ) as client:
             resp = await client.get(url, params=params, follow_redirects=True)
             resp.raise_for_status()
             payload = resp.json()
@@ -88,12 +84,13 @@ class OpenAlexClient:
                     abstract = " ".join(w for _, w in pairs)
             abstract = truncate_text(abstract, abstract_max_chars)
 
+            result_url = f"https://doi.org/{doi}" if doi else url_item
             results.append(
                 {
                     "title": title,
                     "year": year,
                     "doi": doi,
-                    "url": f"https://doi.org/{doi}" if doi else url_item,
+                    "url": result_url,
                     "authors": cast(JSONValue, authors),
                     "journalTitle": journal,
                     "abstract": abstract,
@@ -101,22 +98,17 @@ class OpenAlexClient:
                 }
             )
             citations.append(
-                Citation(
-                    id=_new_citation_id("openalex"),
+                make_citation(
                     source="openalex",
+                    id_prefix="openalex",
                     title=title or (url_item or "OpenAlex result"),
-                    url=f"https://doi.org/{doi}" if doi else url_item,
+                    url=result_url,
                     authors=authors,
                     year=year,
                     doi=doi,
                     snippet=abstract or journal,
-                    accessed_at=_now_iso(),
-                ).to_dict()
+                )
             )
-        ensure_unique_citation_tags(citations)
-        return {
-            "query": query,
-            "source": "openalex",
-            "results": results,
-            "citations": cast(JSONValue, citations),
-        }
+        return build_response(
+            query=query, source="openalex", results=results, citations=citations
+        )

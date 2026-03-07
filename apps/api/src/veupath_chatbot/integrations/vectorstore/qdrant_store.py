@@ -75,13 +75,20 @@ class QdrantStore:
         )
 
     @asynccontextmanager
-    async def _connect(self) -> AsyncIterator[AsyncQdrantClient]:
+    async def connect(self) -> AsyncIterator[AsyncQdrantClient]:
         """Create and properly close an AsyncQdrantClient."""
         client = self._client()
         try:
             yield client
         finally:
             await client.close()
+
+    async def reset_collections(self, *names: str) -> None:
+        """Delete collections if they exist (used before re-ingestion)."""
+        async with self.connect() as client:
+            for name in names:
+                if await client.collection_exists(collection_name=name):
+                    await client.delete_collection(collection_name=name)
 
     async def ensure_collection(
         self,
@@ -93,7 +100,7 @@ class QdrantStore:
         """Create collection if missing; validate vector size if present."""
         from qdrant_client.models import Distance, VectorParams
 
-        async with self._connect() as client:
+        async with self.connect() as client:
             exists = await client.collection_exists(collection_name=name)
             if not exists:
                 dist = {
@@ -179,11 +186,11 @@ class QdrantStore:
                 )
         if not q_points:
             return
-        async with self._connect() as client:
+        async with self.connect() as client:
             await client.upsert(collection_name=collection, points=q_points)
 
     async def get(self, *, collection: str, point_id: str) -> JSONObject | None:
-        async with self._connect() as client:
+        async with self.connect() as client:
             return await self._get_with_client(client, collection, point_id)
 
     async def _get_with_client(
@@ -359,7 +366,7 @@ class QdrantStore:
                 must_not=must_not_conditions if must_not_conditions else None,
             )
 
-        async with self._connect() as client:
+        async with self.connect() as client:
             # qdrant-client async API uses `query_points` (not `search`) in newer versions.
             try:
                 hits = await client.query_points(

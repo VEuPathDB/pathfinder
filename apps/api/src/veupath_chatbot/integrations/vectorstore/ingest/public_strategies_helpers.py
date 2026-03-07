@@ -88,7 +88,9 @@ def embedding_text_for_example(
 
 
 def simplify_strategy_details(details: JSONObject) -> JSONObject:
-    step_tree = details.get("stepTree") or {}
+    step_tree = (
+        details.get("stepTree") or {}
+    )  # BUG: `or {}` converts absent/None stepTree to {}, producing an empty-but-present simplified node instead of None
     steps = details.get("steps") or {}
 
     def simplify_step_node(node: JSONObject) -> JSONObject:
