@@ -13,12 +13,14 @@ interface CompareModalProps {
 
 export function CompareModal({ open, onClose, setA, setB }: CompareModalProps) {
   const comparison = useMemo(() => {
-    const a = new Set(setA.geneIds);
-    const b = new Set(setB.geneIds);
-    const shared = setA.geneIds.filter((id) => b.has(id));
-    const onlyA = setA.geneIds.filter((id) => !b.has(id));
-    const onlyB = setB.geneIds.filter((id) => !a.has(id));
-    const unionSize = new Set([...setA.geneIds, ...setB.geneIds]).size;
+    const idsA = setA.geneIds ?? [];
+    const idsB = setB.geneIds ?? [];
+    const a = new Set(idsA);
+    const b = new Set(idsB);
+    const shared = idsA.filter((id) => b.has(id));
+    const onlyA = idsA.filter((id) => !b.has(id));
+    const onlyB = idsB.filter((id) => !a.has(id));
+    const unionSize = new Set([...idsA, ...idsB]).size;
     const jaccard = unionSize > 0 ? shared.length / unionSize : 0;
     return { shared, onlyA, onlyB, unionSize, jaccard };
   }, [setA.geneIds, setB.geneIds]);
@@ -35,8 +37,8 @@ export function CompareModal({ open, onClose, setA, setB }: CompareModalProps) {
         {/* Stats */}
         <div className="grid grid-cols-5 gap-3 mb-5">
           {[
-            { label: setA.name, value: setA.geneIds.length },
-            { label: setB.name, value: setB.geneIds.length },
+            { label: setA.name, value: (setA.geneIds ?? []).length },
+            { label: setB.name, value: (setB.geneIds ?? []).length },
             { label: "Shared", value: comparison.shared.length },
             { label: "Union", value: comparison.unionSize },
             { label: "Jaccard Index", value: comparison.jaccard.toFixed(3) },

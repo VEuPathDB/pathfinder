@@ -1,0 +1,469 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+// Mock requestJson before importing the module under test
+vi.mock("@/lib/api/http", () => ({
+  requestJson: vi.fn(),
+}));
+
+import {
+  createGeneSet,
+  listGeneSets,
+  deleteGeneSet,
+  performSetOperation,
+  enrichGeneSet,
+  resolveGeneIds,
+  createGeneSetFromStrategy,
+} from "./geneSets";
+import type {
+  CreateGeneSetRequest,
+  SetOperationRequest,
+  CreateFromStrategyArgs,
+  GeneResolveResult,
+} from "./geneSets";
+import { requestJson } from "@/lib/api/http";
+import type { GeneSet } from "../store";
+import type { EnrichmentResult } from "@pathfinder/shared";
+
+const mockRequestJson = vi.mocked(requestJson);
+
+beforeEach(() => {
+  mockRequestJson.mockReset();
+});
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const geneSetFixture: GeneSet = {
+  id: "gs-1",
+  name: "My Gene Set",
+  siteId: "plasmodb",
+  geneIds: ["PF3D7_0100100", "PF3D7_0200200"],
+  geneCount: 2,
+  source: "paste",
+};
+
+// ---------------------------------------------------------------------------
+// createGeneSet
+// ---------------------------------------------------------------------------
+
+describe("createGeneSet", () => {
+  it("sends POST to /api/v1/gene-sets with the request body", async () => {
+    mockRequestJson.mockResolvedValue(geneSetFixture);
+
+    const req: CreateGeneSetRequest = {
+      name: "My Gene Set",
+      source: "paste",
+      geneIds: ["PF3D7_0100100", "PF3D7_0200200"],
+      siteId: "plasmodb",
+    };
+
+    const result = await createGeneSet(req);
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets", {
+      method: "POST",
+      body: req,
+    });
+    expect(result).toEqual(geneSetFixture);
+  });
+
+  it("includes optional fields when provided", async () => {
+    mockRequestJson.mockResolvedValue(geneSetFixture);
+
+    const req: CreateGeneSetRequest = {
+      name: "Strategy Set",
+      source: "strategy",
+      geneIds: ["G1"],
+      siteId: "toxodb",
+      wdkStrategyId: 42,
+      wdkStepId: 7,
+      searchName: "GeneByTextSearch",
+      recordType: "gene",
+      parameters: { text_expression: "kinase" },
+    };
+
+    await createGeneSet(req);
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets", {
+      method: "POST",
+      body: req,
+    });
+  });
+
+  it("propagates API errors", async () => {
+    mockRequestJson.mockRejectedValue(new Error("500 Internal Server Error"));
+
+    await expect(
+      createGeneSet({
+        name: "fail",
+        source: "paste",
+        geneIds: [],
+        siteId: "plasmodb",
+      }),
+    ).rejects.toThrow("500 Internal Server Error");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listGeneSets
+// ---------------------------------------------------------------------------
+
+describe("listGeneSets", () => {
+  it("sends GET to /api/v1/gene-sets without query when no siteId", async () => {
+    mockRequestJson.mockResolvedValue([geneSetFixture]);
+
+    const result = await listGeneSets();
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets", {
+      query: undefined,
+    });
+    expect(result).toEqual([geneSetFixture]);
+  });
+
+  it("includes siteId in query when provided", async () => {
+    mockRequestJson.mockResolvedValue([]);
+
+    await listGeneSets("plasmodb");
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets", {
+      query: { siteId: "plasmodb" },
+    });
+  });
+
+  it("returns empty array when no gene sets exist", async () => {
+    mockRequestJson.mockResolvedValue([]);
+
+    const result = await listGeneSets("toxodb");
+
+    expect(result).toEqual([]);
+  });
+
+  it("propagates errors", async () => {
+    mockRequestJson.mockRejectedValue(new Error("Network error"));
+
+    await expect(listGeneSets()).rejects.toThrow("Network error");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteGeneSet
+// ---------------------------------------------------------------------------
+
+describe("deleteGeneSet", () => {
+  it("sends DELETE to /api/v1/gene-sets/:id", async () => {
+    mockRequestJson.mockResolvedValue(undefined);
+
+    await deleteGeneSet("gs-1");
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets/gs-1", {
+      method: "DELETE",
+    });
+  });
+
+  it("encodes special characters in the ID", async () => {
+    mockRequestJson.mockResolvedValue(undefined);
+
+    await deleteGeneSet("gs/special");
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets/gs/special", {
+      method: "DELETE",
+    });
+  });
+
+  it("propagates errors on deletion failure", async () => {
+    mockRequestJson.mockRejectedValue(new Error("404 Not Found"));
+
+    await expect(deleteGeneSet("nonexistent")).rejects.toThrow("404 Not Found");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// performSetOperation
+// ---------------------------------------------------------------------------
+
+describe("performSetOperation", () => {
+  it("sends POST to /api/v1/gene-sets/operations", async () => {
+    const resultSet: GeneSet = {
+      ...geneSetFixture,
+      id: "gs-derived",
+      name: "Intersection",
+      source: "derived",
+    };
+    mockRequestJson.mockResolvedValue(resultSet);
+
+    const req: SetOperationRequest = {
+      operation: "intersect",
+      setAId: "gs-1",
+      setBId: "gs-2",
+      name: "Intersection",
+    };
+
+    const result = await performSetOperation(req);
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets/operations", {
+      method: "POST",
+      body: req,
+    });
+    expect(result).toEqual(resultSet);
+  });
+
+  it("supports union operation", async () => {
+    mockRequestJson.mockResolvedValue(geneSetFixture);
+
+    const req: SetOperationRequest = {
+      operation: "union",
+      setAId: "gs-1",
+      setBId: "gs-2",
+      name: "Union",
+    };
+
+    await performSetOperation(req);
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets/operations", {
+      method: "POST",
+      body: expect.objectContaining({ operation: "union" }),
+    });
+  });
+
+  it("supports minus operation", async () => {
+    mockRequestJson.mockResolvedValue(geneSetFixture);
+
+    const req: SetOperationRequest = {
+      operation: "minus",
+      setAId: "gs-1",
+      setBId: "gs-2",
+      name: "Difference",
+    };
+
+    await performSetOperation(req);
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets/operations", {
+      method: "POST",
+      body: expect.objectContaining({ operation: "minus" }),
+    });
+  });
+
+  it("propagates errors", async () => {
+    mockRequestJson.mockRejectedValue(new Error("Validation error"));
+
+    await expect(
+      performSetOperation({
+        operation: "intersect",
+        setAId: "gs-1",
+        setBId: "gs-2",
+        name: "fail",
+      }),
+    ).rejects.toThrow("Validation error");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// enrichGeneSet
+// ---------------------------------------------------------------------------
+
+describe("enrichGeneSet", () => {
+  it("sends POST to /api/v1/gene-sets/:id/enrich with enrichment types", async () => {
+    const enrichmentResults: EnrichmentResult[] = [
+      {
+        analysisType: "go_function",
+        terms: [],
+        totalGenesAnalyzed: 10,
+        backgroundSize: 5000,
+      },
+    ];
+    mockRequestJson.mockResolvedValue(enrichmentResults);
+
+    const result = await enrichGeneSet("gs-1", ["go_function", "pathway"]);
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets/gs-1/enrich", {
+      method: "POST",
+      body: { enrichmentTypes: ["go_function", "pathway"] },
+    });
+    expect(result).toEqual(enrichmentResults);
+  });
+
+  it("handles empty enrichment types array", async () => {
+    mockRequestJson.mockResolvedValue([]);
+
+    await enrichGeneSet("gs-1", []);
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets/gs-1/enrich", {
+      method: "POST",
+      body: { enrichmentTypes: [] },
+    });
+  });
+
+  it("propagates errors", async () => {
+    mockRequestJson.mockRejectedValue(new Error("Enrichment failed"));
+
+    await expect(enrichGeneSet("gs-1", ["go_function"])).rejects.toThrow(
+      "Enrichment failed",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveGeneIds
+// ---------------------------------------------------------------------------
+
+describe("resolveGeneIds", () => {
+  it("sends POST to /api/v1/sites/:siteId/genes/resolve", async () => {
+    const resolveResult: GeneResolveResult = {
+      resolved: [
+        {
+          geneId: "PF3D7_0100100",
+          displayName: "PF3D7_0100100",
+          organism: "P. falciparum",
+          product: "hypothetical protein",
+          geneName: "",
+          geneType: "protein_coding",
+          location: "chr1:1-1000",
+        },
+      ],
+      unresolved: ["INVALID_GENE"],
+    };
+    mockRequestJson.mockResolvedValue(resolveResult);
+
+    const result = await resolveGeneIds("plasmodb", ["PF3D7_0100100", "INVALID_GENE"]);
+
+    expect(mockRequestJson).toHaveBeenCalledWith(
+      "/api/v1/sites/plasmodb/genes/resolve",
+      {
+        method: "POST",
+        body: { geneIds: ["PF3D7_0100100", "INVALID_GENE"] },
+      },
+    );
+    expect(result.resolved).toHaveLength(1);
+    expect(result.unresolved).toEqual(["INVALID_GENE"]);
+  });
+
+  it("handles all genes resolved successfully", async () => {
+    const resolveResult: GeneResolveResult = {
+      resolved: [
+        {
+          geneId: "G1",
+          displayName: "G1",
+          organism: "org",
+          product: "prod",
+          geneName: "name",
+          geneType: "type",
+          location: "loc",
+        },
+      ],
+      unresolved: [],
+    };
+    mockRequestJson.mockResolvedValue(resolveResult);
+
+    const result = await resolveGeneIds("toxodb", ["G1"]);
+
+    expect(result.resolved).toHaveLength(1);
+    expect(result.unresolved).toHaveLength(0);
+  });
+
+  it("handles all genes unresolved", async () => {
+    const resolveResult: GeneResolveResult = {
+      resolved: [],
+      unresolved: ["BAD1", "BAD2"],
+    };
+    mockRequestJson.mockResolvedValue(resolveResult);
+
+    const result = await resolveGeneIds("plasmodb", ["BAD1", "BAD2"]);
+
+    expect(result.resolved).toHaveLength(0);
+    expect(result.unresolved).toEqual(["BAD1", "BAD2"]);
+  });
+
+  it("propagates errors", async () => {
+    mockRequestJson.mockRejectedValue(new Error("Network error"));
+
+    await expect(resolveGeneIds("plasmodb", ["G1"])).rejects.toThrow("Network error");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createGeneSetFromStrategy
+// ---------------------------------------------------------------------------
+
+describe("createGeneSetFromStrategy", () => {
+  it("calls createGeneSet with strategy source and mapped fields", async () => {
+    mockRequestJson.mockResolvedValue(geneSetFixture);
+
+    const args: CreateFromStrategyArgs = {
+      name: "From Strategy",
+      siteId: "plasmodb",
+      wdkStrategyId: 42,
+      wdkStepId: 7,
+      searchName: "GeneByTextSearch",
+      recordType: "gene",
+      parameters: { text_expression: "kinase" },
+      geneIds: ["G1", "G2"],
+    };
+
+    await createGeneSetFromStrategy(args);
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets", {
+      method: "POST",
+      body: {
+        name: "From Strategy",
+        source: "strategy",
+        geneIds: ["G1", "G2"],
+        siteId: "plasmodb",
+        wdkStrategyId: 42,
+        wdkStepId: 7,
+        searchName: "GeneByTextSearch",
+        recordType: "gene",
+        parameters: { text_expression: "kinase" },
+      },
+    });
+  });
+
+  it("defaults geneIds to empty array when not provided", async () => {
+    mockRequestJson.mockResolvedValue(geneSetFixture);
+
+    const args: CreateFromStrategyArgs = {
+      name: "Empty Set",
+      siteId: "toxodb",
+      wdkStrategyId: 99,
+    };
+
+    await createGeneSetFromStrategy(args);
+
+    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets", {
+      method: "POST",
+      body: expect.objectContaining({
+        geneIds: [],
+        source: "strategy",
+      }),
+    });
+  });
+
+  it("passes optional fields as undefined when not provided", async () => {
+    mockRequestJson.mockResolvedValue(geneSetFixture);
+
+    const args: CreateFromStrategyArgs = {
+      name: "Minimal",
+      siteId: "plasmodb",
+      wdkStrategyId: 1,
+    };
+
+    await createGeneSetFromStrategy(args);
+
+    const body = mockRequestJson.mock.calls[0][1]?.body as CreateGeneSetRequest;
+    expect(body.wdkStepId).toBeUndefined();
+    expect(body.searchName).toBeUndefined();
+    expect(body.recordType).toBeUndefined();
+    expect(body.parameters).toBeUndefined();
+  });
+
+  it("propagates errors from createGeneSet", async () => {
+    mockRequestJson.mockRejectedValue(new Error("Creation failed"));
+
+    await expect(
+      createGeneSetFromStrategy({
+        name: "fail",
+        siteId: "plasmodb",
+        wdkStrategyId: 1,
+      }),
+    ).rejects.toThrow("Creation failed");
+  });
+});

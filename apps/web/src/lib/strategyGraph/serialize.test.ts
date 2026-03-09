@@ -57,8 +57,8 @@ describe("core/strategyGraph/serialize", () => {
     expect(res?.plan.root.primaryInput?.id).toBe("a");
     // Any params containing the UI-only @@fake@@ sentinel are removed.
     expect(res?.plan.root.primaryInput?.parameters).toEqual({ ok: 1 });
-    expect((res?.plan.root.primaryInput?.parameters as any)?.fake).toBeUndefined();
-    expect((res?.plan.root.primaryInput?.parameters as any)?.arr).toBeUndefined();
+    expect(res?.plan.root.primaryInput?.parameters?.["fake"]).toBeUndefined();
+    expect(res?.plan.root.primaryInput?.parameters?.["arr"]).toBeUndefined();
     expect(res?.plan.metadata?.name).toBe("My Strategy");
     expect(res?.plan.metadata?.description).toBe("desc");
   });

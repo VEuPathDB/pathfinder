@@ -5,8 +5,8 @@
  */
 
 import { useSettingsStore } from "@/state/useSettingsStore";
-import { ModelPicker } from "@/features/chat/components/thinking/ModelPicker";
-import { ReasoningToggle } from "@/features/chat/components/message/ReasoningToggle";
+import { ModelPicker } from "@/lib/components/ModelPicker";
+import { ReasoningToggle } from "@/lib/components/ReasoningToggle";
 import { SettingsField } from "./SettingsField";
 
 export function GeneralSettings() {

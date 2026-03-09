@@ -9,9 +9,9 @@ vi.mock("recharts", () => {
   const Box = ({
     children,
     ...props
-  }: React.PropsWithChildren<Record<string, unknown>>) => (
-    <div data-props={JSON.stringify(props)}>{children}</div>
-  );
+  }: React.PropsWithChildren<{
+    [key: string]: string | number | boolean | null | undefined | object;
+  }>) => <div data-props={JSON.stringify(props)}>{children}</div>;
   return {
     ResponsiveContainer: Box,
     LineChart: ({ children, data }: React.PropsWithChildren<{ data?: unknown[] }>) => (
@@ -20,10 +20,10 @@ vi.mock("recharts", () => {
       </div>
     ),
     Line: Box,
-    XAxis: (props: Record<string, unknown>) => (
+    XAxis: (props: { domain?: unknown }) => (
       <div data-testid="x-axis-domain">{JSON.stringify(props.domain)}</div>
     ),
-    YAxis: (props: Record<string, unknown>) => (
+    YAxis: (props: { domain?: unknown }) => (
       <div data-testid="y-axis-domain">{JSON.stringify(props.domain)}</div>
     ),
     Tooltip: Box,

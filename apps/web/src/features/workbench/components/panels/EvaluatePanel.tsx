@@ -2,18 +2,25 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { Target, Play, Loader2 } from "lucide-react";
-import type { Experiment } from "@pathfinder/shared";
+import type { Experiment, EnrichmentAnalysisType } from "@pathfinder/shared";
 import { Button } from "@/lib/components/ui/Button";
 import {
   MetricsOverview,
   ConfusionMatrixSection,
   GeneListsSection,
+  EnrichmentSection,
+  RobustnessSection,
+  RankMetricsSection,
+  Section,
 } from "@/features/analysis";
 import {
   createExperimentStream,
   type ExperimentSSEHandler,
 } from "@/features/workbench/api";
 import { AnalysisPanelContainer } from "../AnalysisPanelContainer";
+import { GeneChipInput } from "../GeneChipInput";
+import { SaveControlSetForm } from "../SaveControlSetForm";
+import { ControlSetQuickPick } from "../ControlSetQuickPick";
 import { useWorkbenchStore } from "../../store";
 
 // ---------------------------------------------------------------------------
@@ -26,8 +33,11 @@ export function EvaluatePanel() {
   const activeSet = geneSets.find((gs) => gs.id === activeSetId);
   const setLastExperiment = useWorkbenchStore((s) => s.setLastExperiment);
 
-  const [positiveControls, setPositiveControls] = useState("");
-  const [negativeControls, setNegativeControls] = useState("");
+  const [positiveControls, setPositiveControls] = useState<string[]>([]);
+  const [negativeControls, setNegativeControls] = useState<string[]>([]);
+  const [enableCV, setEnableCV] = useState(false);
+  const [kFolds, setKFolds] = useState(5);
+  const [enrichmentTypes, setEnrichmentTypes] = useState<EnrichmentAnalysisType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [experiment, setExperiment] = useState<Experiment | null>(null);
@@ -44,38 +54,28 @@ export function EvaluatePanel() {
     clearPendingControls();
     queueMicrotask(() => {
       if (pos.length > 0) {
-        setPositiveControls((prev) => {
-          const existing = prev.trim();
-          const joined = pos.join("\n");
-          return existing ? `${existing}\n${joined}` : joined;
-        });
+        setPositiveControls((prev) => [...prev, ...pos]);
       }
       if (neg.length > 0) {
-        setNegativeControls((prev) => {
-          const existing = prev.trim();
-          const joined = neg.join("\n");
-          return existing ? `${existing}\n${joined}` : joined;
-        });
+        setNegativeControls((prev) => [...prev, ...neg]);
       }
     });
   }, [pendingPositive, pendingNegative, clearPendingControls]);
 
-  const hasSearchContext = Boolean(activeSet?.searchName && activeSet.parameters);
+  const hasSearchContext = Boolean(
+    activeSet &&
+    (activeSet.geneIds?.length || (activeSet.searchName && activeSet.parameters)),
+  );
 
   const handleRun = useCallback(async () => {
-    if (!activeSet || !activeSet.searchName || !activeSet.parameters) return;
-    const posLines = positiveControls
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (posLines.length === 0) {
+    if (!activeSet) return;
+    const hasGeneIds = Boolean(activeSet.geneIds?.length);
+    const hasSearch = Boolean(activeSet.searchName && activeSet.parameters);
+    if (!hasGeneIds && !hasSearch) return;
+    if (positiveControls.length === 0) {
       setError("At least one positive control gene ID is required.");
       return;
     }
-    const negLines = negativeControls
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
 
     setLoading(true);
     setError(null);
@@ -98,16 +98,17 @@ export function EvaluatePanel() {
         {
           siteId: activeSet.siteId,
           recordType: activeSet.recordType ?? "gene",
-          searchName: activeSet.searchName,
-          parameters: activeSet.parameters,
-          positiveControls: posLines,
-          negativeControls: negLines,
+          searchName: activeSet.searchName ?? "",
+          parameters: activeSet.parameters ?? {},
+          positiveControls,
+          negativeControls,
           controlsSearchName: "GeneByLocusTag",
           controlsParamName: "ds_gene_ids",
           controlsValueFormat: "newline",
-          enableCrossValidation: false,
-          kFolds: 5,
-          enrichmentTypes: [],
+          enableCrossValidation: enableCV,
+          kFolds,
+          enrichmentTypes,
+          targetGeneIds: activeSet.geneIds?.length ? activeSet.geneIds : undefined,
           name: `Workbench eval: ${activeSet.name}`,
         },
         handlers,
@@ -116,7 +117,16 @@ export function EvaluatePanel() {
       setError(err instanceof Error ? err.message : String(err));
       setLoading(false);
     }
-  }, [activeSet, activeSetId, positiveControls, negativeControls, setLastExperiment]);
+  }, [
+    activeSet,
+    activeSetId,
+    positiveControls,
+    negativeControls,
+    enableCV,
+    kFolds,
+    enrichmentTypes,
+    setLastExperiment,
+  ]);
 
   return (
     <AnalysisPanelContainer
@@ -128,31 +138,99 @@ export function EvaluatePanel() {
       disabledReason="Requires a strategy-backed gene set with search parameters"
     >
       <div className="space-y-4">
+        {/* Quick pick from saved controls */}
+        {activeSet?.siteId && (
+          <ControlSetQuickPick
+            siteId={activeSet.siteId}
+            onSelect={(posIds, negIds) => {
+              setPositiveControls(posIds);
+              setNegativeControls(negIds);
+            }}
+          />
+        )}
+
         {/* Controls form */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Positive Controls (required)
-            </label>
-            <textarea
-              value={positiveControls}
-              onChange={(e) => setPositiveControls(e.target.value)}
-              placeholder="Paste gene IDs, one per line or comma-separated"
-              rows={4}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          <GeneChipInput
+            siteId={activeSet?.siteId ?? ""}
+            value={positiveControls}
+            onChange={setPositiveControls}
+            label="Positive Controls"
+            tint="positive"
+            required
+          />
+          <GeneChipInput
+            siteId={activeSet?.siteId ?? ""}
+            value={negativeControls}
+            onChange={setNegativeControls}
+            label="Negative Controls"
+            tint="negative"
+          />
+        </div>
+
+        {/* Save controls as reusable set */}
+        <SaveControlSetForm
+          siteId={activeSet?.siteId ?? ""}
+          positiveIds={positiveControls}
+          negativeIds={negativeControls}
+        />
+
+        {/* Analysis options */}
+        <div className="space-y-3">
+          <p className="text-xs font-medium text-muted-foreground">Analysis Options</p>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={enableCV}
+              onChange={(e) => setEnableCV(e.target.checked)}
+              className="rounded border-input"
             />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Negative Controls (optional)
-            </label>
-            <textarea
-              value={negativeControls}
-              onChange={(e) => setNegativeControls(e.target.value)}
-              placeholder="Paste gene IDs, one per line or comma-separated"
-              rows={4}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+            Cross-validation ({kFolds}-fold)
+          </label>
+          {enableCV && (
+            <div className="flex items-center gap-2 pl-5">
+              <span className="text-[10px] text-muted-foreground">2</span>
+              <input
+                type="range"
+                min={2}
+                max={10}
+                value={kFolds}
+                onChange={(e) => setKFolds(Number(e.target.value))}
+                className="h-1.5 w-24 accent-primary"
+              />
+              <span className="text-[10px] text-muted-foreground">10</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-1.5">
+            {(["go_process", "go_function", "go_component", "pathway"] as const).map(
+              (t) => {
+                const label = {
+                  go_process: "GO:BP",
+                  go_function: "GO:MF",
+                  go_component: "GO:CC",
+                  pathway: "Pathway",
+                }[t];
+                const active = enrichmentTypes.includes(t);
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium border transition-colors ${
+                      active
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-input text-muted-foreground hover:border-foreground/30"
+                    }`}
+                    onClick={() =>
+                      setEnrichmentTypes((prev) =>
+                        active ? prev.filter((x) => x !== t) : [...prev, t],
+                      )
+                    }
+                  >
+                    {label}
+                  </button>
+                );
+              },
+            )}
           </div>
         </div>
 
@@ -177,6 +255,37 @@ export function EvaluatePanel() {
               robustness={experiment.robustness}
             />
             <ConfusionMatrixSection cm={experiment.metrics.confusionMatrix} />
+            {experiment.rankMetrics && (
+              <RankMetricsSection rankMetrics={experiment.rankMetrics} />
+            )}
+            {experiment.robustness && (
+              <RobustnessSection robustness={experiment.robustness} />
+            )}
+            {experiment.crossValidation && (
+              <Section title="Cross-Validation">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <span>{experiment.crossValidation.k}-fold</span>
+                    <span
+                      className={
+                        experiment.crossValidation.overfittingLevel === "low"
+                          ? "text-green-600 dark:text-green-400"
+                          : experiment.crossValidation.overfittingLevel === "moderate"
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-red-600 dark:text-red-400"
+                      }
+                    >
+                      Overfitting: {experiment.crossValidation.overfittingLevel} (
+                      {experiment.crossValidation.overfittingScore.toFixed(3)})
+                    </span>
+                  </div>
+                  <MetricsOverview metrics={experiment.crossValidation.meanMetrics} />
+                </div>
+              </Section>
+            )}
+            {experiment.enrichmentResults.length > 0 && (
+              <EnrichmentSection results={experiment.enrichmentResults} />
+            )}
             <GeneListsSection experiment={experiment} />
           </div>
         )}

@@ -29,6 +29,8 @@ def _make_projection(**overrides: Any) -> SimpleNamespace:
         "record_type": "gene",
         "model_id": "claude-sonnet-4-20250514",
         "wdk_strategy_id": None,
+        "is_saved": False,
+        "site_id": "plasmodb",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)

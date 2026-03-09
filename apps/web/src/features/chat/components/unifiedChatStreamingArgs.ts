@@ -1,7 +1,10 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { Message, ToolCall, Strategy } from "@pathfinder/shared";
+import type { NodeSelection } from "@/lib/types/nodeSelection";
 import type { useThinkingState } from "@/features/chat/hooks/useThinkingState";
 import type { GraphSnapshotInput } from "@/features/chat/utils/graphSnapshot";
+import type { ToolResultPayload } from "@/features/chat/utils/parseToolResult";
+import type { ToolArguments } from "@/features/chat/utils/parseToolArguments";
 import type { StreamingSession } from "@/features/chat/streaming/StreamingSession";
 
 type ThinkingState = ReturnType<typeof useThinkingState>;
@@ -9,8 +12,8 @@ type ThinkingState = ReturnType<typeof useThinkingState>;
 interface BuildUnifiedChatStreamingArgsParams {
   siteId: string;
   strategyId: string | null;
-  draftSelection: Record<string, unknown> | null;
-  setDraftSelection: Dispatch<SetStateAction<Record<string, unknown> | null>>;
+  draftSelection: NodeSelection | null;
+  setDraftSelection: Dispatch<SetStateAction<NodeSelection | null>>;
   thinking: ThinkingState;
   setMessages: Dispatch<SetStateAction<Message[]>>;
   setUndoSnapshots: Dispatch<SetStateAction<Record<number, Strategy>>>;
@@ -30,10 +33,8 @@ interface BuildUnifiedChatStreamingArgsParams {
   setStrategyMeta: (meta: Partial<Strategy>) => void;
   clearStrategy: () => void;
   addStep: (step: Strategy["steps"][number]) => void;
-  parseToolArguments: (args: unknown) => Record<string, unknown>;
-  parseToolResult: (
-    result?: string | null,
-  ) => { graphSnapshot?: Record<string, unknown> } | null;
+  parseToolArguments: (args: unknown) => ToolArguments;
+  parseToolResult: (result?: string | null) => ToolResultPayload | null;
   applyGraphSnapshot: (graphSnapshot: GraphSnapshotInput) => void;
   getStrategy: (id: string) => Promise<Strategy>;
   currentStrategy: Strategy | null;
@@ -47,8 +48,16 @@ interface BuildUnifiedChatStreamingArgsParams {
   currentModelSelection: ReturnType<
     typeof import("@/features/chat/components/MessageComposer").buildModelSelection
   >;
+  setSelectedModelId?: (modelId: string | null) => void;
   setChatIsStreaming: (value: boolean) => void;
   handleError: (error: unknown, fallback: string) => void;
+  onWorkbenchGeneSet?: (geneSet: {
+    id: string;
+    name: string;
+    geneCount: number;
+    source: string;
+    siteId: string;
+  }) => void;
 }
 
 export function useUnifiedChatStreamingArgs({
@@ -77,8 +86,10 @@ export function useUnifiedChatStreamingArgs({
   currentStrategy,
   attachThinkingToLastAssistant,
   currentModelSelection,
+  setSelectedModelId,
   setChatIsStreaming,
   handleError,
+  onWorkbenchGeneSet,
 }: BuildUnifiedChatStreamingArgsParams) {
   return {
     siteId,
@@ -105,7 +116,9 @@ export function useUnifiedChatStreamingArgs({
     getStrategy,
     currentStrategy,
     attachThinkingToLastAssistant,
+    setSelectedModelId,
     modelSelection: currentModelSelection,
+    onWorkbenchGeneSet,
     onStreamComplete: () => setChatIsStreaming(false),
     onStreamError: (error: Error) => {
       setChatIsStreaming(false);

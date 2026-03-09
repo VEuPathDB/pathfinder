@@ -4,7 +4,7 @@ import {
   getStrategy,
   normalizePlan,
   updateStrategy,
-} from "@/lib/api/client";
+} from "@/lib/api/strategies";
 import { toUserMessage } from "@/lib/api/errors";
 import type { StrategyPlan, Strategy } from "@pathfinder/shared";
 

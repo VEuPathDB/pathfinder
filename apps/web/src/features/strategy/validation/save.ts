@@ -1,5 +1,5 @@
 import type { Step, Strategy } from "@pathfinder/shared";
-import { validateSearchParams } from "@/lib/api/client";
+import { validateSearchParams } from "@/lib/api/sites";
 import { toUserMessage } from "@/lib/api/errors";
 import { formatSearchValidationResponse } from "./format";
 import { getRootSteps, validateStrategySteps } from "@/lib/strategyGraph";

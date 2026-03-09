@@ -1,56 +1,103 @@
 import { isRecord } from "@/lib/utils/isRecord";
 import { parseJsonRecord } from "@/features/chat/utils/parseJson";
-
-type UnknownRecord = Record<string, unknown>;
-
-export type NodeSelection = {
-  graphId?: string;
-  nodeIds: string[];
-  selectedNodeIds: string[];
-  contextNodeIds: string[];
-  nodes: UnknownRecord[];
-  edges: UnknownRecord[];
-};
+import type {
+  NodeSelection,
+  NodeSelectionNode,
+  NodeSelectionEdge,
+} from "@/lib/types/nodeSelection";
+import type { StepParameters } from "@/lib/strategyGraph/types";
+export type { NodeSelection, NodeSelectionNode, NodeSelectionEdge };
 
 const NODE_PREFIX = "__NODE__";
+
+/** Raw node data as received from the backend before normalization. */
+type RawNodeData = {
+  id?: string;
+  kind?: string;
+  displayName?: string;
+  searchName?: string;
+  operator?: string;
+  parameters?: unknown;
+  recordType?: string;
+  resultCount?: unknown;
+  wdkStepId?: unknown;
+  selected?: boolean;
+};
+
+/** Raw edge data as received from the backend before normalization. */
+type RawEdgeData = {
+  sourceId?: string;
+  targetId?: string;
+  kind?: string;
+};
 
 const asStringArray = (value: unknown): string[] =>
   Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
 
-export function normalizeNodeSelection(data: UnknownRecord): NodeSelection {
+export function normalizeNodeSelection(data: Record<string, unknown>): NodeSelection {
   const nodeIds = asStringArray(data.nodeIds);
   const selectedNodeIds = asStringArray(data.selectedNodeIds);
   const contextNodeIds = asStringArray(data.contextNodeIds);
-  const nodes = Array.isArray(data.nodes) ? (data.nodes as UnknownRecord[]) : [];
-  const edges = Array.isArray(data.edges) ? (data.edges as UnknownRecord[]) : [];
+  const rawNodes: RawNodeData[] = Array.isArray(data.nodes)
+    ? (data.nodes as RawNodeData[])
+    : [];
+  const rawEdges: RawEdgeData[] = Array.isArray(data.edges)
+    ? (data.edges as RawEdgeData[])
+    : [];
 
   const fallbackNodeIds =
     nodeIds.length > 0 ? nodeIds : typeof data.id === "string" ? [data.id] : [];
   const normalizedSelected =
     selectedNodeIds.length > 0 ? selectedNodeIds : fallbackNodeIds;
-  const normalizedNodes =
-    nodes.length > 0 ? nodes : fallbackNodeIds.map((id) => ({ id, displayName: id }));
 
-  const withSelection = normalizedNodes.map((node) => {
-    if (!isRecord(node)) return node;
-    const id = (node as { id?: string }).id;
-    const selected =
-      typeof (node as { selected?: boolean }).selected === "boolean"
-        ? (node as { selected?: boolean }).selected
-        : id
-          ? normalizedSelected.includes(id)
-          : false;
-    return { ...node, selected };
-  });
+  const baseNodes: NodeSelectionNode[] =
+    rawNodes.length > 0
+      ? rawNodes.map((n) => ({
+          id: String(n.id ?? ""),
+          kind: typeof n.kind === "string" ? n.kind : undefined,
+          displayName: typeof n.displayName === "string" ? n.displayName : undefined,
+          searchName: typeof n.searchName === "string" ? n.searchName : undefined,
+          operator: typeof n.operator === "string" ? n.operator : undefined,
+          parameters: isRecord(n.parameters)
+            ? (n.parameters as StepParameters)
+            : undefined,
+          recordType: typeof n.recordType === "string" ? n.recordType : undefined,
+          resultCount: typeof n.resultCount === "number" ? n.resultCount : undefined,
+          wdkStepId: typeof n.wdkStepId === "number" ? n.wdkStepId : undefined,
+        }))
+      : fallbackNodeIds.map((id) => ({ id, displayName: id }));
+
+  const nodes: NodeSelectionNode[] = baseNodes.map((node) => ({
+    ...node,
+    selected:
+      typeof node.selected === "boolean"
+        ? node.selected
+        : node.id
+          ? normalizedSelected.includes(node.id)
+          : false,
+  }));
+
+  const edges: NodeSelectionEdge[] = rawEdges
+    .filter(
+      (e): e is Required<RawEdgeData> =>
+        typeof e.sourceId === "string" &&
+        typeof e.targetId === "string" &&
+        typeof e.kind === "string",
+    )
+    .map((e) => ({
+      sourceId: e.sourceId,
+      targetId: e.targetId,
+      kind: e.kind,
+    }));
 
   return {
     graphId: typeof data.graphId === "string" ? data.graphId : undefined,
     nodeIds: fallbackNodeIds,
     selectedNodeIds: normalizedSelected,
     contextNodeIds,
-    nodes: withSelection,
+    nodes,
     edges,
   };
 }
@@ -73,13 +120,13 @@ export function decodeNodeSelection(content: string): {
   const data = parseJsonRecord(jsonPart);
   if (!data) return { selection: null, message: content };
   return {
-    selection: normalizeNodeSelection(data as UnknownRecord),
+    selection: normalizeNodeSelection(data),
     message: textPart,
   };
 }
 
 export function encodeNodeSelection(
-  selection: UnknownRecord | null | undefined,
+  selection: NodeSelection | null | undefined,
   message: string,
 ): string {
   if (!selection) return message;

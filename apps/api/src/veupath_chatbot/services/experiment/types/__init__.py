@@ -37,7 +37,6 @@ from veupath_chatbot.services.experiment.types.metrics import (
     GeneInfo,
 )
 from veupath_chatbot.services.experiment.types.optimization import (
-    ControlSetSummary,
     OperatorKnob,
     OptimizationSpec,
     ThresholdKnob,
@@ -93,7 +92,6 @@ __all__ = [
     "NegativeSetVariant",
     "RankMetrics",
     # Optimization
-    "ControlSetSummary",
     "OperatorKnob",
     "OptimizationSpec",
     "ThresholdKnob",

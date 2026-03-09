@@ -109,6 +109,7 @@ class CreateExperimentRequest(BaseModel):
     sort_attribute: str | None = Field(default=None, alias="sortAttribute")
     sort_direction: Literal["ASC", "DESC"] = Field(default="ASC", alias="sortDirection")
     parent_experiment_id: str | None = Field(default=None, alias="parentExperimentId")
+    target_gene_ids: list[str] | None = Field(default=None, alias="targetGeneIds")
     model_config = {"populate_by_name": True}
 
 

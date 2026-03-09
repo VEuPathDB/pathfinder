@@ -1,6 +1,7 @@
 import type { Step, Strategy } from "@pathfinder/shared";
 import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import { isFallbackDisplayName } from "@/lib/strategyGraph";
+import type { StepParameters } from "@/lib/strategyGraph/types";
 
 export interface GraphSnapshotStepInput {
   id: string;
@@ -8,7 +9,7 @@ export interface GraphSnapshotStepInput {
   displayName?: string;
   searchName?: string;
   operator?: string;
-  parameters?: Record<string, unknown>;
+  parameters?: StepParameters;
   inputStepIds?: string[];
   primaryInputStepId?: string;
   secondaryInputStepId?: string;
@@ -44,7 +45,7 @@ export function buildStrategyFromGraphSnapshot(args: {
     stepsById,
     existingStrategy = null,
   } = args;
-  const hasStepsField = "steps" in (graphSnapshot as Record<string, unknown>);
+  const hasStepsField = "steps" in graphSnapshot;
   const snapshotSteps = Array.isArray(graphSnapshot.steps) ? graphSnapshot.steps : null;
 
   const steps: Step[] = snapshotSteps

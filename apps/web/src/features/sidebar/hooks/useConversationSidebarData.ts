@@ -17,7 +17,7 @@ import {
   useState,
   startTransition,
 } from "react";
-import { openStrategy, syncWdkStrategies } from "@/lib/api/client";
+import { openStrategy, syncWdkStrategies } from "@/lib/api/strategies";
 import { DEFAULT_STREAM_NAME, type Strategy } from "@pathfinder/shared";
 import { useSessionStore } from "@/state/useSessionStore";
 import { useStrategyStore } from "@/state/useStrategyStore";
@@ -34,6 +34,8 @@ export interface ConversationSidebarData {
   filtered: ConversationItem[];
   /** Whether there are any conversations at all (ignoring search). */
   hasConversations: boolean;
+  /** False until the first successful fetch completes. */
+  hasInitiallyLoaded: boolean;
   query: string;
   setQuery: (q: string) => void;
   isSyncing: boolean;
@@ -60,6 +62,7 @@ export function useConversationSidebarData({
   const [strategyItems, setStrategyItems] = useState<Strategy[]>([]);
   const [query, setQuery] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
 
   // --- Data fetching ---
 
@@ -76,6 +79,7 @@ export function useConversationSidebarData({
     if (prevSiteRef.current !== siteId) {
       prevSiteRef.current = siteId;
       setStrategyItems([]);
+      setHasInitiallyLoaded(false);
       syncInFlight.current = false;
       hasFetched.current = false;
       autoCreateInFlight.current = false;
@@ -91,6 +95,7 @@ export function useConversationSidebarData({
         // Discard if site changed while fetch was in-flight.
         if (fetchSite !== prevSiteRef.current) return;
         hasFetched.current = true;
+        setHasInitiallyLoaded(true);
         // Populate the global store so @-mentions and experiment import
         // can read the same data (single source of truth).
         useStrategyStore.getState().setStrategies(strategies);
@@ -229,6 +234,7 @@ export function useConversationSidebarData({
   return {
     filtered,
     hasConversations: conversations.length > 0,
+    hasInitiallyLoaded,
     query,
     setQuery,
     isSyncing,

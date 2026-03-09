@@ -72,6 +72,7 @@ class StepResponse(BaseModel):
     filters: list[StepFilterResponse] | None = None
     analyses: list[StepAnalysisResponse] | None = None
     reports: list[StepReportResponse] | None = None
+    validation_error: str | None = Field(default=None, alias="validationError")
 
     model_config = {"populate_by_name": True}
 

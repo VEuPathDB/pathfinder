@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react";
-import type { ThresholdSweepPoint } from "@/features/workbench/api";
+import type { ThresholdSweepPoint } from "@/lib/api/analysis";
 import { CHART_COLORS } from "@/lib/utils/chartTheme";
 import { fmtNum, truncateLabel } from "./types";
 
@@ -66,9 +66,9 @@ function CategoricalChart({
       )
       .join(" ");
 
-  const sensLine = makeLineCat((p) => p.metrics!.sensitivity);
-  const specLine = makeLineCat((p) => p.metrics!.specificity);
-  const f1Line = makeLineCat((p) => p.metrics!.f1Score);
+  const sensLine = makeLineCat((p) => p.metrics?.sensitivity ?? 0);
+  const specLine = makeLineCat((p) => p.metrics?.specificity ?? 0);
+  const f1Line = makeLineCat((p) => p.metrics?.f1Score ?? 0);
 
   return (
     <ChartWrapper parameter={parameter} isStreaming={isStreaming}>
@@ -92,9 +92,9 @@ function CategoricalChart({
           <MetricDots
             key={String(p.value)}
             cx={xCat(i)}
-            sensitivity={p.metrics!.sensitivity}
-            specificity={p.metrics!.specificity}
-            f1Score={p.metrics!.f1Score}
+            sensitivity={p.metrics?.sensitivity ?? 0}
+            specificity={p.metrics?.specificity ?? 0}
+            f1Score={p.metrics?.f1Score ?? 0}
           />
         ))}
       </svg>
@@ -126,9 +126,9 @@ function NumericChart({
       )
       .join(" ");
 
-  const sensLine = makeLine((p) => p.metrics!.sensitivity);
-  const specLine = makeLine((p) => p.metrics!.specificity);
-  const f1Line = makeLine((p) => p.metrics!.f1Score);
+  const sensLine = makeLine((p) => p.metrics?.sensitivity ?? 0);
+  const specLine = makeLine((p) => p.metrics?.specificity ?? 0);
+  const f1Line = makeLine((p) => p.metrics?.f1Score ?? 0);
 
   const xTicks = points.filter(
     (_, i) =>
@@ -157,9 +157,9 @@ function NumericChart({
           <MetricDots
             key={String(p.value)}
             cx={x(Number(p.value))}
-            sensitivity={p.metrics!.sensitivity}
-            specificity={p.metrics!.specificity}
-            f1Score={p.metrics!.f1Score}
+            sensitivity={p.metrics?.sensitivity ?? 0}
+            specificity={p.metrics?.specificity ?? 0}
+            f1Score={p.metrics?.f1Score ?? 0}
           />
         ))}
       </svg>

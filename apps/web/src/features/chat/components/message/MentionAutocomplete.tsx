@@ -10,8 +10,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileText, FlaskConical, Loader2 } from "lucide-react";
 import type { ChatMention, ExperimentSummary, Strategy } from "@pathfinder/shared";
-import { useStrategyStore } from "@/state/useStrategyStore";
-import { listExperiments } from "@/features/workbench/api";
+import { useStrategyList } from "@/state/useStrategySelectors";
+import { listExperiments } from "@/lib/api/experiments";
 
 interface MentionAutocompleteProps {
   siteId: string;
@@ -37,7 +37,7 @@ export function MentionAutocomplete({
   onSelect,
   onDismiss,
 }: MentionAutocompleteProps) {
-  const storeStrategies = useStrategyStore((s) => s.strategies);
+  const { strategies: storeStrategies } = useStrategyList();
   const [experiments, setExperiments] = useState<ExperimentSummary[]>([]);
   const [loadingExperiments, setLoadingExperiments] = useState(false);
   const [focusIndex, setFocusIndex] = useState(0);

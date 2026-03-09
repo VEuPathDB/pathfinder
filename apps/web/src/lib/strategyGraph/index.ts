@@ -1,6 +1,7 @@
 export type {
   Step,
   Strategy,
+  StepParameters,
   StrategyNode,
   StrategyEdge,
   StrategyGraphSelection,

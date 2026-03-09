@@ -97,4 +97,5 @@ def config_from_request(req: CreateExperimentRequest) -> ExperimentConfig:
         sort_attribute=req.sort_attribute,
         sort_direction=req.sort_direction,
         parent_experiment_id=req.parent_experiment_id,
+        target_gene_ids=req.target_gene_ids,
     )

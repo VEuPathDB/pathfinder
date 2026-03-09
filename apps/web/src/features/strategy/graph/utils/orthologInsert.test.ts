@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Step } from "@pathfinder/shared";
+import type { Search, Step } from "@pathfinder/shared";
 import { computeOrthologInsert } from "@/features/strategy/graph/utils/orthologInsert";
 
 function step(partial: Partial<Step> & { id: string }): Step {
@@ -26,7 +26,11 @@ describe("computeOrthologInsert", () => {
       selectedId: "a",
       steps,
       strategyRecordType: null,
-      search: { name: "ortholog_search", displayName: "Find orthologs" } as any,
+      search: {
+        name: "ortholog_search",
+        displayName: "Find orthologs",
+        recordType: "gene",
+      } satisfies Search,
       options: { insertBetween: true },
       generateId: () => "new1",
     });
@@ -58,7 +62,11 @@ describe("computeOrthologInsert", () => {
       selectedId: "a",
       steps,
       strategyRecordType: null,
-      search: { name: "ortholog_search", displayName: "Ortholog tool" } as any,
+      search: {
+        name: "ortholog_search",
+        displayName: "Ortholog tool",
+        recordType: "gene",
+      } satisfies Search,
       options: { insertBetween: true },
       generateId: () => "new2",
     });
@@ -77,7 +85,11 @@ describe("computeOrthologInsert", () => {
       selectedId: "a",
       steps,
       strategyRecordType: null,
-      search: { name: "ortholog_search", displayName: null } as any,
+      search: {
+        name: "ortholog_search",
+        displayName: "",
+        recordType: "gene",
+      } satisfies Search,
       options: { insertBetween: false },
       generateId: () => "new3",
     });

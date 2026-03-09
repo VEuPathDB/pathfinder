@@ -63,38 +63,3 @@ export function useAsyncAction(): AsyncActionState {
 
   return { run, error, loading, clearError };
 }
-
-// ---------------------------------------------------------------------------
-// Standalone: loggedCatch
-// ---------------------------------------------------------------------------
-
-/**
- * Replacement for `.catch(() => {})` — ensures errors are at least logged to
- * console.  Use this for fire-and-forget promises where you don't want to
- * crash but need visibility into failures.
- *
- * @param context A label for the log message (e.g. "refreshAuth" or "loadModels").
- *
- * @example
- * ```ts
- * refreshAuth().catch(loggedCatch("refreshAuth"));
- * ```
- */
-export function loggedCatch(context: string) {
-  return (err: unknown) => {
-    console.error(`[${context}]`, err);
-  };
-}
-
-/**
- * Fire-and-forget helper that logs errors instead of swallowing them.
- * Useful for `void` promise calls in effects or callbacks.
- *
- * @example
- * ```ts
- * fireAndForget("loadRecordTypes", () => getRecordTypes(siteId).then(setAllRecordTypes));
- * ```
- */
-export function fireAndForget(context: string, fn: () => Promise<unknown>): void {
-  fn().catch(loggedCatch(context));
-}

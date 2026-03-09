@@ -1,63 +1,9 @@
-import type { Classification, Experiment, ExperimentSummary } from "@pathfinder/shared";
-import { buildUrl, requestJson } from "@/lib/api/http";
+import type { Experiment } from "@pathfinder/shared";
+import { requestBlob, requestJson } from "@/lib/api/http";
+import type { StepParameters } from "@/lib/strategyGraph/types";
 
-export interface RecordAttribute {
-  name: string;
-  displayName: string;
-  help?: string | null;
-  type?: string | null;
-  isDisplayable?: boolean;
-  isSortable?: boolean;
-  isSuggested?: boolean;
-}
-
-export interface WdkRecord {
-  id: { name: string; value: string }[];
-  attributes: Record<string, string | null>;
-  _classification?: Classification | null;
-}
-
-export interface RecordsResponse {
-  records: WdkRecord[];
-  meta: {
-    totalCount: number;
-    displayTotalCount: number;
-    responseCount: number;
-    pagination: { offset: number; numRecords: number };
-    attributes: string[];
-    tables: string[];
-  };
-}
-
-export interface StrategyNode {
-  stepId: number;
-  primaryInput?: StrategyNode;
-  secondaryInput?: StrategyNode;
-}
-
-export interface StrategyResponse {
-  strategyId: number;
-  name: string;
-  stepTree: StrategyNode;
-  steps: Record<
-    string,
-    {
-      stepId: number;
-      searchName: string;
-      customName?: string;
-      estimatedSize?: number;
-      searchConfig?: { parameters: Record<string, string> };
-    }
-  >;
-}
-
-export async function listExperiments(
-  siteId?: string | null,
-): Promise<ExperimentSummary[]> {
-  return await requestJson<ExperimentSummary[]>("/api/v1/experiments", {
-    query: siteId ? { siteId } : undefined,
-  });
-}
+// Re-export from shared location so workbench consumers still work.
+export { listExperiments, seedExperiments } from "@/lib/api/experiments";
 
 export async function getExperiment(experimentId: string): Promise<Experiment> {
   return await requestJson<Experiment>(`/api/v1/experiments/${experimentId}`);
@@ -81,10 +27,7 @@ export async function exportExperiment(
   experimentId: string,
   name: string,
 ): Promise<void> {
-  const url = buildUrl(`/api/v1/experiments/${experimentId}/export`);
-  const resp = await fetch(url, { credentials: "include" });
-  if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
-  const blob = await resp.blob();
+  const blob = await requestBlob(`/api/v1/experiments/${experimentId}/export`);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${name.replace(/\s+/g, "_").slice(0, 50)}.zip`;
@@ -92,10 +35,19 @@ export async function exportExperiment(
   URL.revokeObjectURL(a.href);
 }
 
+/** Configuration for a refinement action (combine or transform). */
+export interface RefineConfig {
+  searchName?: string;
+  parameters?: StepParameters;
+  operator?: string;
+  stepId?: string | number;
+  [key: string]: unknown;
+}
+
 export async function refineExperiment(
   experimentId: string,
   action: "combine" | "transform",
-  config: Record<string, unknown>,
+  config: RefineConfig,
 ): Promise<{ success: boolean; newStepId?: number }> {
   return await requestJson(`/api/v1/experiments/${experimentId}/refine`, {
     method: "POST",

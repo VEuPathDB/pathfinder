@@ -5,10 +5,21 @@ import type {
   OptimizationTrial,
   PlanningArtifact,
   ToolCall,
-  Strategy,
 } from "@pathfinder/shared";
-import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import type { ChatEventContext } from "./handleChatEvent.types";
+import type {
+  MessageStartData,
+  UserMessageData,
+  AssistantDeltaData,
+  AssistantMessageData,
+  CitationsData,
+  PlanningArtifactData,
+  ReasoningData,
+  ModelSelectedData,
+  MessageEndData,
+  ErrorData,
+} from "@/features/chat/sse_events";
+import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 
 /**
  * Resolve the current streaming assistant message index with fallback.
@@ -49,9 +60,8 @@ export function snapshotSubKaniActivityFromBuffers(
  * replays events from Redis — including the user_message — and
  * we must append it so `mergeMessages` sees a complete conversation.
  */
-export function handleUserMessageEvent(ctx: ChatEventContext, data: unknown) {
-  const raw = data as { content?: string; messageId?: string };
-  const content = typeof raw.content === "string" ? raw.content : "";
+export function handleUserMessageEvent(ctx: ChatEventContext, data: UserMessageData) {
+  const content = typeof data.content === "string" ? data.content : "";
   if (!content) return;
 
   ctx.setMessages((prev) => {
@@ -67,18 +77,15 @@ export function handleUserMessageEvent(ctx: ChatEventContext, data: unknown) {
       {
         role: "user" as const,
         content,
-        messageId: raw.messageId,
+        messageId: data.messageId,
         timestamp: new Date().toISOString(),
       },
     ];
   });
 }
 
-export function handleMessageStartEvent(ctx: ChatEventContext, data: unknown) {
-  const { strategyId, strategy } = data as {
-    strategyId?: string;
-    strategy?: Strategy;
-  };
+export function handleMessageStartEvent(ctx: ChatEventContext, data: MessageStartData) {
+  const { strategyId, strategy } = data;
 
   if (strategyId) {
     ctx.setStrategyId(strategyId);
@@ -108,16 +115,18 @@ export function handleMessageStartEvent(ctx: ChatEventContext, data: unknown) {
   }
 }
 
-export function handleAssistantDeltaEvent(ctx: ChatEventContext, data: unknown) {
-  const raw = data as { messageId?: string; delta?: unknown };
-  const messageId = raw.messageId;
+export function handleAssistantDeltaEvent(
+  ctx: ChatEventContext,
+  data: AssistantDeltaData,
+) {
+  const messageId = data.messageId;
   const delta =
-    typeof raw.delta === "string"
-      ? raw.delta
-      : Array.isArray(raw.delta)
-        ? raw.delta.join("")
-        : raw.delta
-          ? String(raw.delta)
+    typeof data.delta === "string"
+      ? data.delta
+      : Array.isArray(data.delta)
+        ? (data.delta as string[]).join("")
+        : data.delta
+          ? String(data.delta)
           : "";
   if (!delta) return;
 
@@ -161,16 +170,18 @@ export function handleAssistantDeltaEvent(ctx: ChatEventContext, data: unknown) 
   });
 }
 
-export function handleAssistantMessageEvent(ctx: ChatEventContext, data: unknown) {
-  const raw = data as { messageId?: string; content?: unknown };
-  const messageId = raw.messageId;
+export function handleAssistantMessageEvent(
+  ctx: ChatEventContext,
+  data: AssistantMessageData,
+) {
+  const messageId = data.messageId;
   const finalContent =
-    typeof raw.content === "string"
-      ? raw.content
-      : Array.isArray(raw.content)
-        ? raw.content.join("")
-        : raw.content
-          ? String(raw.content)
+    typeof data.content === "string"
+      ? data.content
+      : Array.isArray(data.content)
+        ? (data.content as string[]).join("")
+        : data.content
+          ? String(data.content)
           : "";
   const subKaniActivity = snapshotSubKaniActivityFromBuffers(
     ctx.subKaniCallsBuffer,
@@ -249,8 +260,8 @@ export function handleAssistantMessageEvent(ctx: ChatEventContext, data: unknown
   ctx.planningArtifactsBuffer.length = 0;
 }
 
-export function handleCitationsEvent(ctx: ChatEventContext, data: unknown) {
-  const citations = (data as { citations?: unknown }).citations;
+export function handleCitationsEvent(ctx: ChatEventContext, data: CitationsData) {
+  const citations = data.citations;
   if (!Array.isArray(citations)) return;
   for (const c of citations) {
     if (c && typeof c === "object" && !Array.isArray(c)) {
@@ -259,21 +270,27 @@ export function handleCitationsEvent(ctx: ChatEventContext, data: unknown) {
   }
 }
 
-export function handlePlanningArtifactEvent(ctx: ChatEventContext, data: unknown) {
-  const artifact = (data as { planningArtifact?: unknown }).planningArtifact;
+export function handlePlanningArtifactEvent(
+  ctx: ChatEventContext,
+  data: PlanningArtifactData,
+) {
+  const artifact = data.planningArtifact;
   if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) return;
   ctx.planningArtifactsBuffer.push(artifact as PlanningArtifact);
 }
 
-export function handleReasoningEvent(ctx: ChatEventContext, data: unknown) {
-  const reasoning = (data as { reasoning?: string })?.reasoning;
+export function handleReasoningEvent(ctx: ChatEventContext, data: ReasoningData) {
+  const reasoning = data.reasoning;
   if (typeof reasoning !== "string") return;
   ctx.thinking.updateReasoning(reasoning);
   ctx.streamState.reasoning = reasoning;
 }
 
-export function handleOptimizationProgressEvent(ctx: ChatEventContext, data: unknown) {
-  const progressData = data as OptimizationProgressData;
+export function handleOptimizationProgressEvent(
+  ctx: ChatEventContext,
+  data: OptimizationProgressData,
+) {
+  const progressData = data;
   const previous = ctx.streamState.optimizationProgress;
 
   const mergedTrialsByNumber = new Map<number, OptimizationTrial>();
@@ -320,8 +337,25 @@ export function handleOptimizationProgressEvent(ctx: ChatEventContext, data: unk
   });
 }
 
-export function handleErrorEvent(ctx: ChatEventContext, data: unknown) {
-  const { error } = data as { error: string };
+export function handleModelSelectedEvent(
+  ctx: ChatEventContext,
+  data: ModelSelectedData,
+) {
+  const { modelId } = data;
+  if (typeof modelId === "string") {
+    ctx.setSelectedModelId?.(modelId || null);
+  }
+}
+
+export function handleMessageEndEvent(_ctx: ChatEventContext, _data: MessageEndData) {
+  // message_end signals the end of a streaming session.
+  // The actual stream-complete cleanup is handled by the onComplete callback
+  // in the subscription layer (operationSubscribe / useChatStreaming).
+  // This handler exists to prevent the event from falling through to "unknown".
+}
+
+export function handleErrorEvent(ctx: ChatEventContext, data: ErrorData) {
+  const { error } = data;
   const assistantMessage: Message = {
     role: "assistant",
     content: `⚠️ Error: ${error}`,

@@ -5,13 +5,17 @@ import {
   handleAssistantMessageEvent,
   handleCitationsEvent,
   handleErrorEvent,
+  handleMessageEndEvent,
   handleMessageStartEvent,
+  handleModelSelectedEvent,
   handleOptimizationProgressEvent,
   handlePlanningArtifactEvent,
   handleReasoningEvent,
   handleUserMessageEvent,
 } from "./handleChatEvent.messageEvents";
 import {
+  handleExecutorBuildRequestEvent,
+  handleGraphPlanEvent,
   handleGraphSnapshotEvent,
   handleStrategyClearedEvent,
   handleStrategyLinkEvent,
@@ -101,6 +105,22 @@ export function handleChatEvent(ctx: ChatEventContext, event: ChatSSEEvent) {
     }
     case "graph_cleared": {
       handleStrategyClearedEvent(ctx, event.data);
+      break;
+    }
+    case "model_selected": {
+      handleModelSelectedEvent(ctx, event.data);
+      break;
+    }
+    case "graph_plan": {
+      handleGraphPlanEvent(ctx, event.data);
+      break;
+    }
+    case "executor_build_request": {
+      handleExecutorBuildRequestEvent(ctx, event.data);
+      break;
+    }
+    case "message_end": {
+      handleMessageEndEvent(ctx, event.data);
       break;
     }
     case "optimization_progress": {

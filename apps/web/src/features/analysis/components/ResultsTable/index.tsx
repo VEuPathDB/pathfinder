@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
 import type { WdkSortDir } from "@/features/analysis/constants";
-import type { WdkRecord } from "@/features/workbench/api";
+import type { WdkRecord, RecordDetail } from "@/lib/types/wdk";
 import {
   getAttributes,
   getRecords,
@@ -12,7 +12,8 @@ import {
   type RecordsResponse,
 } from "@/features/analysis/api/stepResults";
 import { ResultsTableHeader } from "./ResultsTableHeader";
-import { ResultsTableBody, Pagination } from "./ResultsTableBody";
+import { ResultsTableBody } from "./ResultsTableBody";
+import { PaginationControls } from "./PaginationControls";
 
 interface ResultsTableProps {
   entityRef: EntityRef;
@@ -38,7 +39,7 @@ export function ResultsTable({ entityRef }: ResultsTableProps) {
 
   /* ---------- row expansion state ---------- */
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [detail, setDetail] = useState<RecordDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -186,7 +187,7 @@ export function ResultsTable({ entityRef }: ResultsTableProps) {
         onExpandRow={handleExpandRow}
       />
 
-      <Pagination
+      <PaginationControls
         offset={offset}
         pageSize={pageSize}
         totalCount={totalCount}

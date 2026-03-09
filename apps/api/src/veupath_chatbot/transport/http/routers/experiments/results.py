@@ -1,4 +1,4 @@
-"""Results endpoints: records, record detail, attributes, strategy, distributions, analyses, refine."""
+"""Results endpoints: records, record detail, attributes, distributions, refine."""
 
 from typing import Literal, cast
 
@@ -16,10 +16,7 @@ from veupath_chatbot.services.experiment.store import get_experiment_store
 from veupath_chatbot.services.wdk import get_strategy_api
 from veupath_chatbot.services.wdk.step_results import StepResultsService
 from veupath_chatbot.transport.http.deps import CurrentUser, ExperimentDep
-from veupath_chatbot.transport.http.schemas.experiments import (
-    RefineRequest,
-    RunAnalysisRequest,
-)
+from veupath_chatbot.transport.http.schemas.experiments import RefineRequest
 from veupath_chatbot.transport.http.schemas.steps import RecordDetailRequest
 
 logger = get_logger(__name__)
@@ -52,24 +49,6 @@ async def get_experiment_attributes(
         api, step_id=exp.wdk_step_id or 0, record_type=exp.config.record_type
     )
     return await svc.get_attributes()
-
-
-@router.get("/{experiment_id}/results/sortable-attributes")
-async def get_sortable_attributes(
-    exp: ExperimentDep, user_id: CurrentUser
-) -> JSONObject:
-    """Return only sortable (numeric) attributes, with suggestions for known score columns."""
-    full = await get_experiment_attributes(exp, user_id)
-    all_attrs = full.get("attributes", [])
-    sortable = [
-        a
-        for a in (all_attrs if isinstance(all_attrs, list) else [])
-        if isinstance(a, dict) and a.get("isSortable")
-    ]
-    return {
-        "sortableAttributes": cast(JSONValue, sortable),
-        "recordType": full.get("recordType"),
-    }
 
 
 @router.get("/{experiment_id}/results/records")
@@ -138,20 +117,6 @@ async def get_experiment_record_detail(
     return await svc.get_record_detail(pk_parts, exp.config.site_id)
 
 
-@router.get("/{experiment_id}/strategy")
-async def get_experiment_strategy(
-    exp: ExperimentDep, user_id: CurrentUser
-) -> JSONObject:
-    """Get the WDK strategy tree for an experiment."""
-    if not exp.wdk_strategy_id:
-        raise NotFoundError(
-            title="No WDK strategy",
-            detail="This experiment has no persisted WDK strategy.",
-        )
-    svc = _require_step(exp)
-    return await svc.get_strategy(exp.wdk_strategy_id)
-
-
 @router.get("/{experiment_id}/results/distributions/{attribute_name}")
 async def get_experiment_distribution(
     exp: ExperimentDep,
@@ -161,50 +126,6 @@ async def get_experiment_distribution(
     """Get distribution data for an attribute using the byValue column reporter."""
     svc = _require_step(exp)
     return await svc.get_distribution(attribute_name)
-
-
-@router.get("/{experiment_id}/analyses/types")
-async def get_experiment_analysis_types(
-    exp: ExperimentDep, user_id: CurrentUser
-) -> JSONObject:
-    """List available WDK step analysis types for an experiment."""
-    svc = _require_step(exp)
-    return await svc.list_analysis_types()
-
-
-@router.post("/{experiment_id}/analyses/run")
-async def run_experiment_analysis(
-    exp: ExperimentDep,
-    request: RunAnalysisRequest,
-    user_id: CurrentUser,
-) -> JSONObject:
-    """Create and run a WDK step analysis on the experiment's step.
-
-    Uses the shared service for defaults+merge+run, but adds
-    experiment-specific enrichment persistence.
-    """
-    from veupath_chatbot.services.experiment.enrichment import (
-        is_enrichment_analysis,
-        parse_enrichment_from_raw,
-        upsert_enrichment_result,
-    )
-    from veupath_chatbot.services.experiment.types import to_json
-
-    svc = _require_step(exp)
-    raw_result, merged_params = await svc.run_analysis_raw(
-        request.analysis_name, dict(request.parameters)
-    )
-
-    if is_enrichment_analysis(request.analysis_name):
-        er = parse_enrichment_from_raw(request.analysis_name, merged_params, raw_result)
-        upsert_enrichment_result(exp.enrichment_results, er)
-        get_experiment_store().save(exp)
-        return {
-            "_resultType": "enrichment",
-            "enrichmentResults": [to_json(er)],
-        }
-
-    return raw_result
 
 
 @router.post("/{experiment_id}/refine")

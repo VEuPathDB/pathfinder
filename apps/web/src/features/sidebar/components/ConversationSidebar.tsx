@@ -11,7 +11,7 @@
  */
 
 import { useCallback } from "react";
-import { RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { useSessionStore } from "@/state/useSessionStore";
 import { useConversationSidebarData } from "@/features/sidebar/hooks/useConversationSidebarData";
 import { useConversationSidebarActions } from "@/features/sidebar/hooks/useConversationSidebarActions";
@@ -86,15 +86,11 @@ export function ConversationSidebar({ siteId, onToast }: ConversationSidebarProp
         className="w-full rounded-md border border-border bg-card px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground transition-colors duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
       />
 
-      {/* Loading skeleton */}
-      {data.isSyncing && data.filtered.length === 0 && (
-        <div className="space-y-2">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div
-              key={i}
-              className="h-14 animate-pulse rounded-md border border-border bg-muted/50"
-            />
-          ))}
+      {/* Loading indicator — shown until the first fetch completes */}
+      {(!data.hasInitiallyLoaded || data.isSyncing) && data.filtered.length === 0 && (
+        <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground animate-fade-in">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <p className="text-xs">Loading conversations…</p>
         </div>
       )}
 
@@ -102,6 +98,7 @@ export function ConversationSidebar({ siteId, onToast }: ConversationSidebarProp
       <ConversationList
         items={data.filtered}
         query={data.query}
+        hasInitiallyLoaded={data.hasInitiallyLoaded}
         activeId={actions.activeId}
         renamingId={actions.renamingId}
         renameValue={actions.renameValue}

@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
+import type { Message, ToolCall } from "@pathfinder/shared";
 import { mergeMessages } from "./mergeMessages";
 import { parseToolArguments } from "./parseToolArguments";
 import { extractDelegateSummaries } from "./extractDelegateSummaries";
 
 describe("features/chat/utils", () => {
   it("mergeMessages only accepts incoming when at least as complete", () => {
-    const a = { role: "user", content: "a", timestamp: "t1" } as any;
-    const b = { role: "user", content: "b", timestamp: "t2" } as any;
+    const a: Message = { role: "user", content: "a", timestamp: "t1" };
+    const b: Message = { role: "user", content: "b", timestamp: "t2" };
     expect(mergeMessages([a], [])).toEqual([a]);
     expect(mergeMessages([a], [a])).toHaveLength(1);
     expect(mergeMessages([a, b], [a])).toHaveLength(2);
@@ -20,22 +21,22 @@ describe("features/chat/utils", () => {
       currentTrial: 5,
       totalTrials: 5,
     };
-    const local = [
+    const local: Message[] = [
       {
         role: "assistant",
         content: "done",
         optimizationProgress: localOpt,
         timestamp: "t1",
       },
-    ] as any;
-    const incoming = [
+    ];
+    const incoming: Message[] = [
       {
         role: "assistant",
         content: "done",
         optimizationProgress: null,
         timestamp: "t1",
       },
-    ] as any;
+    ];
     const result = mergeMessages(local, incoming);
     expect(result[0].optimizationProgress).toEqual(localOpt);
   });
@@ -47,15 +48,17 @@ describe("features/chat/utils", () => {
       currentTrial: 5,
       totalTrials: 5,
     };
-    const local = [
+    const local: Message[] = [
       {
         role: "assistant",
         content: "done",
         optimizationProgress: localOpt,
         timestamp: "t1",
       },
-    ] as any;
-    const incoming = [{ role: "assistant", content: "done", timestamp: "t1" }] as any;
+    ];
+    const incoming: Message[] = [
+      { role: "assistant", content: "done", timestamp: "t1" },
+    ];
     const result = mergeMessages(local, incoming);
     expect(result[0].optimizationProgress).toEqual(localOpt);
   });
@@ -67,15 +70,15 @@ describe("features/chat/utils", () => {
       currentTrial: 10,
       totalTrials: 10,
     };
-    const local = [{ role: "assistant", content: "done", timestamp: "t1" }] as any;
-    const incoming = [
+    const local: Message[] = [{ role: "assistant", content: "done", timestamp: "t1" }];
+    const incoming: Message[] = [
       {
         role: "assistant",
         content: "done",
         optimizationProgress: serverOpt,
         timestamp: "t1",
       },
-    ] as any;
+    ];
     const result = mergeMessages(local, incoming);
     expect(result[0].optimizationProgress).toEqual(serverOpt);
   });
@@ -89,7 +92,7 @@ describe("features/chat/utils", () => {
   });
 
   it("extractDelegateSummaries parses delegate_strategy_subtasks results", () => {
-    const toolCalls = [
+    const toolCalls: ToolCall[] = [
       { id: "x", name: "other", arguments: {}, result: "{}" },
       {
         id: "d1",
@@ -106,7 +109,7 @@ describe("features/chat/utils", () => {
           rejected: [{ task: "r", error: "e", details: "d" }],
         }),
       },
-    ] as any;
+    ];
 
     const res = extractDelegateSummaries(toolCalls);
     expect(res.summaries).toHaveLength(1);

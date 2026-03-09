@@ -1,6 +1,6 @@
 import type { PlanStepNode, StrategyPlan } from "@pathfinder/shared";
 import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
-import type { Step, Strategy } from "./types";
+import type { Step, Strategy, StepParameters } from "./types";
 
 export type SerializedStrategyPlan = {
   plan: StrategyPlan;
@@ -8,11 +8,9 @@ export type SerializedStrategyPlan = {
   recordType: string | null;
 };
 
-function sanitizeParametersForPlan(
-  params: Record<string, unknown>,
-): Record<string, unknown> {
+function sanitizeParametersForPlan(params: StepParameters): StepParameters {
   // UI-only sentinel must never be persisted/sent.
-  const next: Record<string, unknown> = {};
+  const next: StepParameters = {};
   for (const [key, value] of Object.entries(params || {})) {
     if (value === "@@fake@@") continue;
     if (Array.isArray(value) && value.includes("@@fake@@")) continue;

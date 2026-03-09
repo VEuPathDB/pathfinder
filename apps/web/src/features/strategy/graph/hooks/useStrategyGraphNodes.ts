@@ -19,15 +19,15 @@ import {
   inferStepKind,
   type CombineMismatchGroup,
 } from "@/lib/strategyGraph";
-import { isRecord } from "@/lib/utils/isRecord";
 
 const DEFAULT_NODE_WIDTH = 224;
 const DEFAULT_NODE_HEIGHT = 112;
 const WARNING_PADDING = 16;
 
-type NodeData = Record<string, unknown> & {
+type NodeData = {
   isUnsaved?: boolean;
   step?: Step;
+  message?: string;
 };
 
 function computeWarningGroupNodes(
@@ -228,9 +228,7 @@ export function useStrategyGraphNodes(options: UseStrategyGraphNodesOptions) {
       prev.map((node) => ({
         ...node,
         data: {
-          ...((node.data && isRecord(node.data)
-            ? (node.data as NodeData)
-            : {}) as NodeData),
+          ...(node.data as NodeData),
           isUnsaved: dirtyStepIds.has(node.id),
         },
       })),

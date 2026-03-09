@@ -1,5 +1,5 @@
 import type { OptimizeSpec, ParamSpec } from "@pathfinder/shared";
-import { extractVocabOptions } from "@/features/strategy/editor/components/stepEditorUtils";
+import { extractVocabOptions } from "@/lib/utils/vocab";
 
 export interface VocabEntry {
   value: string;

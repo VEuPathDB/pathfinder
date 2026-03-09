@@ -11,12 +11,14 @@ import { useSiteTheme } from "@/features/sites/hooks/useSiteTheme";
 import { WorkbenchSidebar } from "@/features/workbench/components/WorkbenchSidebar";
 import { WorkbenchMain } from "@/features/workbench/components/WorkbenchMain";
 import { GeneSearchSidebar } from "@/features/workbench/components/GeneSearchSidebar";
+import { SidebarEdgeTab } from "@/features/workbench/components/SidebarEdgeTab";
 import { listGeneSets } from "@/features/workbench/api/geneSets";
 import { useWorkbenchStore } from "@/features/workbench/store";
 import { Button } from "@/lib/components/ui/Button";
 import {
   AlertTriangle,
   Layers,
+  List,
   Loader2,
   MessageCircle,
   RefreshCw,
@@ -42,6 +44,8 @@ export default function WorkbenchPage() {
   const [showSettings, setShowSettings] = useState(false);
   const geneSearchOpen = useWorkbenchStore((s) => s.geneSearchOpen);
   const toggleGeneSearch = useWorkbenchStore((s) => s.toggleGeneSearch);
+  const leftSidebarOpen = useWorkbenchStore((s) => s.leftSidebarOpen);
+  const toggleLeftSidebar = useWorkbenchStore((s) => s.toggleLeftSidebar);
 
   // Load gene sets from API on mount / site change
   const addGeneSet = useWorkbenchStore((s) => s.addGeneSet);
@@ -126,16 +130,6 @@ export default function WorkbenchPage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={toggleGeneSearch}
-              aria-label="Toggle gene search"
-              aria-pressed={geneSearchOpen}
-              className={geneSearchOpen ? "bg-white/20" : ""}
-            >
-              <Search className="h-4 w-4" aria-hidden />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
               onClick={() => setShowSettings(true)}
               aria-label="Settings"
             >
@@ -146,18 +140,34 @@ export default function WorkbenchPage() {
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="w-64 shrink-0 border-r border-border bg-sidebar">
-          <WorkbenchSidebar />
-        </div>
+        {leftSidebarOpen ? (
+          <div className="w-96 shrink-0 border-r border-border bg-sidebar">
+            <WorkbenchSidebar onCollapse={toggleLeftSidebar} />
+          </div>
+        ) : (
+          <SidebarEdgeTab
+            side="left"
+            label="Gene Sets"
+            icon={<List className="h-4 w-4" />}
+            onClick={toggleLeftSidebar}
+          />
+        )}
 
         <div className="min-h-0 min-w-0 flex-1 bg-card">
           <WorkbenchMain />
         </div>
 
-        {geneSearchOpen && (
+        {geneSearchOpen ? (
           <div className="w-80 shrink-0 border-l border-border bg-sidebar">
-            <GeneSearchSidebar />
+            <GeneSearchSidebar onCollapse={toggleGeneSearch} />
           </div>
+        ) : (
+          <SidebarEdgeTab
+            side="right"
+            label="Gene Search"
+            icon={<Search className="h-4 w-4" />}
+            onClick={toggleGeneSearch}
+          />
         )}
       </div>
 

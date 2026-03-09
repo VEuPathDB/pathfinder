@@ -15,7 +15,7 @@ import {
   getStrategy,
   openStrategy,
   updateStrategy as updateStrategyApi,
-} from "@/lib/api/client";
+} from "@/lib/api/strategies";
 import { toUserMessage } from "@/lib/api/errors";
 import { useSessionStore } from "@/state/useSessionStore";
 import { useStrategyStore } from "@/state/useStrategyStore";

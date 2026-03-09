@@ -3,6 +3,7 @@
  */
 
 import { create } from "zustand";
+import type { NodeSelection } from "@/lib/types/nodeSelection";
 
 interface SessionState {
   selectedSite: string;
@@ -15,7 +16,7 @@ interface SessionState {
   /** Monotonic counter; bump to tell sidebar to reload chat preview. */
   chatPreviewVersion: number;
   /** Transient node selection payload from graph -> chat. */
-  pendingAskNode: Record<string, unknown> | null;
+  pendingAskNode: NodeSelection | null;
   /** Prefill content for the message composer. */
   composerPrefill: { message: string } | null;
 
@@ -35,7 +36,7 @@ interface SessionState {
   // Signal setters
   bumpChatPreviewVersion: () => void;
   bumpAuthVersion: () => void;
-  setPendingAskNode: (payload: Record<string, unknown> | null) => void;
+  setPendingAskNode: (payload: NodeSelection | null) => void;
   setComposerPrefill: (payload: { message: string } | null) => void;
   setAuthRefreshed: (value: boolean) => void;
   setAuthStatusKnown: (value: boolean) => void;

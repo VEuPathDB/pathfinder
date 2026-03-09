@@ -7,15 +7,11 @@
 
 import type { ChatSSEEvent } from "@/features/chat/sse_events";
 
-/**
- * Event sequences include "message_end" and "graph_plan" which don't appear
- * in the ChatSSEEvent union (the handler ignores them).  We type the arrays
- * broadly and cast individual items where needed.
- */
-type AnySSEEvent = ChatSSEEvent | { type: string; data: Record<string, unknown> };
+// All event types (including graph_plan, message_end, etc.) are part of
+// the ChatSSEEvent union — no broad type hack needed.
 
 // Execute mode: single-step epitope search with tool calls + build
-export const EXECUTE_EPITOPE_SEARCH_EVENTS: AnySSEEvent[] = [
+export const EXECUTE_EPITOPE_SEARCH_EVENTS: ChatSSEEvent[] = [
   {
     type: "message_start",
     data: {
@@ -108,13 +104,6 @@ export const EXECUTE_EPITOPE_SEARCH_EVENTS: AnySSEEvent[] = [
         },
         graphName: "New Conversation",
       },
-      allSteps: [
-        {
-          stepId: "step-001",
-          kind: "search",
-          displayName: "P. falciparum epitope genes",
-        },
-      ],
     },
   },
   // Tool call: build_strategy
@@ -218,7 +207,7 @@ export const EXECUTE_EPITOPE_SEARCH_EVENTS: AnySSEEvent[] = [
 ];
 
 // Planning artifact + executor request events
-export const PLAN_ARTIFACT_EVENTS: AnySSEEvent[] = [
+export const PLAN_ARTIFACT_EVENTS: ChatSSEEvent[] = [
   {
     type: "message_start",
     data: {
@@ -354,7 +343,7 @@ export const PLAN_ARTIFACT_EVENTS: AnySSEEvent[] = [
 ];
 
 // Optimization progress events
-export const OPTIMIZATION_PROGRESS_EVENTS: AnySSEEvent[] = [
+export const OPTIMIZATION_PROGRESS_EVENTS: ChatSSEEvent[] = [
   {
     type: "message_start",
     data: {
@@ -392,15 +381,20 @@ export const OPTIMIZATION_PROGRESS_EVENTS: AnySSEEvent[] = [
     type: "optimization_progress",
     data: {
       optimizationId: "opt-001",
-      status: "trial_complete",
+      status: "running",
       totalTrials: 3,
       currentTrial: 1,
       trial: {
-        number: 1,
+        trialNumber: 1,
         parameters: { fold_change: "1.8" },
         score: 0.65,
         recall: 0.8,
         falsePositiveRate: 0.25,
+        resultCount: null,
+        positiveHits: null,
+        negativeHits: null,
+        totalPositives: null,
+        totalNegatives: null,
       },
     },
   },
@@ -408,15 +402,20 @@ export const OPTIMIZATION_PROGRESS_EVENTS: AnySSEEvent[] = [
     type: "optimization_progress",
     data: {
       optimizationId: "opt-001",
-      status: "trial_complete",
+      status: "running",
       totalTrials: 3,
       currentTrial: 2,
       trial: {
-        number: 2,
+        trialNumber: 2,
         parameters: { fold_change: "3.2" },
         score: 0.78,
         recall: 0.7,
         falsePositiveRate: 0.1,
+        resultCount: null,
+        positiveHits: null,
+        negativeHits: null,
+        totalPositives: null,
+        totalNegatives: null,
       },
     },
   },
@@ -424,15 +423,20 @@ export const OPTIMIZATION_PROGRESS_EVENTS: AnySSEEvent[] = [
     type: "optimization_progress",
     data: {
       optimizationId: "opt-001",
-      status: "trial_complete",
+      status: "running",
       totalTrials: 3,
       currentTrial: 3,
       trial: {
-        number: 3,
+        trialNumber: 3,
         parameters: { fold_change: "2.5" },
         score: 0.82,
         recall: 0.75,
         falsePositiveRate: 0.12,
+        resultCount: null,
+        positiveHits: null,
+        negativeHits: null,
+        totalPositives: null,
+        totalNegatives: null,
       },
     },
   },
@@ -444,9 +448,16 @@ export const OPTIMIZATION_PROGRESS_EVENTS: AnySSEEvent[] = [
       totalTrials: 3,
       currentTrial: 3,
       bestTrial: {
-        number: 3,
+        trialNumber: 3,
         parameters: { fold_change: "2.5" },
         score: 0.82,
+        recall: null,
+        falsePositiveRate: null,
+        resultCount: null,
+        positiveHits: null,
+        negativeHits: null,
+        totalPositives: null,
+        totalNegatives: null,
       },
     },
   },
@@ -471,7 +482,7 @@ export const OPTIMIZATION_PROGRESS_EVENTS: AnySSEEvent[] = [
 ];
 
 // Sub-kani delegation events
-export const DELEGATION_EVENTS: AnySSEEvent[] = [
+export const DELEGATION_EVENTS: ChatSSEEvent[] = [
   {
     type: "message_start",
     data: {

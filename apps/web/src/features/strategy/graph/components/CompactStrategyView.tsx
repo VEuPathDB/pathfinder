@@ -1,15 +1,14 @@
 "use client";
 
 /**
- * CompactStrategyView — VEuPathDB-style horizontal strategy strip.
+ * CompactStrategyView -- VEuPathDB-style horizontal strategy strip.
  *
  * Main spine is a single `items-center` row of pills and arrows.
  * For combines, the Venn icon sits inline on the spine, and the
  * secondary input floats above it via absolute positioning.
  */
 
-import { useCallback, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 import { Layers, Loader2, Pencil } from "lucide-react";
 import type { Step, Strategy } from "@pathfinder/shared";
 import {
@@ -17,9 +16,6 @@ import {
   type CompactStep,
 } from "@/features/strategy/graph/utils/compactLayout";
 import { VennIcon } from "@/features/strategy/graph/components/OpBadge";
-import { createGeneSetFromStrategy } from "@/features/workbench/api/geneSets";
-import { useWorkbenchStore } from "@/features/workbench/store";
-import { useSessionStore } from "@/state/useSessionStore";
 
 // Style helpers
 
@@ -47,7 +43,7 @@ function Arrow() {
   );
 }
 
-/** Step pill — two tight lines: name + count. */
+/** Step pill -- two tight lines: name + count. */
 function Pill({ step }: { step: CompactStep }) {
   const border = KIND_BORDER[step.kind] ?? "border-border";
   const countCls = KIND_COUNT[step.kind] ?? "text-muted-foreground";
@@ -70,7 +66,7 @@ function Pill({ step }: { step: CompactStep }) {
   );
 }
 
-/** Venn icon sitting inline on the spine row — no background, scaled up. */
+/** Venn icon sitting inline on the spine row -- no background, scaled up. */
 function InlineVenn({ operator }: { operator: string }) {
   return (
     <div className="flex shrink-0 items-center justify-center [&_svg]:mr-0 [&_svg]:h-5 [&_svg]:w-auto">
@@ -81,7 +77,7 @@ function InlineVenn({ operator }: { operator: string }) {
 
 // Segment renderers
 
-/** A plain step (search or transform) — just a pill on the spine. */
+/** A plain step (search or transform) -- just a pill on the spine. */
 function PlainSegment({ step }: { step: CompactStep }) {
   return <Pill step={step} />;
 }
@@ -102,7 +98,7 @@ function CombineSegment({
     <div className="flex items-center">
       {/* Venn icon with secondary floating above */}
       <div className="relative flex items-center justify-center">
-        {/* Secondary input — absolute, floating above the Venn dot */}
+        {/* Secondary input -- absolute, floating above the Venn dot */}
         <div className="absolute bottom-full left-1/2 mb-0.5 flex -translate-x-1/2 flex-col items-center">
           <Pill step={secondaryInput} />
           <div className="h-1.5 w-px bg-border" />
@@ -115,65 +111,29 @@ function CombineSegment({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Find the root step from a built strategy. */
-function findRootStep(strategy: Strategy): Step | null {
-  if (!strategy.rootStepId || !strategy.steps?.length) return null;
-  return strategy.steps.find((s) => s.id === strategy.rootStepId) ?? null;
-}
-
 // Main component
 
 interface CompactStrategyViewProps {
   strategy: Strategy | null;
   onEditGraph?: () => void;
+  /** Callback to export strategy results as a gene set in the workbench. */
+  onExportAsGeneSet?: (strategy: Strategy) => void;
+  /** Whether the export operation is in progress. */
+  exportingGeneSet?: boolean;
 }
 
 export function CompactStrategyView({
   strategy,
   onEditGraph,
+  onExportAsGeneSet,
+  exportingGeneSet = false,
 }: CompactStrategyViewProps) {
-  const router = useRouter();
-  const addGeneSet = useWorkbenchStore((s) => s.addGeneSet);
-  const selectedSite = useSessionStore((s) => s.selectedSite);
-  const [openingWorkbench, setOpeningWorkbench] = useState(false);
-
   const spine = useMemo(() => {
     if (!strategy?.steps?.length || !strategy.rootStepId) return [];
     return buildSpineLayout(strategy.steps, strategy.rootStepId);
   }, [strategy]);
 
-  const canOpenInWorkbench = !!strategy?.wdkStrategyId;
-
-  const handleOpenInWorkbench = useCallback(async () => {
-    if (!strategy?.wdkStrategyId) return;
-    setOpeningWorkbench(true);
-
-    try {
-      const rootStep = findRootStep(strategy);
-      const name = strategy.name || "Strategy results";
-
-      const geneSet = await createGeneSetFromStrategy({
-        name,
-        siteId: strategy.siteId || selectedSite,
-        wdkStrategyId: strategy.wdkStrategyId,
-        wdkStepId: rootStep?.wdkStepId,
-        searchName: rootStep?.searchName,
-        recordType: strategy.recordType ?? rootStep?.recordType,
-        parameters: rootStep?.parameters as Record<string, unknown> | undefined,
-      });
-
-      addGeneSet(geneSet);
-      router.push("/workbench");
-    } catch (err) {
-      console.error("Failed to open strategy in workbench:", err);
-    } finally {
-      setOpeningWorkbench(false);
-    }
-  }, [strategy, selectedSite, addGeneSet, router]);
+  const canOpenInWorkbench = !!strategy?.wdkStrategyId && !!onExportAsGeneSet;
 
   if (!strategy || spine.length === 0) return null;
 
@@ -194,16 +154,16 @@ export function CompactStrategyView({
           ))}
         </div>
 
-        {/* Action buttons — pinned outside the scroll area */}
+        {/* Action buttons -- pinned outside the scroll area */}
         <div className="mr-3 flex shrink-0 items-center gap-1.5 self-center">
           {canOpenInWorkbench && (
             <button
               type="button"
-              onClick={handleOpenInWorkbench}
-              disabled={openingWorkbench}
+              onClick={() => onExportAsGeneSet(strategy)}
+              disabled={exportingGeneSet}
               className="inline-flex shrink-0 items-center gap-1 rounded border border-dashed border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-input hover:text-foreground disabled:opacity-50"
             >
-              {openingWorkbench ? (
+              {exportingGeneSet ? (
                 <Loader2 className="h-2.5 w-2.5 animate-spin" aria-hidden />
               ) : (
                 <Layers className="h-2.5 w-2.5" aria-hidden />

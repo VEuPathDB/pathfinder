@@ -6,7 +6,7 @@
  */
 
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
-import { listModels } from "@/lib/api/client";
+import { listModels } from "@/lib/api/models";
 import { useSettingsStore } from "@/state/useSettingsStore";
 import { buildModelSelection } from "@/features/chat/components/MessageComposer";
 import type { ReasoningEffort, ModelCatalogEntry } from "@pathfinder/shared";

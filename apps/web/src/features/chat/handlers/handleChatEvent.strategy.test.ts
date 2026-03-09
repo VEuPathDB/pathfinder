@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { handleChatEvent } from "./handleChatEvent";
+import type { ChatSSEEvent } from "@/features/chat/sse_events";
 import { StreamingSession } from "@/features/chat/streaming/StreamingSession";
 import { makeCtx } from "./handleChatEvent.testUtils";
 
@@ -28,7 +29,7 @@ describe("handleChatEvent — strategy events", () => {
           displayName: "A",
         },
       },
-    } as any);
+    } as ChatSSEEvent);
 
     expect(ctx.session.undoSnapshot).toBeTruthy();
     expect(ctx.session.snapshotApplied).toBe(true);
@@ -37,7 +38,7 @@ describe("handleChatEvent — strategy events", () => {
     handleChatEvent(ctx, {
       type: "assistant_message",
       data: { messageId: "m1", content: "done" },
-    } as any);
+    } as ChatSSEEvent);
 
     expect(state.messages).toHaveLength(1);
     expect(state.messages[0]?.content).toBe("done");
@@ -62,7 +63,7 @@ describe("handleChatEvent — strategy events", () => {
           recordType: "gene",
         },
       },
-    } as any);
+    } as ChatSSEEvent);
 
     expect(ctx.setStrategyMeta).toHaveBeenCalledWith({
       name: "New name",
@@ -112,7 +113,7 @@ describe("handleChatEvent — strategy events", () => {
         name: "N",
         description: "D",
       },
-    } as any);
+    } as ChatSSEEvent);
     expect(ctx.addExecutedStrategy).toHaveBeenCalled();
     expect(ctx.setWdkInfo).toHaveBeenCalledWith(123, "u", "N", "D");
     expect(ctx.setStrategyMeta).toHaveBeenCalled();
@@ -123,7 +124,10 @@ describe("handleChatEvent — strategy events", () => {
       currentStrategy: null,
       getStrategy,
     });
-    handleChatEvent(ctx2, { type: "strategy_link", data: { graphId: "s2" } } as any);
+    handleChatEvent(ctx2, {
+      type: "strategy_link",
+      data: { graphId: "s2" },
+    } as ChatSSEEvent);
     // resolve microtask for then()
     await Promise.resolve();
     expect(getStrategy).toHaveBeenCalledWith("s2");
@@ -137,7 +141,7 @@ describe("handleChatEvent — strategy events", () => {
         description: "NewDesc",
         recordType: "gene",
       },
-    } as any);
+    } as ChatSSEEvent);
     expect(ctx.setStrategyMeta).toHaveBeenCalledWith({
       name: "NewName",
       description: "NewDesc",
@@ -145,8 +149,52 @@ describe("handleChatEvent — strategy events", () => {
     });
 
     // graph_cleared clears when id matches.
-    handleChatEvent(ctx, { type: "graph_cleared", data: { graphId: "s1" } } as any);
+    handleChatEvent(ctx, {
+      type: "graph_cleared",
+      data: { graphId: "s1" },
+    } as ChatSSEEvent);
     expect(ctx.clearStrategy).toHaveBeenCalled();
+  });
+
+  it("handles graph_plan by updating strategy metadata", () => {
+    const { ctx } = makeCtx();
+    handleChatEvent(ctx, {
+      type: "graph_plan",
+      data: {
+        graphId: "s1",
+        plan: { recordType: "transcript", root: { id: "step-1" } },
+        name: "My plan",
+        recordType: "transcript",
+        description: "A plan",
+      },
+    } as ChatSSEEvent);
+
+    expect(ctx.setStrategyMeta).toHaveBeenCalledWith({
+      name: "My plan",
+      description: "A plan",
+      recordType: "transcript",
+    });
+  });
+
+  it("graph_plan is ignored when graphId does not match", () => {
+    const { ctx } = makeCtx();
+    handleChatEvent(ctx, {
+      type: "graph_plan",
+      data: {
+        graphId: "other-id",
+        plan: { root: {} },
+      },
+    } as ChatSSEEvent);
+    expect(ctx.setStrategyMeta).not.toHaveBeenCalled();
+  });
+
+  it("executor_build_request is a no-op (does not crash)", () => {
+    const { ctx } = makeCtx();
+    handleChatEvent(ctx, {
+      type: "executor_build_request",
+      data: { executorBuildRequest: { strategyId: "s1" } },
+    } as ChatSSEEvent);
+    // No assertions needed — just verifying it doesn't crash or fall to unknown.
   });
 
   it("handles strategy_update guards and applies step updates", () => {
@@ -171,7 +219,7 @@ describe("handleChatEvent — strategy events", () => {
         graphId: "other",
         step: { stepId: "x", kind: "search", displayName: "X", recordType: "gene" },
       },
-    } as any);
+    } as ChatSSEEvent);
     expect(ctx.addStep).not.toHaveBeenCalled();
 
     // Matching graph id applies update and captures undo snapshot.
@@ -189,7 +237,7 @@ describe("handleChatEvent — strategy events", () => {
           description: "Desc",
         },
       },
-    } as any);
+    } as ChatSSEEvent);
     expect(ctx.addStep).toHaveBeenCalledWith(
       expect.objectContaining({ id: "a", displayName: "A", searchName: "q" }),
     );

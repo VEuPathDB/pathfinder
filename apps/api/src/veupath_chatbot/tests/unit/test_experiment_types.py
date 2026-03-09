@@ -12,7 +12,6 @@ from veupath_chatbot.services.experiment.types import (
     BootstrapResult,
     ConfidenceInterval,
     ConfusionMatrix,
-    ControlSetSummary,
     CrossValidationResult,
     EnrichmentResult,
     EnrichmentTerm,
@@ -267,14 +266,6 @@ class TestOperatorKnob:
         assert "INTERSECT" in k.options
         assert "UNION" in k.options
         assert "MINUS" in k.options
-
-
-class TestControlSetSummary:
-    def test_defaults(self) -> None:
-        cs = ControlSetSummary(id="cs1", name="Published", source="paper")
-        assert cs.tags == []
-        assert cs.positive_count == 0
-        assert cs.negative_count == 0
 
 
 class TestTreeOptimizationTrial:

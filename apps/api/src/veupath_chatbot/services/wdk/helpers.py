@@ -13,6 +13,14 @@ from veupath_chatbot.platform.types import JSONObject, JSONValue
 
 _SORTABLE_WDK_TYPES = {"number", "float", "integer", "double"}
 
+DETAIL_ATTRIBUTE_LIMIT = 50
+"""Max attributes to request when fetching a single record detail.
+
+WDK record types can have thousands of attributes (e.g. 3000+ expression
+columns on transcript).  Requesting all would timeout.  The first ~50
+``isInReport`` attributes cover core gene/record fields.
+"""
+
 _SCORE_ATTRIBUTE_KEYWORDS = {
     "score",
     "e_value",
@@ -195,6 +203,48 @@ def _build_single_attribute(
         "isSortable": sortable,
         "isSuggested": sortable and is_suggested_score(name),
     }
+
+
+# ---------------------------------------------------------------------------
+# Detail attribute extraction
+# ---------------------------------------------------------------------------
+
+
+def extract_detail_attributes(
+    attrs_raw: object,
+) -> tuple[list[str], dict[str, str]]:
+    """Extract attribute names and display names for the record detail view.
+
+    Filters to attributes with ``isInReport=True`` (skipping composite
+    overview fields) and caps at :data:`DETAIL_ATTRIBUTE_LIMIT` so that
+    record types with thousands of attributes don't timeout WDK.
+
+    Handles both dict (``attributesMap``) and list (expanded) formats.
+
+    :returns: ``(attribute_names, display_name_map)``
+    """
+    items: list[tuple[str, dict[str, object]]] = []
+    if isinstance(attrs_raw, dict):
+        for name, meta in attrs_raw.items():
+            if isinstance(meta, dict):
+                items.append((str(name), meta))
+    elif isinstance(attrs_raw, list):
+        for meta in attrs_raw:
+            if isinstance(meta, dict):
+                items.append((str(meta.get("name", "")), meta))
+
+    names: list[str] = []
+    display_names: dict[str, str] = {}
+    for name, meta in items:
+        if not meta.get("isInReport", meta.get("isDisplayable", False)):
+            continue
+        names.append(name)
+        dn = meta.get("displayName")
+        display_names[name] = str(dn) if isinstance(dn, str) else name
+        if len(names) >= DETAIL_ATTRIBUTE_LIMIT:
+            break
+
+    return names, display_names
 
 
 # ---------------------------------------------------------------------------

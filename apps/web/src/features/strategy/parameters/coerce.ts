@@ -1,5 +1,6 @@
 import type { ParamSpec } from "@/features/strategy/parameters/spec";
 import { isMultiParam } from "@/features/strategy/parameters/spec";
+import type { StepParameters } from "@/lib/strategyGraph/types";
 
 type CoerceOptions = {
   allowStringParsing?: boolean;
@@ -59,11 +60,11 @@ function coerceScalarValue(value: unknown): unknown {
 }
 
 export function coerceParametersForSpecs(
-  params: Record<string, unknown>,
+  params: StepParameters,
   specs: ParamSpec[],
   options: CoerceOptions = {},
-): Record<string, unknown> {
-  const next: Record<string, unknown> = { ...params };
+): StepParameters {
+  const next: StepParameters = { ...params };
   for (const spec of specs) {
     if (!spec.name) continue;
     const rawValue = params[spec.name];

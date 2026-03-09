@@ -19,7 +19,7 @@ interface RankMetricsSectionProps {
   rankMetrics: RankMetrics;
 }
 
-const K_DISPLAY_ORDER = [10, 25, 50, 100];
+const K_DISPLAY_ORDER = [10, 25, 50, 100, 250];
 
 export function RankMetricsSection({ rankMetrics }: RankMetricsSectionProps) {
   const kRows = useMemo(() => {

@@ -266,12 +266,32 @@ async def _run_stream_loop(
     Emits a ``message_start`` event with strategy context, then forwards
     every event from the stream iterator to Redis/PostgreSQL via ``emit()``.
     """
+    # Extract description from plan metadata when available.
+    plan = projection.plan if isinstance(projection.plan, dict) else {}
+    meta = plan.get("metadata") if isinstance(plan, dict) else None
+    description = meta.get("description") if isinstance(meta, dict) else None
+
+    # Compute WDK URL when we have a strategy ID and site.
+    wdk_url: str | None = None
+    if projection.wdk_strategy_id is not None and site_id:
+        try:
+            from veupath_chatbot.integrations.veupathdb.factory import get_site
+
+            site = get_site(site_id)
+            wdk_url = site.strategy_url(projection.wdk_strategy_id)
+        except Exception:
+            pass
+
     strategy_payload: JSONObject = {
         "id": stream_id_str,
         "name": projection.name,
+        "title": projection.name,
+        "description": description,
         "siteId": site_id,
         "recordType": projection.record_type,
         "wdkStrategyId": projection.wdk_strategy_id,
+        "isSaved": projection.is_saved,
+        "wdkUrl": wdk_url,
     }
     await emit(
         redis,

@@ -2,10 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from veupath_chatbot.services.experiment.types.core import (
-    ControlSetSource,
-    ParameterType,
-)
+from veupath_chatbot.services.experiment.types.core import ParameterType
 from veupath_chatbot.services.experiment.types.rank import RankMetrics
 
 
@@ -19,18 +16,6 @@ class OptimizationSpec:
     max: float | None = None
     step: float | None = None
     choices: list[str] | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class ControlSetSummary:
-    """Lightweight control set reference for experiment configs."""
-
-    id: str
-    name: str
-    source: ControlSetSource
-    tags: list[str] = field(default_factory=list)
-    positive_count: int = 0
-    negative_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)

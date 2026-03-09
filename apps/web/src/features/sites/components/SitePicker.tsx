@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getVeupathdbAuthStatus, listSites, logoutVeupathdb } from "@/lib/api/client";
+import { getVeupathdbAuthStatus, logoutVeupathdb } from "@/lib/api/veupathdb-auth";
+import { listSites } from "@/lib/api/sites";
 import type { VEuPathDBSite as Site } from "@pathfinder/shared";
 import { useSessionStore } from "@/state/useSessionStore";
 import { Modal } from "@/lib/components/Modal";

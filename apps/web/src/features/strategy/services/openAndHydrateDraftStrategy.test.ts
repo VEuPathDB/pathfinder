@@ -6,12 +6,16 @@ describe("openAndHydrateDraftStrategy", () => {
   it("opens, seeds list store, hydrates full strategy, and sets meta", async () => {
     const nowIso = () => "2026-01-01T00:00:00.000Z";
     const open = vi.fn().mockResolvedValue({ strategyId: "s1" });
-    const full = {
+    const full: Strategy = {
       id: "s1",
       name: "X",
       siteId: "plasmodb",
       recordType: "gene",
-    } as any as Strategy;
+      steps: [],
+      rootStepId: null,
+      createdAt: "t",
+      updatedAt: "t",
+    };
     const getStrategy = vi.fn().mockResolvedValue(full);
 
     const setStrategyId = vi.fn();

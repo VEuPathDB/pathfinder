@@ -6,8 +6,6 @@ import pytest
 
 from veupath_chatbot.platform.errors import ValidationError
 from veupath_chatbot.services.experiment.evaluation import (
-    _extract_control_counts,
-    compute_step_contributions,
     compute_sweep_values,
     format_metrics_dict,
     generate_sweep_events,
@@ -211,55 +209,6 @@ class TestFormatMetricsDict:
 
 
 # ---------------------------------------------------------------------------
-# _extract_control_counts
-# ---------------------------------------------------------------------------
-
-
-class TestExtractControlCounts:
-    def test_full_result(self) -> None:
-        result = {
-            "target": {"resultCount": 100},
-            "positive": {"intersectionCount": 8},
-            "negative": {"intersectionCount": 3},
-        }
-        total, pos, neg = _extract_control_counts(result)
-        assert total == 100
-        assert pos == 8
-        assert neg == 3
-
-    def test_missing_sections(self) -> None:
-        total, pos, neg = _extract_control_counts({})
-        assert total == 0
-        assert pos == 0
-        assert neg == 0
-
-    def test_none_sections(self) -> None:
-        result = {"target": None, "positive": None, "negative": None}
-        total, pos, neg = _extract_control_counts(result)
-        assert total == 0
-        assert pos == 0
-        assert neg == 0
-
-    def test_non_dict_sections(self) -> None:
-        result = {"target": "bad", "positive": 42, "negative": []}
-        total, pos, neg = _extract_control_counts(result)
-        assert total == 0
-        assert pos == 0
-        assert neg == 0
-
-    def test_float_counts(self) -> None:
-        result = {
-            "target": {"resultCount": 100.0},
-            "positive": {"intersectionCount": 8.0},
-            "negative": {"intersectionCount": 3.0},
-        }
-        total, pos, neg = _extract_control_counts(result)
-        assert total == 100
-        assert pos == 8
-        assert neg == 3
-
-
-# ---------------------------------------------------------------------------
 # run_sweep_point
 # ---------------------------------------------------------------------------
 
@@ -406,76 +355,6 @@ class TestReEvaluate:
 
         mock_tree_fn.assert_called_once()
         assert isinstance(result, dict)
-
-
-# ---------------------------------------------------------------------------
-# compute_step_contributions
-# ---------------------------------------------------------------------------
-
-
-class TestComputeStepContributions:
-    @pytest.mark.asyncio
-    async def test_basic_tree(self) -> None:
-        exp = _make_experiment()
-        tree = {
-            "searchName": "root",
-            "operator": "INTERSECT",
-            "primaryInput": {
-                "searchName": "LeafA",
-                "displayName": "Leaf A",
-                "parameters": {"p": "1"},
-            },
-            "secondaryInput": {
-                "searchName": "LeafB",
-                "displayName": "Leaf B",
-                "parameters": {"p": "2"},
-            },
-        }
-        mock_result = {
-            "positive": {"intersectionCount": 2, "controlsCount": 2},
-            "negative": {"intersectionCount": 0, "controlsCount": 1},
-            "target": {"resultCount": 10},
-        }
-
-        with patch(
-            "veupath_chatbot.services.experiment.evaluation.run_positive_negative_controls",
-            new_callable=AsyncMock,
-            return_value=mock_result,
-        ):
-            contribs = await compute_step_contributions(exp, tree)
-
-        assert len(contribs) == 2
-        assert contribs[0]["stepSearchName"] == "LeafA"
-        assert contribs[1]["stepSearchName"] == "LeafB"
-        assert contribs[0]["totalResults"] == 10
-        assert contribs[0]["positiveControlHits"] == 2
-
-    @pytest.mark.asyncio
-    async def test_skips_invalid_leaves(self) -> None:
-        exp = _make_experiment()
-        tree = {
-            "searchName": "",  # invalid
-            "parameters": {},
-        }
-
-        contribs = await compute_step_contributions(exp, tree)
-        assert len(contribs) == 0
-
-    @pytest.mark.asyncio
-    async def test_handles_failure(self) -> None:
-        exp = _make_experiment()
-        tree = {"searchName": "Failing", "parameters": {"x": "1"}}
-
-        with patch(
-            "veupath_chatbot.services.experiment.evaluation.run_positive_negative_controls",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("boom"),
-        ):
-            contribs = await compute_step_contributions(exp, tree)
-
-        assert len(contribs) == 1
-        assert contribs[0]["totalResults"] == 0
-        assert contribs[0]["stepName"] == "Failing"
 
 
 # ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@
 import { useState, useCallback } from "react";
 import { useSettingsStore } from "@/state/useSettingsStore";
 import { useSessionStore } from "@/state/useSessionStore";
+import { seedExperiments } from "@/lib/api/experiments";
 import { Loader2, FlaskConical } from "lucide-react";
 import { SettingsField } from "./SettingsField";
 
@@ -48,39 +49,7 @@ export function AdvancedSettings() {
     setSeeding(true);
     setSeedStatus("Starting...");
     try {
-      const response = await fetch("/api/v1/experiments/seed", {
-        method: "POST",
-        headers: { Accept: "text/event-stream" },
-        credentials: "include",
-      });
-      if (!response.ok || !response.body) {
-        setSeedStatus(`Failed: HTTP ${response.status}`);
-        setSeeding(false);
-        return;
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          try {
-            const data = JSON.parse(line.slice(5).trim());
-            if (data.message) setSeedStatus(data.message);
-          } catch {
-            /* skip malformed */
-          }
-        }
-      }
+      await seedExperiments((message) => setSeedStatus(message));
     } catch (err) {
       setSeedStatus(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
     } finally {

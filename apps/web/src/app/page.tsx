@@ -1,36 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { usePrevious } from "@/lib/hooks/usePrevious";
 import { UnifiedChatPanel } from "@/features/chat/components/UnifiedChatPanel";
-import { StrategyGraph } from "@/features/strategy/graph/components/StrategyGraph";
 import { ConversationSidebar } from "@/features/sidebar/components/ConversationSidebar";
 import { useSessionStore } from "@/state/useSessionStore";
 import { useStrategyStore } from "@/state/useStrategyStore";
+import { useWorkbenchStore } from "@/features/workbench/store";
 
 import { ToastContainer } from "@/app/components/ToastContainer";
 import { LoginModal } from "@/app/components/LoginModal";
 import { TopBar } from "@/app/components/TopBar";
-import { Modal } from "@/lib/components/Modal";
-import { Button } from "@/lib/components/ui/Button";
+import { TopBarActions } from "@/app/components/TopBarActions";
+import { GraphEditorModal } from "@/app/components/GraphEditorModal";
+import { SiteChangeConfirmModal } from "@/app/components/SiteChangeConfirmModal";
+import { LoadingScreen } from "@/app/components/LoadingScreen";
+import { ApiErrorScreen } from "@/app/components/ApiErrorScreen";
 import { useToasts } from "@/app/hooks/useToasts";
 import { useSidebarResize } from "@/app/hooks/useSidebarResize";
+import { useModalState } from "@/app/hooks/useModalState";
+import { useGeneSetExport } from "@/app/hooks/useGeneSetExport";
 import { useBuildStrategy } from "@/features/strategy/hooks/useBuildStrategy";
-import {
-  AlertTriangle,
-  Layers,
-  Loader2,
-  MessageCircle,
-  RefreshCw,
-  Settings,
-  X,
-} from "lucide-react";
-import Link from "next/link";
 import { CompactStrategyView } from "@/features/strategy/graph/components/CompactStrategyView";
 import { SettingsPage } from "@/features/settings/components/SettingsPage";
 import { useAuthCheck } from "@/app/hooks/useAuthCheck";
 import { useAuthRefresh } from "@/app/hooks/useAuthRefresh";
 import { useSiteTheme } from "@/features/sites/hooks/useSiteTheme";
+import { useStableGraph } from "@/app/hooks/useStableGraph";
 
 export default function HomePage() {
   const { selectedSite, setSelectedSite } = useSessionStore();
@@ -52,9 +48,7 @@ export default function HomePage() {
 
   const { toasts, addToast, removeToast, durationMs } = useToasts();
   const { layoutRef, sidebarWidth, startDragging } = useSidebarResize();
-  const [pendingSiteChange, setPendingSiteChange] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [graphEditing, setGraphEditing] = useState(false);
+  const modals = useModalState();
   const pendingAskNode = useSessionStore((state) => state.pendingAskNode);
   const setPendingAskNode = useSessionStore((state) => state.setPendingAskNode);
 
@@ -71,22 +65,31 @@ export default function HomePage() {
     (nextSite: string) => {
       if (nextSite === selectedSite) return;
       if (strategy && strategy.steps.length > 0) {
-        setPendingSiteChange(nextSite);
+        modals.setPendingSiteChange(nextSite);
         return;
       }
       setSelectedSite(nextSite);
     },
-    [selectedSite, strategy, setSelectedSite],
+    [selectedSite, strategy, setSelectedSite, modals],
   );
 
   const confirmSiteChange = useCallback(() => {
-    if (pendingSiteChange) {
-      setSelectedSite(pendingSiteChange);
-      setPendingSiteChange(null);
+    if (modals.pendingSiteChange) {
+      setSelectedSite(modals.pendingSiteChange);
+      modals.clearPendingSiteChange();
     }
-  }, [pendingSiteChange, setSelectedSite]);
+  }, [modals, setSelectedSite]);
 
-  const hasGraph = !!(strategy && strategy.steps.length > 0);
+  // --- Workbench gene set export ---
+  const addGeneSet = useWorkbenchStore((s) => s.addGeneSet);
+  const geneSets = useWorkbenchStore((s) => s.geneSets);
+  const { exportingGeneSet, handleExportAsGeneSet } = useGeneSetExport({
+    selectedSite,
+    addGeneSet,
+  });
+
+  const chatIsStreaming = useSessionStore((state) => state.chatIsStreaming);
+  const { displayStrategy, hasGraph } = useStableGraph(strategy, chatIsStreaming);
 
   const planResult = buildPlan();
   const canBuild = !!planResult;
@@ -102,30 +105,8 @@ export default function HomePage() {
     addToast,
   });
 
-  if (authLoading) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center bg-background text-foreground">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
-  }
-
-  if (apiError) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-background text-foreground">
-        <AlertTriangle className="h-10 w-10 text-destructive" />
-        <div className="text-center">
-          <p className="text-sm font-medium">Unable to connect to the API</p>
-          <p className="mt-1 max-w-sm text-xs text-muted-foreground">{apiError}</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={retryAuth}>
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-          Retry
-        </Button>
-      </div>
-    );
-  }
+  if (authLoading) return <LoadingScreen />;
+  if (apiError) return <ApiErrorScreen error={apiError} onRetry={retryAuth} />;
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
@@ -139,34 +120,7 @@ export default function HomePage() {
       <TopBar
         selectedSite={selectedSite}
         onSiteChange={handleSiteChange}
-        actions={
-          <div className="flex items-center gap-1">
-            <span
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-              aria-current="page"
-            >
-              <MessageCircle className="h-3.5 w-3.5" aria-hidden />
-              Chat
-            </span>
-            <Link
-              href="/workbench"
-              aria-label="Go to Workbench"
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground"
-            >
-              <Layers className="h-3.5 w-3.5" aria-hidden />
-              Workbench
-            </Link>
-            <div className="mx-1 h-5 w-px bg-border" />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowSettings(true)}
-              aria-label="Settings"
-            >
-              <Settings className="h-4 w-4" aria-hidden />
-            </Button>
-          </div>
-        }
+        actions={<TopBarActions onOpenSettings={modals.openSettings} />}
       />
 
       <div ref={layoutRef} className="flex min-h-0 flex-1 overflow-hidden">
@@ -191,77 +145,39 @@ export default function HomePage() {
               siteId={selectedSite}
               pendingAskNode={pendingAskNode}
               onConsumeAskNode={() => setPendingAskNode(null)}
+              addGeneSet={addGeneSet}
+              geneSets={geneSets}
             />
           </div>
 
-          {hasGraph && (
+          {hasGraph && displayStrategy && (
             <CompactStrategyView
-              strategy={strategy}
-              onEditGraph={() => setGraphEditing(true)}
+              strategy={displayStrategy}
+              onEditGraph={modals.openGraphEditor}
+              onExportAsGeneSet={handleExportAsGeneSet}
+              exportingGeneSet={exportingGeneSet}
             />
           )}
 
-          <Modal
-            open={graphEditing}
-            onClose={() => setGraphEditing(false)}
-            title="Graph Editor"
-            maxWidth="max-w-[95vw]"
-          >
-            <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg">
-              <div className="flex items-center justify-between border-b border-border bg-muted/50 px-4 py-2.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Graph Editor
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setGraphEditing(false)}
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden />
-                  Close
-                </Button>
-              </div>
-              <div className="min-h-0 flex-1">
-                <StrategyGraph
-                  strategy={strategy}
-                  siteId={selectedSite}
-                  onToast={addToast}
-                />
-              </div>
-            </div>
-          </Modal>
+          <GraphEditorModal
+            open={modals.graphEditing}
+            onClose={modals.closeGraphEditor}
+            strategy={displayStrategy ?? strategy}
+            siteId={selectedSite}
+            onToast={addToast}
+          />
         </div>
       </div>
 
-      <Modal
-        open={!!pendingSiteChange}
-        onClose={() => setPendingSiteChange(null)}
-        title="Switch site?"
-        maxWidth="max-w-sm"
-      >
-        <div className="px-5 pb-5 pt-2">
-          <p className="text-sm text-muted-foreground">
-            Your current strategy will be cleared when you switch sites. Are you sure
-            you want to continue?
-          </p>
-          <div className="mt-4 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPendingSiteChange(null)}
-            >
-              Cancel
-            </Button>
-            <Button size="sm" onClick={confirmSiteChange}>
-              Switch site
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <SiteChangeConfirmModal
+        open={!!modals.pendingSiteChange}
+        onClose={modals.clearPendingSiteChange}
+        onConfirm={confirmSiteChange}
+      />
 
       <SettingsPage
-        open={showSettings}
-        onClose={() => setShowSettings(false)}
+        open={modals.showSettings}
+        onClose={modals.closeSettings}
         siteId={selectedSite}
       />
     </div>

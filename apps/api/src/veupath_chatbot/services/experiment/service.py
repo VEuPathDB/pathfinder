@@ -111,7 +111,20 @@ async def _phase_evaluate(
     """
     await emit("evaluating", message="Running control tests...")
 
-    if config.is_tree_mode:
+    if config.target_gene_ids:
+        # Gene set mode: evaluate using gene IDs directly, no WDK calls.
+        from veupath_chatbot.services.experiment.metrics import (
+            evaluate_gene_ids_against_controls,
+        )
+
+        result = evaluate_gene_ids_against_controls(
+            gene_ids=config.target_gene_ids,
+            positive_controls=config.positive_controls or [],
+            negative_controls=config.negative_controls or [],
+            site_id=config.site_id,
+            record_type=config.record_type,
+        )
+    elif config.is_tree_mode:
         tree_dict: JSONObject = cast(JSONObject, config.step_tree)
         cvf: ControlValueFormat = config.controls_value_format
 

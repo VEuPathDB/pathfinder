@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, type Mock } from "vitest";
 import { handleChatEvent } from "./handleChatEvent";
 import type { ChatSSEEvent } from "@/features/chat/sse_events";
 import { OPTIMIZATION_PROGRESS_EVENTS } from "./__fixtures__/realisticEvents";
@@ -14,7 +14,7 @@ describe("handleChatEvent — optimization progress events", () => {
 
     // setOptimizationProgress should have been called multiple times
     expect(ctx.setOptimizationProgress).toHaveBeenCalled();
-    const calls = ctx.setOptimizationProgress.mock.calls;
+    const calls = (ctx.setOptimizationProgress as Mock).mock.calls;
     // At least 5 calls: started + 3 trials + completed
     expect(calls.length).toBeGreaterThanOrEqual(5);
 
@@ -60,10 +60,14 @@ describe("handleChatEvent — optimization progress events", () => {
             recall: 0.5,
             falsePositiveRate: 0.1,
             resultCount: 10,
+            positiveHits: null,
+            negativeHits: null,
+            totalPositives: null,
+            totalNegatives: null,
           },
         ],
       },
-    } as any);
+    } as ChatSSEEvent);
 
     // Progress is live-only at this point; previous assistant must remain untouched.
     expect(state.messages[0]?.optimizationProgress).toBeUndefined();
@@ -95,7 +99,7 @@ describe("handleChatEvent — optimization progress events", () => {
         totalTrials: 3,
         currentTrial: 3,
       },
-    } as any);
+    } as ChatSSEEvent);
 
     // Current turn assistant starts streaming.
     handleChatEvent(ctx, {
@@ -105,7 +109,7 @@ describe("handleChatEvent — optimization progress events", () => {
     handleChatEvent(ctx, {
       type: "assistant_message",
       data: { messageId: "m2", content: "Done." },
-    } as any);
+    } as ChatSSEEvent);
 
     expect(state.messages).toHaveLength(3);
     // Previous assistant must stay clean.

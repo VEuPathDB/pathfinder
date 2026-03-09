@@ -1,27 +1,22 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import type {
   ChatMention,
   Message,
   ToolCall,
-  Citation,
   ModelSelection,
   OptimizationProgressData,
-  PlanningArtifact,
   Step,
   Strategy,
 } from "@pathfinder/shared";
-import type { ChatSSEEvent } from "@/features/chat/sse_events";
+import type { NodeSelection } from "@/lib/types/nodeSelection";
 import { streamChat } from "@/features/chat/stream";
-import type { StreamChatResult } from "@/features/chat/stream";
-import { handleChatEvent } from "@/features/chat/handlers/handleChatEvent";
-import type { ChatEventContext } from "@/features/chat/handlers/handleChatEvent";
-import { snapshotSubKaniActivityFromBuffers } from "@/features/chat/handlers/handleChatEvent.messageEvents";
 import { encodeNodeSelection } from "@/features/chat/node_selection";
-import { useSessionStore } from "@/state/useSessionStore";
-import { cancelOperation, type OperationSubscription } from "@/lib/operationSubscribe";
 import type { GraphSnapshotInput } from "@/features/chat/utils/graphSnapshot";
+import type { ChatEventContext } from "@/features/chat/handlers/handleChatEvent";
 import type { useThinkingState } from "@/features/chat/hooks/useThinkingState";
 import type { StreamingSession } from "@/features/chat/streaming/StreamingSession";
+import { useStreamLifecycle } from "@/features/chat/hooks/useStreamLifecycle";
+import { useStreamEvents } from "@/features/chat/hooks/useStreamEvents";
 
 type Thinking = ReturnType<typeof useThinkingState>;
 type AddStrategyInput = Parameters<ChatEventContext["addStrategy"]>[0];
@@ -29,8 +24,8 @@ type AddStrategyInput = Parameters<ChatEventContext["addStrategy"]>[0];
 interface UseChatStreamingArgs {
   siteId: string;
   strategyId: string | null;
-  draftSelection: Record<string, unknown> | null;
-  setDraftSelection: (selection: Record<string, unknown> | null) => void;
+  draftSelection: NodeSelection | null;
+  setDraftSelection: (selection: NodeSelection | null) => void;
   thinking: Thinking;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setUndoSnapshots: React.Dispatch<React.SetStateAction<Record<number, Strategy>>>;
@@ -54,9 +49,13 @@ interface UseChatStreamingArgs {
     calls: ToolCall[],
     activity?: { calls: Record<string, ToolCall[]>; status: Record<string, string> },
   ) => void;
+  /** Called when the backend selects a model (model_selected event). */
+  setSelectedModelId?: (modelId: string | null) => void;
   /** Per-request model/provider/reasoning selection. */
   modelSelection?: ModelSelection | null;
   onApiError?: (message: string) => void;
+  /** Callback for workbench_gene_set events — decouples from workbench store. */
+  onWorkbenchGeneSet?: ChatEventContext["onWorkbenchGeneSet"];
   /** Called after streaming completes successfully. */
   onStreamComplete?: () => void;
   /** Called after streaming errors out (in addition to the default error handling). */
@@ -88,248 +87,105 @@ export function useChatStreaming({
   getStrategy,
   currentStrategy,
   attachThinkingToLastAssistant,
+  setSelectedModelId,
   modelSelection,
   onApiError,
+  onWorkbenchGeneSet,
   onStreamComplete,
   onStreamError,
 }: UseChatStreamingArgs) {
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [optimizationProgress, setOptimizationProgress] =
-    useState<OptimizationProgressData | null>(null);
-  const [subscription, setSubscription] = useState<OperationSubscription | null>(null);
-  const [operationId, setOperationId] = useState<string | null>(null);
+  // --- Sub-hooks ---
+  const lifecycle = useStreamLifecycle(thinking);
+  const { buildStreamCallbacks } = useStreamEvents({
+    siteId,
+    thinking,
+    setMessages,
+    setUndoSnapshots,
+    setStrategyId,
+    addStrategy,
+    addExecutedStrategy,
+    setWdkInfo,
+    setStrategy,
+    setStrategyMeta,
+    clearStrategy,
+    addStep,
+    loadGraph,
+    currentStrategy,
+    parseToolArguments,
+    parseToolResult,
+    applyGraphSnapshot,
+    getStrategy,
+    attachThinkingToLastAssistant,
+    setSelectedModelId,
+    setOptimizationProgress: lifecycle.setOptimizationProgress,
+    onApiError,
+    onWorkbenchGeneSet,
+  });
 
-  const stopStreaming = useCallback(() => {
-    if (operationId) {
-      void cancelOperation(operationId);
-    }
-    subscription?.unsubscribe();
-    setSubscription(null);
-    setOperationId(null);
-    setIsStreaming(false);
-  }, [subscription, operationId]);
-
-  /**
-   * Shared stream setup -- resets state, wires event handling, and calls
-   * ``streamChat``.  Used by both ``handleSendMessage`` (user-initiated)
-   * and ``handleAutoExecute`` (system-initiated, no visible user message).
-   */
+  // --- Core stream execution ---
   const executeStream = useCallback(
     async (
       content: string,
-      streamContext: {
-        strategyId?: string;
-        mentions?: ChatMention[];
-      },
+      streamContext: { strategyId?: string; mentions?: ChatMention[] },
     ) => {
-      setIsStreaming(true);
-      setApiError(null);
-      thinking.reset();
-      setOptimizationProgress(null);
+      lifecycle.beginStream();
 
       const session = createSession();
       sessionRef.current = session;
 
-      const streamState: ChatEventContext["streamState"] = {
-        streamingAssistantIndex: null,
-        streamingAssistantMessageId: null,
-        turnAssistantIndex: null,
-        reasoning: null,
-        optimizationProgress: null,
-      };
-
-      const toolCalls: ToolCall[] = [];
-      const citationsBuffer: Citation[] = [];
-      const planningArtifactsBuffer: PlanningArtifact[] = [];
-      const subKaniCallsBuffer: Record<string, ToolCall[]> = {};
-      const subKaniStatusBuffer: Record<string, string> = {};
-
       const effectiveStrategyId = streamContext.strategyId ?? strategyId;
 
-      let result: StreamChatResult;
+      const callbacks = buildStreamCallbacks(
+        session,
+        effectiveStrategyId ?? null,
+        (toolCalls: ToolCall[]) => {
+          lifecycle.finalizeStream(toolCalls);
+          onStreamComplete?.();
+        },
+        (error: Error, toolCalls: ToolCall[]) => {
+          lifecycle.handleStreamError(error, toolCalls, onStreamError);
+        },
+      );
+
       try {
-        result = await streamChat(
+        const result = await streamChat(
           content,
           siteId,
           {
-            onMessage: (event: ChatSSEEvent) => {
-              handleChatEvent(
-                {
-                  siteId,
-                  strategyIdAtStart: effectiveStrategyId ?? null,
-                  toolCallsBuffer: toolCalls,
-                  citationsBuffer,
-                  planningArtifactsBuffer,
-                  subKaniCallsBuffer,
-                  subKaniStatusBuffer,
-                  thinking,
-                  setStrategyId,
-                  addStrategy,
-                  addExecutedStrategy,
-                  setWdkInfo,
-                  setStrategy,
-                  setStrategyMeta,
-                  clearStrategy,
-                  addStep,
-                  loadGraph,
-                  session,
-                  currentStrategy,
-                  setMessages,
-                  setUndoSnapshots,
-                  parseToolArguments,
-                  parseToolResult,
-                  applyGraphSnapshot,
-                  getStrategy,
-                  streamState,
-                  setOptimizationProgress,
-                  onApiError,
-                },
-                event,
-              );
-            },
-
-            onComplete: () => {
-              setIsStreaming(false);
-              setSubscription(null);
-              setOperationId(null);
-              thinking.finalizeToolCalls(toolCalls.length > 0 ? [...toolCalls] : []);
-              const subKaniActivity = snapshotSubKaniActivityFromBuffers(
-                subKaniCallsBuffer,
-                subKaniStatusBuffer,
-              );
-              attachThinkingToLastAssistant(
-                toolCalls.length > 0 ? [...toolCalls] : [],
-                subKaniActivity,
-              );
-
-              // Persist reasoning to the last assistant message.
-              const savedReasoning = streamState.reasoning;
-              if (savedReasoning) {
-                setMessages((prev) => {
-                  for (let i = prev.length - 1; i >= 0; i -= 1) {
-                    if (prev[i].role !== "assistant") continue;
-                    const msg = prev[i];
-                    if (msg.reasoning) return prev;
-                    const next = [...prev];
-                    next[i] = { ...msg, reasoning: savedReasoning };
-                    return next;
-                  }
-                  return prev;
-                });
-              }
-
-              // Force-write optimization data to the last assistant message.
-              const savedOptimization = streamState.optimizationProgress;
-              if (savedOptimization) {
-                setMessages((prev) => {
-                  for (let i = prev.length - 1; i >= 0; i -= 1) {
-                    if (prev[i].role !== "assistant") continue;
-                    const next = [...prev];
-                    next[i] = {
-                      ...prev[i],
-                      optimizationProgress: savedOptimization,
-                    };
-                    return next;
-                  }
-                  return prev;
-                });
-              }
-
-              if (effectiveStrategyId && !session.snapshotApplied) {
-                getStrategy(effectiveStrategyId)
-                  .then((full) => {
-                    // Guard against race: only apply if the user hasn't
-                    // switched to a different strategy while awaiting.
-                    const currentId = useSessionStore.getState().strategyId;
-                    if (currentId !== effectiveStrategyId) return;
-                    setStrategy(full);
-                    setStrategyMeta({
-                      name: full.name,
-                      recordType: full.recordType ?? undefined,
-                      siteId: full.siteId,
-                    });
-                  })
-                  .catch((err) =>
-                    console.error(
-                      "[useChatStreaming] Failed to refresh strategy after stream:",
-                      err,
-                    ),
-                  );
-              }
-              onStreamComplete?.();
-            },
-
-            onError: (error) => {
-              setIsStreaming(false);
-              setSubscription(null);
-              setOperationId(null);
-              thinking.finalizeToolCalls(toolCalls.length > 0 ? [...toolCalls] : []);
-
-              const isAbort =
-                error.name === "AbortError" ||
-                (error.message && /abort/i.test(error.message));
-              if (isAbort) return;
-
-              console.error("Chat error:", error);
-              setApiError(error.message || "Unable to reach the API.");
-              onStreamError?.(error);
-            },
+            onMessage: callbacks.onMessage,
+            onComplete: callbacks.onComplete,
+            onError: callbacks.onError,
           },
           streamContext,
-          undefined, // signal — subscription handles cleanup via unsubscribe
+          undefined,
           modelSelection ?? undefined,
         );
+
+        lifecycle.trackOperation(result.subscription, result.operationId);
+
+        if (!streamContext.strategyId && result.strategyId) {
+          setStrategyId(result.strategyId);
+        }
       } catch (e) {
-        // streamChat can throw if no onError handler catches the health check
-        // failure, or if requestJson throws (network error, 4xx/5xx).
-        setIsStreaming(false);
         const error = e instanceof Error ? e : new Error(String(e));
-        console.error("Chat error:", error);
-        setApiError(error.message || "Unable to reach the API.");
-        onStreamError?.(error);
-        return;
-      }
-
-      setSubscription(result.subscription);
-      setOperationId(result.operationId);
-
-      // Use the strategyId from the response if we didn't have one.
-      if (!streamContext.strategyId && result.strategyId) {
-        setStrategyId(result.strategyId);
+        lifecycle.handleStreamError(error, callbacks.toolCalls, onStreamError);
       }
     },
     [
-      setMessages,
-      thinking,
-      sessionRef,
+      lifecycle,
       createSession,
-      siteId,
+      sessionRef,
       strategyId,
-      setStrategyId,
-      addStrategy,
-      addExecutedStrategy,
-      setWdkInfo,
-      setStrategy,
-      setStrategyMeta,
-      clearStrategy,
-      addStep,
-      loadGraph,
-      currentStrategy,
-      setUndoSnapshots,
-      parseToolArguments,
-      parseToolResult,
-      applyGraphSnapshot,
-      getStrategy,
-      attachThinkingToLastAssistant,
+      buildStreamCallbacks,
+      siteId,
       modelSelection,
-      onApiError,
+      setStrategyId,
       onStreamComplete,
       onStreamError,
     ],
   );
 
-  /** User-initiated send -- appends a visible user message then streams. */
+  // --- Public API ---
   const handleSendMessage = useCallback(
     async (content: string, mentions?: ChatMention[]) => {
       const finalContent = encodeNodeSelection(draftSelection, content);
@@ -344,20 +200,14 @@ export function useChatStreaming({
         setDraftSelection(null);
       }
 
-      const streamContext = {
+      await executeStream(finalContent, {
         strategyId: strategyId ?? undefined,
         mentions,
-      };
-
-      await executeStream(finalContent, streamContext);
+      });
     },
     [draftSelection, setMessages, setDraftSelection, strategyId, executeStream],
   );
 
-  /**
-   * System-initiated execution -- sends the prompt to the model without
-   * adding a visible user message.  Used for auto-handoff scenarios.
-   */
   const handleAutoExecute = useCallback(
     async (prompt: string, targetStrategyId: string) => {
       await executeStream(prompt, { strategyId: targetStrategyId });
@@ -368,11 +218,11 @@ export function useChatStreaming({
   return {
     handleSendMessage,
     handleAutoExecute,
-    stopStreaming,
-    isStreaming,
-    apiError,
-    setIsStreaming,
-    optimizationProgress,
-    setOptimizationProgress,
+    stopStreaming: lifecycle.stopStreaming,
+    isStreaming: lifecycle.isStreaming,
+    apiError: lifecycle.apiError,
+    setIsStreaming: lifecycle.setIsStreaming,
+    optimizationProgress: lifecycle.optimizationProgress,
+    setOptimizationProgress: lifecycle.setOptimizationProgress,
   };
 }

@@ -18,6 +18,22 @@ from veupath_chatbot.transport.http.schemas import (
 logger = get_logger(__name__)
 
 
+def _compute_wdk_url(site_id: str, wdk_strategy_id: int | None) -> str | None:
+    """Compute the WDK URL for a strategy if possible.
+
+    Returns ``None`` when the strategy has no WDK ID or the site is unknown.
+    """
+    if wdk_strategy_id is None or not site_id:
+        return None
+    try:
+        from veupath_chatbot.integrations.veupathdb.factory import get_site
+
+        site = get_site(site_id)
+        return site.strategy_url(wdk_strategy_id)
+    except Exception:
+        return None
+
+
 def build_step_response(step: JSONObject) -> StepResponse:
     """Build a StepResponse from a step dict."""
     return StepResponse.model_validate(cast(dict[str, object], step))
@@ -102,6 +118,8 @@ def build_projection_response(
 
     thinking_response = parse_thinking(thinking)
 
+    wdk_url = _compute_wdk_url(projection.site_id, projection.wdk_strategy_id)
+
     return StrategyResponse(
         id=projection.stream_id,
         name=projection.name,
@@ -112,6 +130,7 @@ def build_projection_response(
         steps=derive_steps_from_plan(plan),
         rootStepId=root_step_id,
         wdkStrategyId=projection.wdk_strategy_id,
+        wdkUrl=wdk_url,
         isSaved=projection.is_saved,
         messages=msg_responses,
         thinking=thinking_response,
@@ -132,13 +151,17 @@ def build_projection_summary(
 
     Returns a StrategyResponse with ``steps=[]`` and summary fields populated.
     """
+    effective_site_id = site_id or projection.site_id
+    wdk_url = _compute_wdk_url(effective_site_id, projection.wdk_strategy_id)
+
     return StrategyResponse(
         id=projection.stream_id,
         name=projection.name,
         title=projection.name,
-        siteId=site_id or projection.site_id,
+        siteId=effective_site_id,
         recordType=projection.record_type,
         wdkStrategyId=projection.wdk_strategy_id,
+        wdkUrl=wdk_url,
         isSaved=projection.is_saved,
         stepCount=projection.step_count,
         resultCount=projection.result_count,

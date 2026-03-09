@@ -1,37 +1,24 @@
 import type { ChatEventContext } from "./handleChatEvent.types";
-import { useWorkbenchStore } from "@/features/workbench/store";
+import type { WorkbenchGeneSetData } from "@/features/chat/sse_events";
 
 /**
- * Handle `workbench_gene_set` events — AI created a gene set in the workbench.
+ * Handle `workbench_gene_set` events -- AI created a gene set in the workbench.
  *
- * Adds the gene set to the workbench store so it appears in the sidebar
- * when the user navigates to /workbench.
+ * Delegates to the `onWorkbenchGeneSet` callback provided via ChatEventContext
+ * so this handler does not depend on the workbench store directly.
  */
-export function handleWorkbenchGeneSetEvent(_ctx: ChatEventContext, data: unknown) {
-  const raw = data as {
-    geneSet?: {
-      id: string;
-      name: string;
-      geneCount: number;
-      source: string;
-      siteId: string;
-    };
-  };
-  const gs = raw.geneSet;
+export function handleWorkbenchGeneSetEvent(
+  ctx: ChatEventContext,
+  data: WorkbenchGeneSetData,
+) {
+  const gs = data.geneSet;
   if (!gs || !gs.id) return;
 
-  // Add to workbench store (even if not on /workbench page — Zustand is global)
-  const store = useWorkbenchStore.getState();
-  // Avoid duplicates
-  if (store.geneSets.some((s) => s.id === gs.id)) return;
-
-  store.addGeneSet({
+  ctx.onWorkbenchGeneSet?.({
     id: gs.id,
     name: gs.name,
-    geneIds: [], // Gene IDs will be loaded from API when workbench mounts
-    siteId: gs.siteId,
     geneCount: gs.geneCount,
-    source: gs.source as "strategy" | "paste" | "upload" | "derived" | "saved",
-    createdAt: new Date().toISOString(),
+    source: gs.source,
+    siteId: gs.siteId,
   });
 }

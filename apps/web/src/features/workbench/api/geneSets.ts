@@ -5,6 +5,7 @@
 import type { EnrichmentResult } from "@pathfinder/shared";
 import { requestJson } from "@/lib/api/http";
 import type { GeneSet } from "../store";
+import type { StepParameters } from "@/lib/strategyGraph/types";
 
 // ---------------------------------------------------------------------------
 // Request / response types
@@ -19,7 +20,7 @@ export interface CreateGeneSetRequest {
   wdkStepId?: number;
   searchName?: string;
   recordType?: string;
-  parameters?: Record<string, unknown>;
+  parameters?: StepParameters;
 }
 
 export interface SetOperationRequest {
@@ -115,7 +116,7 @@ export interface CreateFromStrategyArgs {
   wdkStepId?: number;
   searchName?: string;
   recordType?: string;
-  parameters?: Record<string, unknown>;
+  parameters?: StepParameters;
   geneIds?: string[];
 }
 

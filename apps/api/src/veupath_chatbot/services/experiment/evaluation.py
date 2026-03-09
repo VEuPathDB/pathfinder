@@ -1,4 +1,4 @@
-"""Evaluation service: re-evaluate, threshold sweep, step contributions.
+"""Evaluation service: re-evaluate and threshold sweep.
 
 Pure business logic extracted from the transport handler. No HTTP/SSE
 concerns here -- callers (routers, tools, etc.) wrap the results in
@@ -17,7 +17,6 @@ from veupath_chatbot.services.experiment.helpers import extract_and_enrich_genes
 from veupath_chatbot.services.experiment.metrics import metrics_from_control_result
 from veupath_chatbot.services.experiment.store import get_experiment_store
 from veupath_chatbot.services.experiment.types import (
-    ControlValueFormat,
     Experiment,
     ExperimentMetrics,
     experiment_to_json,
@@ -294,121 +293,3 @@ async def generate_sweep_events(
         }
     )
     yield f"event: sweep_complete\ndata: {final_data}\n\n"
-
-
-# ---------------------------------------------------------------------------
-# Step contributions
-# ---------------------------------------------------------------------------
-
-
-async def compute_step_contributions(
-    exp: Experiment,
-    step_tree: JSONObject,
-) -> list[JSONObject]:
-    """Evaluate controls against each leaf step to measure per-step contribution.
-
-    :param exp: Experiment with config (controls, site, record type, etc.).
-    :param step_tree: The step tree to analyse.
-    :returns: List of contribution dicts, one per leaf.
-    """
-    from veupath_chatbot.services.experiment.step_analysis._tree_utils import (
-        _collect_leaves,
-    )
-
-    leaves = _collect_leaves(step_tree)
-    contributions: list[JSONObject] = []
-
-    _valid_formats: set[ControlValueFormat] = {"newline", "json_list", "comma"}
-    cvf = exp.config.controls_value_format
-    controls_format: ControlValueFormat = cvf if cvf in _valid_formats else "newline"
-
-    for leaf in leaves:
-        search_name = leaf.get("searchName")
-        if not isinstance(search_name, str) or not search_name:
-            continue
-        params = leaf.get("parameters")
-        if not isinstance(params, dict):
-            params = {}
-        display_name = leaf.get("displayName") or search_name
-
-        contribution = await _evaluate_leaf(
-            exp=exp,
-            search_name=search_name,
-            params=params,
-            display_name=str(display_name),
-            controls_format=controls_format,
-        )
-        contributions.append(contribution)
-
-    return contributions
-
-
-async def _evaluate_leaf(
-    *,
-    exp: Experiment,
-    search_name: str,
-    params: JSONObject,
-    display_name: str,
-    controls_format: ControlValueFormat,
-) -> JSONObject:
-    """Evaluate a single leaf step against controls and return a contribution dict."""
-    total_pos = len(exp.config.positive_controls) if exp.config.positive_controls else 0
-    total_neg = len(exp.config.negative_controls) if exp.config.negative_controls else 0
-
-    try:
-        result = await run_positive_negative_controls(
-            site_id=exp.config.site_id,
-            record_type=exp.config.record_type,
-            target_search_name=search_name,
-            target_parameters=params,
-            controls_search_name=exp.config.controls_search_name,
-            controls_param_name=exp.config.controls_param_name,
-            positive_controls=exp.config.positive_controls or None,
-            negative_controls=exp.config.negative_controls or None,
-            controls_value_format=controls_format,
-        )
-        total, pos_hits, neg_hits = _extract_control_counts(result)
-        return {
-            "stepName": display_name,
-            "stepSearchName": search_name,
-            "totalResults": total,
-            "positiveControlHits": pos_hits,
-            "negativeControlHits": neg_hits,
-            "positiveRecall": round(pos_hits / max(total_pos, 1), 4),
-            "negativeRecall": round(neg_hits / max(total_neg, 1), 4),
-        }
-    except Exception as exc:
-        logger.warning(
-            "Step contribution analysis failed",
-            step=search_name,
-            error=str(exc),
-        )
-        return {
-            "stepName": display_name,
-            "stepSearchName": search_name,
-            "totalResults": 0,
-            "positiveControlHits": 0,
-            "negativeControlHits": 0,
-            "positiveRecall": 0,
-            "negativeRecall": 0,
-        }
-
-
-def _extract_control_counts(result: JSONObject) -> tuple[int, int, int]:
-    """Extract (total_results, positive_hits, negative_hits) from a control result."""
-    target_data = result.get("target") or {}
-    target_dict = target_data if isinstance(target_data, dict) else {}
-    raw_count = target_dict.get("resultCount")
-    total = int(raw_count) if isinstance(raw_count, (int, float)) else 0
-
-    pos_data = result.get("positive") or {}
-    pos_dict = pos_data if isinstance(pos_data, dict) else {}
-    raw_pos_hits = pos_dict.get("intersectionCount")
-    pos_hits = int(raw_pos_hits) if isinstance(raw_pos_hits, (int, float)) else 0
-
-    neg_data = result.get("negative") or {}
-    neg_dict = neg_data if isinstance(neg_data, dict) else {}
-    raw_neg_hits = neg_dict.get("intersectionCount")
-    neg_hits = int(raw_neg_hits) if isinstance(raw_neg_hits, (int, float)) else 0
-
-    return total, pos_hits, neg_hits

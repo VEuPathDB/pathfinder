@@ -16,11 +16,16 @@ export type PanelId =
   | "distributions"
   | "evaluate"
   | "sweep"
+  | "batch"
   | "results-table"
   | "step-analysis"
   | "ai-insights"
   | "custom-enrichment"
-  | "ai-interpretation";
+  | "ai-interpretation"
+  | "ensemble"
+  | "confidence"
+  | "benchmark"
+  | "reverse-search";
 
 // ---------------------------------------------------------------------------
 // Store shape
@@ -34,6 +39,7 @@ interface WorkbenchState {
   lastExperiment: Experiment | null;
   lastExperimentSetId: string | null;
   geneSearchOpen: boolean;
+  leftSidebarOpen: boolean;
 
   // Actions — gene sets
   addGeneSet: (geneSet: GeneSet) => void;
@@ -42,14 +48,18 @@ interface WorkbenchState {
   setActiveSet: (id: string | null) => void;
   toggleSetSelection: (id: string) => void;
   clearSelection: () => void;
+  removeGeneSets: (ids: string[]) => void;
+  selectAll: () => void;
+  deselectAll: () => void;
 
   // Actions — panels
   togglePanel: (panelId: PanelId) => void;
   expandPanel: (panelId: PanelId) => void;
   collapsePanel: (panelId: PanelId) => void;
 
-  // Actions — gene search sidebar
+  // Actions — sidebar visibility
   toggleGeneSearch: () => void;
+  toggleLeftSidebar: () => void;
 
   // Actions — evaluate controls
   appendPositiveControls: (ids: string[]) => void;
@@ -78,7 +88,8 @@ const initialState = {
   expandedPanels: new Set<PanelId>(),
   lastExperiment: null as Experiment | null,
   lastExperimentSetId: null as string | null,
-  geneSearchOpen: true,
+  geneSearchOpen: false,
+  leftSidebarOpen: true,
   pendingPositiveControls: [] as string[],
   pendingNegativeControls: [] as string[],
 };
@@ -124,6 +135,22 @@ export const useWorkbenchStore = create<WorkbenchState>()((set) => ({
 
   clearSelection: () => set({ selectedSetIds: [] }),
 
+  removeGeneSets: (ids) =>
+    set((s) => {
+      const removeSet = new Set(ids);
+      const geneSets = s.geneSets.filter((gs) => !removeSet.has(gs.id));
+      const activeSetId =
+        s.activeSetId && removeSet.has(s.activeSetId)
+          ? (geneSets[0]?.id ?? null)
+          : s.activeSetId;
+      const selectedSetIds = s.selectedSetIds.filter((sid) => !removeSet.has(sid));
+      return { geneSets, activeSetId, selectedSetIds };
+    }),
+
+  selectAll: () => set((s) => ({ selectedSetIds: s.geneSets.map((gs) => gs.id) })),
+
+  deselectAll: () => set({ selectedSetIds: [] }),
+
   // -- Panel actions --------------------------------------------------------
 
   togglePanel: (panelId) =>
@@ -156,6 +183,7 @@ export const useWorkbenchStore = create<WorkbenchState>()((set) => ({
   // -- Gene search sidebar ---------------------------------------------------
 
   toggleGeneSearch: () => set((s) => ({ geneSearchOpen: !s.geneSearchOpen })),
+  toggleLeftSidebar: () => set((s) => ({ leftSidebarOpen: !s.leftSidebarOpen })),
 
   // -- Evaluate controls ----------------------------------------------------
 
@@ -189,7 +217,8 @@ export const useWorkbenchStore = create<WorkbenchState>()((set) => ({
       expandedPanels: new Set<PanelId>(),
       lastExperiment: null,
       lastExperimentSetId: null,
-      geneSearchOpen: true,
+      geneSearchOpen: false,
+      leftSidebarOpen: true,
       pendingPositiveControls: [],
       pendingNegativeControls: [],
     }),

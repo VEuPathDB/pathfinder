@@ -69,15 +69,24 @@ export function ConversationListItem({
           onClick={() => onSelect(item)}
           className="min-w-0 flex-1 text-left"
         >
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-foreground">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className="min-w-0 truncate text-sm font-medium text-foreground"
+              title={item.title}
+            >
               {item.title}
             </span>
+            {si && graphHasValidationIssue && (
+              <span
+                className="inline-flex h-2 w-2 shrink-0 rounded-full bg-destructive/50"
+                title="Validation issues"
+              />
+            )}
             {item.kind === "strategy" &&
               si &&
               (si.wdkStrategyId || (si.stepCount ?? 0) > 0) && (
                 <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
+                  className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                     !si.wdkStrategyId
                       ? "bg-warning/10 text-warning"
                       : si.isSaved
@@ -88,12 +97,6 @@ export function ConversationListItem({
                   {!si.wdkStrategyId ? "Building" : si.isSaved ? "Saved" : "Draft"}
                 </span>
               )}
-            {si && graphHasValidationIssue && (
-              <span
-                className="inline-flex h-2 w-2 shrink-0 rounded-full bg-destructive/50"
-                title="Validation issues"
-              />
-            )}
           </div>
           <div className="text-xs text-muted-foreground">
             {formatSidebarTime(item.updatedAt)}

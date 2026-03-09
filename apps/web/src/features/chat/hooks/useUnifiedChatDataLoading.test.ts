@@ -25,19 +25,18 @@ const mockStrategy: Strategy = {
 
 let mockGetStrategy: ReturnType<typeof vi.fn>;
 
-vi.mock("@/lib/api/client", () => ({
-  APIError: class APIError extends Error {
-    status: number;
-    constructor(message: string, args: { status: number }) {
-      super(message);
-      this.name = "APIError";
-      this.status = args.status;
-    }
-  },
+vi.mock("@/lib/api/strategies", () => ({
   get getStrategy() {
     return mockGetStrategy;
   },
 }));
+
+vi.mock("@/lib/api/http", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/http")>();
+  return {
+    ...actual,
+  };
+});
 
 // Mock useSessionStore to control authVersion
 let mockAuthVersion = 0;
@@ -65,7 +64,8 @@ function makeArgs(
       currentThinking: null,
       finalizeToolCalls: vi.fn(),
     } as unknown as ReturnType<typeof import("./useThinkingState").useThinkingState>,
-    loadGraph: vi.fn(),
+    setStrategy: vi.fn(),
+    setStrategyMeta: vi.fn(),
     onStrategyNotFound: vi.fn(),
     ...overrides,
   };
@@ -103,7 +103,7 @@ describe("useUnifiedChatDataLoading", () => {
   });
 
   it("calls onStrategyNotFound on 404", async () => {
-    const { APIError } = await import("@/lib/api/client");
+    const { APIError } = await import("@/lib/api/http");
     mockGetStrategy.mockRejectedValueOnce(
       new APIError("Not found", {
         status: 404,
@@ -122,7 +122,7 @@ describe("useUnifiedChatDataLoading", () => {
   });
 
   it("surfaces API error to UI on failed load", async () => {
-    const { APIError } = await import("@/lib/api/client");
+    const { APIError } = await import("@/lib/api/http");
     // Both attempts fail
     mockGetStrategy.mockRejectedValue(
       new APIError("Unauthorized", {
@@ -144,7 +144,7 @@ describe("useUnifiedChatDataLoading", () => {
   });
 
   it("retries loading when authVersion bumps after a failed load", async () => {
-    const { APIError } = await import("@/lib/api/client");
+    const { APIError } = await import("@/lib/api/http");
 
     // First two calls fail (initial + retry)
     mockGetStrategy
@@ -190,6 +190,56 @@ describe("useUnifiedChatDataLoading", () => {
       expect(mockGetStrategy).toHaveBeenCalledTimes(3);
       // Error should be cleared
       expect(args.setApiError).toHaveBeenCalledWith(null);
+    });
+  });
+
+  it("does NOT call loadGraph — applies the already-fetched strategy directly", async () => {
+    const strategyWithSteps: Strategy = {
+      ...mockStrategy,
+      steps: [
+        {
+          id: "step-1",
+          kind: "search",
+          displayName: "Gene search",
+          searchName: "GeneByTextSearch",
+        },
+      ],
+    };
+    mockGetStrategy.mockResolvedValueOnce(strategyWithSteps);
+    const args = makeArgs();
+
+    renderHook(() => useUnifiedChatDataLoading(args));
+
+    await waitFor(() => {
+      expect(mockGetStrategy).toHaveBeenCalledTimes(1);
+      expect(args.setMessages).toHaveBeenCalled();
+    });
+
+    // setStrategy should be called directly with the fetched data
+    expect(args.setStrategy).toHaveBeenCalledWith(strategyWithSteps);
+  });
+
+  it("exposes isLoading=true while fetching, false after", async () => {
+    let resolveGetStrategy: (s: Strategy) => void;
+    mockGetStrategy.mockReturnValueOnce(
+      new Promise<Strategy>((r) => {
+        resolveGetStrategy = r;
+      }),
+    );
+    const args = makeArgs();
+
+    const { result } = renderHook(() => useUnifiedChatDataLoading(args));
+
+    // Should be loading immediately
+    expect(result.current.isLoading).toBe(true);
+
+    // Resolve the fetch
+    await act(async () => {
+      resolveGetStrategy!(mockStrategy);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
     });
   });
 

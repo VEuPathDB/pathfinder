@@ -200,6 +200,7 @@ def _extract_strategy_link(
             "wdkUrl": result.get("wdkUrl"),
             "name": result.get("name"),
             "description": result.get("description"),
+            "isSaved": result.get("isSaved"),
         },
     }
 

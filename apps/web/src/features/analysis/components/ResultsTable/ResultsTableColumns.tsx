@@ -1,7 +1,7 @@
 import type { Classification } from "@pathfinder/shared";
 import { Badge } from "@/lib/components/ui/Badge";
 import { sanitizeHtml } from "@/lib/utils/sanitizeHtml";
-import type { WdkRecord } from "@/features/workbench/api";
+import type { WdkRecord } from "@/lib/types/wdk";
 
 export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -47,10 +47,13 @@ function stripHtml(html: string): string {
   return doc.body.textContent ?? "";
 }
 
+/** Partial shape of a WDK link-attribute JSON blob. */
+type JsonLinkBlob = { url?: string; href?: string; displayText?: string };
+
 function tryParseJsonLink(raw: string): { text: string; url: string } | null {
   if (!raw.startsWith("{")) return null;
   try {
-    const obj = JSON.parse(raw) as Record<string, unknown>;
+    const obj = JSON.parse(raw) as JsonLinkBlob;
     const url = obj.url ?? obj.href;
     if (typeof url === "string") {
       const text = typeof obj.displayText === "string" ? obj.displayText : "Link";

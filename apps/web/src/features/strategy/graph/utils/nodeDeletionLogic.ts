@@ -33,6 +33,14 @@ export function computeNodeDeletionResult(args: {
     if (step.secondaryInputStepId && toRemove.has(step.secondaryInputStepId)) {
       patch.secondaryInputStepId = undefined;
     }
+    if (
+      (patch.primaryInputStepId !== undefined ||
+        patch.secondaryInputStepId !== undefined) &&
+      step.operator
+    ) {
+      patch.operator = undefined;
+      patch.colocationParams = undefined;
+    }
     if (Object.keys(patch).length > 0) {
       patches.push({ stepId: step.id, patch });
     }

@@ -149,6 +149,8 @@ describe("graphConnectionsLogic", () => {
     });
     expect(edgeToInputPatch({ targetHandle: "left-secondary" } as Edge)).toEqual({
       secondaryInputStepId: undefined,
+      operator: undefined,
+      colocationParams: undefined,
     });
     expect(edgeToInputPatch({ id: "a-b-primary" } as Edge)).toEqual({
       primaryInputStepId: undefined,
@@ -157,6 +159,13 @@ describe("graphConnectionsLogic", () => {
       secondaryInputStepId: undefined,
     });
     expect(edgeToInputPatch({ id: "weird" } as Edge)).toBeNull();
+  });
+
+  test("edgeToInputPatch clears operator and colocationParams when secondary edge removed", () => {
+    const patch = edgeToInputPatch({ targetHandle: "left-secondary" } as Edge);
+    expect(patch).toHaveProperty("operator", undefined);
+    expect(patch).toHaveProperty("colocationParams", undefined);
+    expect(patch).toHaveProperty("secondaryInputStepId", undefined);
   });
 
   test("inferCombineRecordTypeOrMismatch detects real mismatch and infers recordType", () => {
@@ -186,5 +195,198 @@ describe("graphConnectionsLogic", () => {
       indices: idx,
     });
     expect(result.mismatch).toBe(true);
+  });
+
+  test("inferCombineRecordTypeOrMismatch falls back to rightType when leftType is null", () => {
+    const steps = [
+      step({ id: "left" }), // no recordType
+      step({ id: "right", recordType: "gene" }),
+    ];
+    const idx = buildGraphIndices(steps);
+    const result = inferCombineRecordTypeOrMismatch({
+      sourceId: "left",
+      targetId: "right",
+      indices: idx,
+    });
+    expect(result.recordType).toBe("gene");
+    expect(result.mismatch).toBe(false);
+  });
+
+  test("inferCombineRecordTypeOrMismatch returns null recordType when both sides have no type", () => {
+    const steps = [step({ id: "left" }), step({ id: "right" })];
+    const idx = buildGraphIndices(steps);
+    const result = inferCombineRecordTypeOrMismatch({
+      sourceId: "left",
+      targetId: "right",
+      indices: idx,
+    });
+    expect(result.recordType).toBeNull();
+    expect(result.mismatch).toBe(false);
+  });
+
+  test("inferCombineRecordTypeOrMismatch does not flag mismatch when leftType is __mismatch__", () => {
+    // __mismatch__ is a sentinel meaning an upstream combine already has mismatched types.
+    // We should not double-flag.
+    const steps = [
+      step({ id: "a", recordType: "gene" }),
+      step({ id: "b", recordType: "organism" }),
+      step({
+        id: "comb",
+        kind: "combine",
+        primaryInputStepId: "a",
+        secondaryInputStepId: "b",
+        operator: "UNION",
+      }),
+      step({ id: "right", recordType: "gene" }),
+    ];
+    const idx = buildGraphIndices(steps);
+    const result = inferCombineRecordTypeOrMismatch({
+      sourceId: "comb",
+      targetId: "right",
+      indices: idx,
+    });
+    // comb resolves to __mismatch__, so mismatch should be false (sentinel suppression)
+    expect(result.mismatch).toBe(false);
+  });
+
+  test("buildGraphIndices with secondary input counts towards used-as-input", () => {
+    const steps = [
+      step({ id: "a" }),
+      step({ id: "b" }),
+      step({
+        id: "c",
+        kind: "combine",
+        primaryInputStepId: "a",
+        secondaryInputStepId: "b",
+        operator: "UNION",
+      }),
+    ];
+    const idx = buildGraphIndices(steps);
+    expect(idx.usedAsInputCount.get("a")).toBe(1);
+    expect(idx.usedAsInputCount.get("b")).toBe(1);
+    expect(idx.rootSet.has("c")).toBe(true);
+    expect(idx.rootSet.has("a")).toBe(false);
+    expect(idx.rootSet.has("b")).toBe(false);
+  });
+
+  test("isUpstream returns false for non-existent steps", () => {
+    const steps = [step({ id: "a" })];
+    const idx = buildGraphIndices(steps);
+    expect(isUpstream("a", "nonexistent", idx.stepsById)).toBe(false);
+  });
+
+  test("isUpstream handles secondary input path", () => {
+    const steps = [
+      step({ id: "a" }),
+      step({ id: "b" }),
+      step({
+        id: "c",
+        kind: "combine",
+        primaryInputStepId: "a",
+        secondaryInputStepId: "b",
+        operator: "UNION",
+      }),
+    ];
+    const idx = buildGraphIndices(steps);
+    expect(isUpstream("c", "b", idx.stepsById)).toBe(true);
+    expect(isUpstream("c", "a", idx.stepsById)).toBe(true);
+  });
+
+  test("isValidGraphConnection rejects unknown source/target steps", () => {
+    const idx = buildGraphIndices([step({ id: "a" })]);
+    expect(
+      isValidGraphConnection({ source: "a", target: "missing" } as Connection, idx),
+    ).toBe(false);
+    expect(
+      isValidGraphConnection({ source: "missing", target: "a" } as Connection, idx),
+    ).toBe(false);
+  });
+
+  test("isValidGraphConnection rejects left handle when target primary is already filled", () => {
+    const steps = [
+      step({ id: "a" }),
+      step({ id: "b" }),
+      step({ id: "t", kind: "transform", primaryInputStepId: "b" }),
+    ];
+    const idx = buildGraphIndices(steps);
+    expect(
+      isValidGraphConnection(
+        { source: "a", target: "t", targetHandle: "left" } as Connection,
+        idx,
+      ),
+    ).toBe(false);
+  });
+
+  test("isValidGraphConnection rejects left-secondary when target is not combine", () => {
+    const steps = [step({ id: "a" }), step({ id: "t", kind: "transform" })];
+    const idx = buildGraphIndices(steps);
+    expect(
+      isValidGraphConnection(
+        { source: "a", target: "t", targetHandle: "left-secondary" } as Connection,
+        idx,
+      ),
+    ).toBe(false);
+  });
+
+  test("isValidGraphConnection rejects left-secondary when secondary slot is filled", () => {
+    const steps = [
+      step({ id: "a" }),
+      step({ id: "b" }),
+      step({
+        id: "c",
+        kind: "combine",
+        primaryInputStepId: "a",
+        secondaryInputStepId: "b",
+        operator: "UNION",
+      }),
+      step({ id: "d" }),
+    ];
+    const idx = buildGraphIndices(steps);
+    expect(
+      isValidGraphConnection(
+        { source: "d", target: "c", targetHandle: "left-secondary" } as Connection,
+        idx,
+      ),
+    ).toBe(false);
+  });
+
+  test("combine gesture rejects when graph has only one root", () => {
+    const steps = [step({ id: "a" }), step({ id: "b", primaryInputStepId: "a" })];
+    const idx = buildGraphIndices(steps);
+    // b is the only root; no combine gesture possible
+    expect(
+      isValidGraphConnection({ source: "b", target: "b" } as Connection, idx),
+    ).toBe(false);
+  });
+
+  test("combine gesture rejects when target is not a root", () => {
+    const steps = [
+      step({ id: "a" }),
+      step({ id: "b" }),
+      step({ id: "c", primaryInputStepId: "a" }), // c is a root but a is not
+    ];
+    const idx = buildGraphIndices(steps);
+    // a is not a root (used by c)
+    expect(
+      isValidGraphConnection({ source: "b", target: "a" } as Connection, idx),
+    ).toBe(false);
+  });
+
+  test("getConnectionEffect returns noop for invalid connection", () => {
+    const idx = buildGraphIndices([step({ id: "a" })]);
+    expect(
+      getConnectionEffect({ source: "a", target: "a" } as Connection, idx),
+    ).toEqual({ type: "noop" });
+  });
+
+  test("isValidGraphConnection rejects left handle for search step (only transform/combine)", () => {
+    const steps = [step({ id: "a" }), step({ id: "b", kind: "search" })];
+    const idx = buildGraphIndices(steps);
+    expect(
+      isValidGraphConnection(
+        { source: "a", target: "b", targetHandle: "left" } as Connection,
+        idx,
+      ),
+    ).toBe(false);
   });
 });

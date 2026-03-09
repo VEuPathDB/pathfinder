@@ -1,5 +1,5 @@
 import type { Strategy } from "@pathfinder/shared";
-import type { NodeSelection } from "@/features/chat/node_selection";
+import type { NodeSelection } from "@/lib/types/nodeSelection";
 import { inferStepKind } from "@/lib/strategyGraph";
 
 export function buildNodeSelectionPayload(

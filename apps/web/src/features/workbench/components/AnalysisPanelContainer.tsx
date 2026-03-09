@@ -86,7 +86,11 @@ export function AnalysisPanelContainer({
       </button>
 
       {/* ---- Content ---- */}
-      {isExpanded && <div className="border-t px-4 py-4">{children}</div>}
+      {isExpanded && (
+        <div className="overflow-hidden border-t animate-panel-expand">
+          <div className="px-4 py-4">{children}</div>
+        </div>
+      )}
     </div>
   );
 }

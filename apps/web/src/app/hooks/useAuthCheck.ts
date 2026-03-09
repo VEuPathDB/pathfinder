@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getVeupathdbAuthStatus } from "@/lib/api/client";
+import { getVeupathdbAuthStatus } from "@/lib/api/veupathdb-auth";
 import { useSessionStore } from "@/state/useSessionStore";
 
 /**

@@ -1,5 +1,12 @@
 import type { StrategyPlan, Strategy } from "@pathfinder/shared";
-import { APIError, requestJson } from "./http";
+import { APIError, requestJson, requestJsonValidated } from "./http";
+import {
+  NormalizePlanResponseSchema,
+  OpenStrategyResponseSchema,
+  StepCountsResponseSchema,
+  StrategyListItemListSchema,
+  StrategySchema,
+} from "./schemas/strategy";
 
 /**
  * The list endpoints return objects without `steps` / `rootStepId`.
@@ -18,9 +25,11 @@ function withDefaults(
 }
 
 export async function listStrategies(siteId?: string | null): Promise<Strategy[]> {
-  const raw = await requestJson<Partial<Strategy>[]>("/api/v1/strategies", {
-    query: siteId ? { siteId } : undefined,
-  });
+  const raw = await requestJsonValidated(
+    StrategyListItemListSchema,
+    "/api/v1/strategies",
+    { query: siteId ? { siteId } : undefined },
+  );
   return raw.map((s) => withDefaults(s as Parameters<typeof withDefaults>[0]));
 }
 
@@ -29,10 +38,11 @@ export async function listStrategies(siteId?: string | null): Promise<Strategy[]
  * summary list for this site.
  */
 export async function syncWdkStrategies(siteId: string): Promise<Strategy[]> {
-  const raw = await requestJson<Partial<Strategy>[]>("/api/v1/strategies/sync-wdk", {
-    method: "POST",
-    query: { siteId },
-  });
+  const raw = await requestJsonValidated(
+    StrategyListItemListSchema,
+    "/api/v1/strategies/sync-wdk",
+    { method: "POST", query: { siteId } },
+  );
   return raw.map((s) => withDefaults(s as Parameters<typeof withDefaults>[0]));
 }
 
@@ -41,10 +51,11 @@ export async function openStrategy(payload: {
   strategyId?: string;
   wdkStrategyId?: number;
 }): Promise<{ strategyId: string }> {
-  return await requestJson<{ strategyId: string }>("/api/v1/strategies/open", {
-    method: "POST",
-    body: payload,
-  });
+  return await requestJsonValidated(
+    OpenStrategyResponseSchema,
+    "/api/v1/strategies/open",
+    { method: "POST", body: payload },
+  );
 }
 
 function looksLikeUuid(value: string): boolean {
@@ -63,7 +74,10 @@ export async function getStrategy(strategyId: string): Promise<Strategy> {
       data: { detail: "strategyId must be a UUID" },
     });
   }
-  return await requestJson<Strategy>(`/api/v1/strategies/${strategyId}`);
+  return (await requestJsonValidated(
+    StrategySchema,
+    `/api/v1/strategies/${strategyId}`,
+  )) as Strategy;
 }
 
 export async function createStrategy(args: {
@@ -71,10 +85,10 @@ export async function createStrategy(args: {
   siteId: string;
   plan: StrategyPlan;
 }): Promise<Strategy> {
-  return await requestJson<Strategy>("/api/v1/strategies", {
+  return (await requestJsonValidated(StrategySchema, "/api/v1/strategies", {
     method: "POST",
     body: args,
-  });
+  })) as Strategy;
 }
 
 export async function updateStrategy(
@@ -86,10 +100,14 @@ export async function updateStrategy(
     isSaved?: boolean;
   },
 ): Promise<Strategy> {
-  return await requestJson<Strategy>(`/api/v1/strategies/${strategyId}`, {
-    method: "PATCH",
-    body: args,
-  });
+  return (await requestJsonValidated(
+    StrategySchema,
+    `/api/v1/strategies/${strategyId}`,
+    {
+      method: "PATCH",
+      body: args,
+    },
+  )) as Strategy;
 }
 
 export async function deleteStrategy(strategyId: string): Promise<void> {
@@ -102,17 +120,20 @@ export async function normalizePlan(
   siteId: string,
   plan: StrategyPlan,
 ): Promise<{ plan: StrategyPlan; warnings?: unknown[] | null }> {
-  return await requestJson<{ plan: StrategyPlan; warnings?: unknown[] | null }>(
+  const raw = await requestJsonValidated(
+    NormalizePlanResponseSchema,
     "/api/v1/strategies/plan/normalize",
     { method: "POST", body: { siteId, plan } },
   );
+  return raw as { plan: StrategyPlan; warnings?: unknown[] | null };
 }
 
 export async function computeStepCounts(
   siteId: string,
   plan: StrategyPlan,
 ): Promise<{ counts: Record<string, number | null> }> {
-  return await requestJson<{ counts: Record<string, number | null> }>(
+  return await requestJsonValidated(
+    StepCountsResponseSchema,
     "/api/v1/strategies/step-counts",
     { method: "POST", body: { siteId, plan } },
   );

@@ -19,6 +19,12 @@ import re
 from urllib.parse import urlparse
 
 import httpx
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 from veupath_chatbot.integrations.veupathdb.site_router import get_site_router
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
@@ -34,7 +40,7 @@ def _get_site_search_client() -> httpx.AsyncClient:
     global _site_search_client
     if _site_search_client is None or _site_search_client.is_closed:
         _site_search_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(30.0),
+            timeout=httpx.Timeout(30.0, read=90.0),
             follow_redirects=True,
             headers={"Accept": "application/json"},
         )
@@ -54,6 +60,11 @@ def strip_html_tags(value: str) -> str:
     return re.sub(r"</?[^>]+>", "", value or "").strip()
 
 
+@retry(
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+)
 async def query_site_search(
     site_id: str,
     *,

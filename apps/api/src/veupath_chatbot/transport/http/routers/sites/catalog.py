@@ -4,13 +4,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from veupath_chatbot.platform.errors import ErrorCode, NotFoundError
 from veupath_chatbot.platform.types import JSONValue
 from veupath_chatbot.services import catalog
 from veupath_chatbot.services.wdk import get_discovery_service
 from veupath_chatbot.transport.http.schemas import (
     RecordTypeResponse,
-    SearchDetailsResponse,
     SearchResponse,
     SiteResponse,
 )
@@ -23,20 +21,6 @@ async def list_sites() -> list[SiteResponse]:
     """List all available VEuPathDB sites."""
     sites = await catalog.list_sites()
     return [SiteResponse.model_validate(s) for s in sites if isinstance(s, dict)]
-
-
-@router.get("/{siteId}", response_model=SiteResponse)
-async def get_site(siteId: str) -> SiteResponse:
-    """Get a single site by ID."""
-    sites = await catalog.list_sites()
-    for s in sites:
-        if isinstance(s, dict) and s.get("id") == siteId:
-            return SiteResponse.model_validate(s)
-    raise NotFoundError(
-        code=ErrorCode.SITE_NOT_FOUND,
-        title="Site not found",
-        detail=f"Unknown siteId '{siteId}'.",
-    )
 
 
 @router.get("/{siteId}/record-types", response_model=list[RecordTypeResponse])
@@ -85,17 +69,3 @@ async def get_searches(
             )
 
     return all_searches
-
-
-@router.get(
-    "/{siteId}/searches/{recordType}/{searchName}", response_model=SearchDetailsResponse
-)
-async def get_search_details(
-    siteId: str,
-    recordType: str,
-    searchName: str,
-) -> SearchDetailsResponse:
-    """Get detailed search configuration with parameters."""
-    discovery = get_discovery_service()
-    result = await discovery.get_search_details(siteId, recordType, searchName)
-    return SearchDetailsResponse.model_validate(result)

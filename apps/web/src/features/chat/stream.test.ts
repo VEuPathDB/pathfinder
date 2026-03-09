@@ -7,7 +7,7 @@ vi.mock("@/lib/operationSubscribe", () => ({
 
 const requestJsonMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/http", async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
+  const actual = await importOriginal<typeof import("@/lib/api/http")>();
   return { ...actual, requestJson: requestJsonMock };
 });
 

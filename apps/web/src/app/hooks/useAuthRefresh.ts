@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useSessionStore } from "@/state/useSessionStore";
-import { refreshAuth } from "@/lib/api/client";
+import { refreshAuth } from "@/lib/api/veupathdb-auth";
 
 /**
  * Refreshes VEuPathDB auth cookies once per session after sign-in is detected.

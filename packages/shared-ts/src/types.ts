@@ -989,6 +989,8 @@ export interface ExperimentConfig {
   maxListSize?: number | null;
   sortAttribute?: string | null;
   sortDirection?: "ASC" | "DESC";
+  /** Pre-resolved gene IDs for direct evaluation (bypasses WDK step creation). */
+  targetGeneIds?: string[] | null;
 }
 
 export interface OptimizationResult {

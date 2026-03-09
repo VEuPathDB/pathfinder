@@ -2,7 +2,6 @@
 
 import pytest
 
-from veupath_chatbot.platform.errors import AppError, WDKError
 from veupath_chatbot.services.strategies.wdk_bridge import (
     _build_node_from_wdk,
     _build_snapshot_from_wdk,
@@ -13,7 +12,6 @@ from veupath_chatbot.services.strategies.wdk_bridge import (
     _plan_cache_key,
     extract_wdk_is_saved,
     parse_wdk_strategy_id,
-    wdk_error_boundary,
 )
 
 # ── extract_wdk_is_saved ──────────────────────────────────────────────
@@ -56,34 +54,6 @@ class TestParseWdkStrategyId:
 
     def test_none_value_returns_none(self) -> None:
         assert parse_wdk_strategy_id({"strategyId": None}) is None
-
-
-# ── wdk_error_boundary ────────────────────────────────────────────────
-
-
-class TestWdkErrorBoundary:
-    async def test_passes_through_on_success(self) -> None:
-        async with wdk_error_boundary("test_op"):
-            pass  # Should not raise
-
-    async def test_reraises_app_error(self) -> None:
-        with pytest.raises(AppError):
-            async with wdk_error_boundary("test_op"):
-                raise AppError(
-                    code="TEST",
-                    title="Test error",
-                )
-
-    async def test_reraises_wdk_error(self) -> None:
-        with pytest.raises(WDKError):
-            async with wdk_error_boundary("test_op"):
-                raise WDKError("Test WDK error")
-
-    async def test_wraps_generic_error_as_wdk_error(self) -> None:
-        with pytest.raises(WDKError) as exc_info:
-            async with wdk_error_boundary("fetch_data"):
-                raise RuntimeError("connection refused")
-        assert "fetch_data" in str(exc_info.value.detail)
 
 
 # ── _extract_record_type ──────────────────────────────────────────────

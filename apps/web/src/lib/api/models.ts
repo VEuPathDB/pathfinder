@@ -1,4 +1,5 @@
-import { requestJson } from "./http";
+import { requestJsonValidated } from "./http";
+import { ModelCatalogResponseSchema } from "./schemas/model";
 
 export interface ModelCatalogResponse {
   models: import("@pathfinder/shared").ModelCatalogEntry[];
@@ -7,5 +8,8 @@ export interface ModelCatalogResponse {
 }
 
 export async function listModels(): Promise<ModelCatalogResponse> {
-  return await requestJson<ModelCatalogResponse>("/api/v1/models");
+  return (await requestJsonValidated(
+    ModelCatalogResponseSchema,
+    "/api/v1/models",
+  )) as ModelCatalogResponse;
 }

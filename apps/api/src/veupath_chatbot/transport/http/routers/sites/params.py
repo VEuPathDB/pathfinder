@@ -4,10 +4,7 @@ from fastapi import APIRouter
 
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services import catalog
-from veupath_chatbot.services.wdk import get_discovery_service
 from veupath_chatbot.transport.http.schemas import (
-    DependentParamsRequest,
-    DependentParamsResponse,
     ParamSpecResponse,
     ParamSpecsRequest,
     SearchValidationRequest,
@@ -86,27 +83,6 @@ def _build_param_specs(payload: JSONObject) -> list[ParamSpecResponse]:
 
 
 @router.post(
-    "/{siteId}/searches/{recordType}/{searchName}/dependent-params",
-    response_model=DependentParamsResponse,
-)
-async def get_dependent_params(
-    siteId: str,
-    recordType: str,
-    searchName: str,
-    payload: DependentParamsRequest,
-) -> DependentParamsResponse:
-    """Get dependent parameter vocabulary values."""
-    result = await catalog.get_refreshed_dependent_params(
-        site_id=siteId,
-        record_type=recordType,
-        search_name=searchName,
-        parameter_name=payload.parameter_name,
-        context_values=payload.context_values,
-    )
-    return DependentParamsResponse.model_validate(result)
-
-
-@router.post(
     "/{siteId}/searches/{recordType}/{searchName}/validate",
     response_model=SearchValidationResponse,
 )
@@ -124,29 +100,6 @@ async def validate_search_params(
         context_values=payload.context_values or {},
     )
     return SearchValidationResponse.model_validate(result)
-
-
-@router.get(
-    "/{siteId}/searches/{recordType}/{searchName}/param-specs",
-    response_model=list[ParamSpecResponse],
-)
-async def get_param_specs(
-    siteId: str,
-    recordType: str,
-    searchName: str,
-) -> list[ParamSpecResponse]:
-    """Return normalized parameter specs for UI consumption."""
-    discovery = get_discovery_service()
-    details_raw = await discovery.get_search_details(
-        siteId, recordType, searchName, expand_params=True
-    )
-    details: JSONObject
-    if isinstance(details_raw, dict):
-        search_data_raw = details_raw.get("searchData")
-        details = search_data_raw if isinstance(search_data_raw, dict) else details_raw
-    else:
-        details = {}
-    return _build_param_specs(details)
 
 
 @router.post(

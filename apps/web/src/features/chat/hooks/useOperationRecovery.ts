@@ -14,8 +14,7 @@ import {
   subscribeToOperation,
   type OperationSubscription,
 } from "@/lib/operationSubscribe";
-import { parseChatSSEEvent } from "@/features/chat/sse_events";
-import type { ChatSSEEvent } from "@/features/chat/sse_events";
+import { parseChatSSEEvent, type RawSSEData } from "@/features/chat/sse_events";
 import { handleChatEvent } from "@/features/chat/handlers/handleChatEvent";
 import type { ChatEventContext } from "@/features/chat/handlers/handleChatEvent";
 import type { useThinkingState } from "@/features/chat/hooks/useThinkingState";
@@ -48,8 +47,10 @@ interface UseOperationRecoveryArgs {
     calls: ToolCall[],
     activity?: { calls: Record<string, ToolCall[]>; status: Record<string, string> },
   ) => void;
+  setSelectedModelId?: (modelId: string | null) => void;
   onApiError?: (msg: string) => void;
   setOptimizationProgress: ChatEventContext["setOptimizationProgress"];
+  onWorkbenchGeneSet?: ChatEventContext["onWorkbenchGeneSet"];
 }
 
 /**
@@ -79,8 +80,10 @@ export function useOperationRecovery({
   applyGraphSnapshot,
   getStrategy,
   attachThinkingToLastAssistant,
+  setSelectedModelId,
   onApiError,
   setOptimizationProgress,
+  onWorkbenchGeneSet,
 }: UseOperationRecoveryArgs) {
   const recoveredRef = useRef<string | null>(null);
   const subscriptionRef = useRef<OperationSubscription | null>(null);
@@ -118,9 +121,10 @@ export function useOperationRecovery({
         const subKaniCallsBuffer: Record<string, ToolCall[]> = {};
         const subKaniStatusBuffer: Record<string, string> = {};
 
-        const sub = subscribeToOperation<Record<string, unknown>>(op.operationId, {
+        const sub = subscribeToOperation<RawSSEData>(op.operationId, {
           onEvent: ({ type, data }) => {
-            const event: ChatSSEEvent = parseChatSSEEvent({ type, data });
+            const event = parseChatSSEEvent({ type, data });
+            if (!event) return;
             handleChatEvent(
               {
                 siteId,
@@ -150,7 +154,9 @@ export function useOperationRecovery({
                 getStrategy,
                 streamState,
                 setOptimizationProgress,
+                setSelectedModelId,
                 onApiError,
+                onWorkbenchGeneSet,
               },
               event,
             );

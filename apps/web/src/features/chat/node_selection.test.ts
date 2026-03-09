@@ -7,7 +7,14 @@ import {
 
 describe("node_selection", () => {
   it("round-trips selection + message", () => {
-    const selection = { graphId: "g1", nodeIds: ["a", "b"], selectedNodeIds: ["b"] };
+    const selection = {
+      graphId: "g1",
+      nodeIds: ["a", "b"],
+      selectedNodeIds: ["b"],
+      contextNodeIds: [],
+      nodes: [],
+      edges: [],
+    };
     const msg = "Hello";
     const encoded = encodeNodeSelection(selection, msg);
     const decoded = decodeNodeSelection(encoded);

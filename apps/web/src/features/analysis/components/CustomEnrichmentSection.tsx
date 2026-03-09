@@ -2,10 +2,7 @@ import { useState, useCallback } from "react";
 import { Play, Loader2 } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
 import { Badge } from "@/lib/components/ui/Badge";
-import {
-  runCustomEnrichment,
-  type CustomEnrichmentResult,
-} from "@/features/workbench/api";
+import { runCustomEnrichment, type CustomEnrichmentResult } from "@/lib/api/analysis";
 import { useAsyncAction } from "@/lib/utils/asyncAction";
 
 interface CustomEnrichmentSectionProps {

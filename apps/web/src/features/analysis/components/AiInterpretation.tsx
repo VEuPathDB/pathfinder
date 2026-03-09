@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import type { Experiment } from "@pathfinder/shared";
-import { streamAiAssist } from "@/features/workbench/api";
-import { ChatMarkdown } from "@/features/chat/components/message/ChatMarkdown";
+import { streamAiAssist, type AiAssistContext } from "@/lib/api/streaming";
+import { ChatMarkdown } from "@/lib/components/ChatMarkdown";
 import { Sparkles, Loader2 } from "lucide-react";
 import { Section } from "./Section";
 import { flattenPlanStepNode } from "@/features/analysis/utils/multiStepUtils";
@@ -83,7 +83,7 @@ export function AiInterpretation({ experiment, siteId }: AiInterpretationProps) 
     }
     const geneListsSummary = geneListsParts.length > 0 ? geneListsParts.join("\n") : "";
 
-    const context: Record<string, unknown> = {
+    const context: AiAssistContext = {
       experimentId: experiment.id,
       searchName: config.searchName,
       recordType: config.recordType,

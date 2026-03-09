@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { FileText, FlaskConical, Square, X } from "lucide-react";
+import { Square } from "lucide-react";
 import type {
   ChatMention,
   ModelCatalogEntry,
@@ -11,8 +11,10 @@ import type {
 import { useSessionStore } from "@/state/useSessionStore";
 import { Button } from "@/lib/components/ui/Button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/lib/components/ui/Tooltip";
-import { ModelPicker } from "./thinking/ModelPicker";
-import { ReasoningToggle } from "./message/ReasoningToggle";
+import { ModelPicker } from "@/lib/components/ModelPicker";
+import { ReasoningToggle } from "@/lib/components/ReasoningToggle";
+import { useMentionState } from "@/features/chat/hooks/useMentionState";
+import { MentionBadges } from "./message/MentionBadges";
 import { MentionAutocomplete } from "./message/MentionAutocomplete";
 
 interface MessageComposerProps {
@@ -28,7 +30,7 @@ interface MessageComposerProps {
   /** Current reasoning effort. */
   reasoningEffort?: ReasoningEffort;
   onReasoningChange?: (effort: ReasoningEffort) => void;
-  /** Server default model ID for the current mode — shown in the picker. */
+  /** Server default model ID for the current mode -- shown in the picker. */
   serverDefaultModelId?: string | null;
   /** Site ID for @-mention data fetching. */
   siteId: string;
@@ -48,12 +50,19 @@ export function MessageComposer({
   siteId,
 }: MessageComposerProps) {
   const [message, setMessage] = useState("");
-  const [mentions, setMentions] = useState<ChatMention[]>([]);
-  const [mentionActive, setMentionActive] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState("");
-  const [mentionPos, setMentionPos] = useState({ top: 0, left: 0 });
-  const mentionStartRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const {
+    mentions,
+    setMentions,
+    mentionActive,
+    setMentionActive,
+    mentionQuery,
+    mentionPos,
+    checkMentionTrigger,
+    handleMentionSelect,
+    removeMention,
+  } = useMentionState();
 
   // Allow external prefill (e.g. from graph node "Ask about" action).
   const composerPrefill = useSessionStore((s) => s.composerPrefill);
@@ -84,49 +93,12 @@ export function MessageComposer({
   const selectedModel = models.find((m) => m.id === effectiveModelId);
   const supportsReasoning = selectedModel?.supportsReasoning ?? false;
 
-  const checkMentionTrigger = useCallback((value: string, cursorPos: number) => {
-    const before = value.slice(0, cursorPos);
-    const atIdx = before.lastIndexOf("@");
-    if (
-      atIdx === -1 ||
-      (atIdx > 0 && before[atIdx - 1] !== " " && before[atIdx - 1] !== "\n")
-    ) {
-      setMentionActive(false);
-      return;
-    }
-    const query = before.slice(atIdx + 1);
-    if (query.includes(" ") && query.length > 20) {
-      setMentionActive(false);
-      return;
-    }
-    mentionStartRef.current = atIdx;
-    setMentionQuery(query);
-    setMentionPos({ top: 36, left: 8 });
-    setMentionActive(true);
-  }, []);
-
-  const handleMentionSelect = useCallback(
+  const onMentionSelect = useCallback(
     (mention: ChatMention) => {
-      const start = mentionStartRef.current ?? 0;
-      const before = message.slice(0, start);
-      const textarea = textareaRef.current;
-      const cursorPos = textarea?.selectionStart ?? message.length;
-      const after = message.slice(cursorPos);
-      setMessage(before + after);
-      setMentions((prev) => {
-        if (prev.some((m) => m.type === mention.type && m.id === mention.id))
-          return prev;
-        return [...prev, mention];
-      });
-      setMentionActive(false);
-      setTimeout(() => textareaRef.current?.focus(), 0);
+      handleMentionSelect(mention, message, textareaRef, setMessage);
     },
-    [message],
+    [handleMentionSelect, message],
   );
-
-  const removeMention = useCallback((idx: number) => {
-    setMentions((prev) => prev.filter((_, i) => i !== idx));
-  }, []);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -138,7 +110,7 @@ export function MessageComposer({
         setMentions([]);
       }
     },
-    [message, disabled, onSend, mentions, mentionActive],
+    [message, disabled, onSend, mentions, mentionActive, setMentions],
   );
 
   const handleKeyDown = useCallback(
@@ -200,34 +172,11 @@ export function MessageComposer({
           query={mentionQuery}
           position={mentionPos}
           visible={mentionActive}
-          onSelect={handleMentionSelect}
+          onSelect={onMentionSelect}
           onDismiss={() => setMentionActive(false)}
         />
         <div className="min-w-0 flex-1 rounded-md border border-input bg-background transition-colors duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
-          {mentions.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 border-b border-border px-2.5 py-1.5">
-              {mentions.map((m, i) => {
-                const MIcon = m.type === "strategy" ? FileText : FlaskConical;
-                return (
-                  <span
-                    key={`${m.type}-${m.id}`}
-                    className="inline-flex items-center gap-1 rounded-md bg-primary/5 px-2 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20"
-                  >
-                    <MIcon className="h-3 w-3 shrink-0" />
-                    {m.displayName}
-                    <button
-                      type="button"
-                      onClick={() => removeMention(i)}
-                      aria-label={`Remove mention: ${m.displayName}`}
-                      className="ml-0.5 rounded p-0.5 text-primary/50 transition-colors duration-150 hover:bg-primary/10 hover:text-primary"
-                    >
-                      <X className="h-2.5 w-2.5" aria-hidden />
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-          )}
+          <MentionBadges mentions={mentions} onRemove={removeMention} />
           <textarea
             ref={textareaRef}
             value={message}

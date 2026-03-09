@@ -135,3 +135,151 @@ class TestGetStrategy:
         result = await svc.get_strategy(100)
         mock_api.get_strategy.assert_called_once_with(100)
         assert result == {"stepTree": {}}
+
+
+class TestGetRecordDetail:
+    """Tests for get_record_detail — must pass actual attribute names to WDK.
+
+    WDK interprets ``"attributes": []`` as "return zero attributes."
+    The service must extract attribute names from the record type info
+    and pass them to ``get_single_record``.
+    """
+
+    @pytest.fixture
+    def detail_api(self) -> MagicMock:
+        """Mock API with list-format record type info (like real WDK expanded)."""
+        api = MagicMock()
+        api.get_record_type_info = AsyncMock(
+            return_value={
+                "attributes": [
+                    {
+                        "name": "primary_key",
+                        "displayName": "Gene ID",
+                        "isInReport": True,
+                        "isDisplayable": True,
+                    },
+                    {
+                        "name": "overview",
+                        "displayName": "Overview",
+                        "isInReport": False,
+                        "isDisplayable": True,
+                    },
+                    {
+                        "name": "gene_product",
+                        "displayName": "Product Description",
+                        "isInReport": True,
+                        "isDisplayable": True,
+                    },
+                    {
+                        "name": "organism",
+                        "displayName": "Organism",
+                        "isInReport": True,
+                        "isDisplayable": True,
+                    },
+                ],
+                "primaryKeyColumnRefs": ["gene_source_id", "source_id", "project_id"],
+            }
+        )
+        api.get_single_record = AsyncMock(
+            return_value={
+                "id": [
+                    {"name": "gene_source_id", "value": "PF3D7_0102600"},
+                    {"name": "source_id", "value": "PF3D7_0102600.1"},
+                    {"name": "project_id", "value": "PlasmoDB"},
+                ],
+                "attributes": {
+                    "primary_key": "PF3D7_0102600",
+                    "gene_product": "serine/threonine protein kinase",
+                    "organism": "Plasmodium falciparum 3D7",
+                },
+                "tables": {},
+            }
+        )
+        return api
+
+    @pytest.mark.asyncio
+    async def test_passes_in_report_attributes_to_wdk(
+        self, detail_api: MagicMock
+    ) -> None:
+        """Only isInReport=True attributes are requested from WDK."""
+        svc = StepResultsService(detail_api, step_id=42, record_type="transcript")
+        await svc.get_record_detail(
+            [{"name": "source_id", "value": "PF3D7_0102600"}],
+            "plasmodb",
+        )
+        call_kwargs = detail_api.get_single_record.call_args[1]
+        requested = call_kwargs["attributes"]
+        assert "primary_key" in requested
+        assert "gene_product" in requested
+        assert "organism" in requested
+        assert "overview" not in requested  # isInReport=False
+
+    @pytest.mark.asyncio
+    async def test_response_includes_attribute_names(
+        self, detail_api: MagicMock
+    ) -> None:
+        """Response includes display name map so the frontend can render labels."""
+        svc = StepResultsService(detail_api, step_id=42, record_type="transcript")
+        result = await svc.get_record_detail(
+            [{"name": "source_id", "value": "PF3D7_0102600"}],
+            "plasmodb",
+        )
+        assert "attributeNames" in result
+        names = result["attributeNames"]
+        assert names["primary_key"] == "Gene ID"
+        assert names["gene_product"] == "Product Description"
+        assert names["organism"] == "Organism"
+
+    @pytest.mark.asyncio
+    async def test_response_includes_attributes_from_wdk(
+        self, detail_api: MagicMock
+    ) -> None:
+        """Response includes the populated attributes from WDK."""
+        svc = StepResultsService(detail_api, step_id=42, record_type="transcript")
+        result = await svc.get_record_detail(
+            [{"name": "source_id", "value": "PF3D7_0102600"}],
+            "plasmodb",
+        )
+        assert "attributes" in result
+        assert result["attributes"]["gene_product"] == "serine/threonine protein kinase"
+
+    @pytest.mark.asyncio
+    async def test_never_sends_empty_attributes_to_wdk(
+        self, detail_api: MagicMock
+    ) -> None:
+        """Guard: get_single_record must never receive attributes=[]."""
+        svc = StepResultsService(detail_api, step_id=42, record_type="transcript")
+        await svc.get_record_detail(
+            [{"name": "source_id", "value": "PF3D7_0102600"}],
+            "plasmodb",
+        )
+        call_kwargs = detail_api.get_single_record.call_args[1]
+        assert len(call_kwargs["attributes"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_caps_attributes_at_limit(self, detail_api: MagicMock) -> None:
+        """With many isInReport attributes, only the first N are requested."""
+        from veupath_chatbot.services.wdk.helpers import DETAIL_ATTRIBUTE_LIMIT
+
+        # Generate 100 isInReport attributes
+        many_attrs = [
+            {
+                "name": f"attr_{i}",
+                "displayName": f"Attribute {i}",
+                "isInReport": True,
+                "isDisplayable": True,
+            }
+            for i in range(100)
+        ]
+        detail_api.get_record_type_info = AsyncMock(
+            return_value={
+                "attributes": many_attrs,
+                "primaryKeyColumnRefs": ["source_id"],
+            }
+        )
+        svc = StepResultsService(detail_api, step_id=42, record_type="transcript")
+        await svc.get_record_detail(
+            [{"name": "source_id", "value": "GENE1"}], "plasmodb"
+        )
+        call_kwargs = detail_api.get_single_record.call_args[1]
+        assert len(call_kwargs["attributes"]) == DETAIL_ATTRIBUTE_LIMIT

@@ -1,16 +1,25 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { vi } from "vitest";
-import type { Message, ToolCall } from "@pathfinder/shared";
+import type {
+  Citation,
+  Message,
+  PlanningArtifact,
+  Strategy,
+  ToolCall,
+} from "@pathfinder/shared";
+import type { ChatEventContext } from "./handleChatEvent.types";
 import { StreamingSession } from "@/features/chat/streaming/StreamingSession";
+
+type SetStateAction<T> = T | ((prev: T) => T);
+type UndoSnapshots = Record<number, Strategy>;
 
 export function makeStateSetters() {
   let messages: Message[] = [];
-  let undoSnapshots: Record<number, any> = {};
+  let undoSnapshots: UndoSnapshots = {};
 
-  const setMessages = (updater: any) => {
+  const setMessages = (updater: SetStateAction<Message[]>) => {
     messages = typeof updater === "function" ? updater(messages) : updater;
   };
-  const setUndoSnapshots = (updater: any) => {
+  const setUndoSnapshots = (updater: SetStateAction<UndoSnapshots>) => {
     undoSnapshots = typeof updater === "function" ? updater(undoSnapshots) : updater;
   };
   return {
@@ -31,15 +40,15 @@ export function makeStateSetters() {
  */
 export function makeBatchingStateSetters() {
   let messages: Message[] = [];
-  let undoSnapshots: Record<number, any> = {};
+  let undoSnapshots: UndoSnapshots = {};
   const messageQueue: ((prev: Message[]) => Message[])[] = [];
-  const snapshotQueue: ((prev: Record<number, any>) => Record<number, any>)[] = [];
+  const snapshotQueue: ((prev: UndoSnapshots) => UndoSnapshots)[] = [];
 
-  const setMessages = (updater: any) => {
+  const setMessages = (updater: SetStateAction<Message[]>) => {
     if (typeof updater === "function") messageQueue.push(updater);
     else messages = updater;
   };
-  const setUndoSnapshots = (updater: any) => {
+  const setUndoSnapshots = (updater: SetStateAction<UndoSnapshots>) => {
     if (typeof updater === "function") snapshotQueue.push(updater);
     else undoSnapshots = updater;
   };
@@ -64,23 +73,32 @@ export function makeBatchingStateSetters() {
   };
 }
 
-export function makeCtx(overrides?: Partial<any>) {
+export function makeCtx(overrides?: Partial<ChatEventContext>) {
   const toolCallsBuffer: ToolCall[] = [];
-  const citationsBuffer: any[] = [];
-  const planningArtifactsBuffer: any[] = [];
+  const citationsBuffer: Citation[] = [];
+  const planningArtifactsBuffer: PlanningArtifact[] = [];
   const subKaniCallsBuffer: Record<string, ToolCall[]> = {};
   const subKaniStatusBuffer: Record<string, string> = {};
   const state = makeStateSetters();
   const applyGraphSnapshot = vi.fn();
-  const thinking = {
+  const thinking: ChatEventContext["thinking"] = {
+    activeToolCalls: [],
+    lastToolCalls: [],
+    subKaniCalls: {},
+    subKaniStatus: {},
+    reasoning: null,
+    subKaniActivity: undefined,
+    reset: vi.fn(),
+    applyThinkingPayload: vi.fn(() => false),
     updateActiveFromBuffer: vi.fn(),
+    finalizeToolCalls: vi.fn(),
     updateReasoning: vi.fn(),
     snapshotSubKaniActivity: vi.fn(() => ({ calls: {}, status: {} })),
     subKaniTaskStart: vi.fn(),
     subKaniToolCallStart: vi.fn(),
     subKaniToolCallEnd: vi.fn(),
     subKaniTaskEnd: vi.fn(),
-  } as any;
+  };
 
   const base = {
     siteId: "plasmodb",
@@ -105,7 +123,7 @@ export function makeCtx(overrides?: Partial<any>) {
     setMessages: state.setMessages,
     setUndoSnapshots: state.setUndoSnapshots,
     parseToolArguments: vi.fn(() => ({ a: 1 })),
-    parseToolResult: vi.fn(() => ({ graphSnapshot: { x: 1 } })),
+    parseToolResult: vi.fn(() => ({ graphSnapshot: { graphId: "g1", steps: [] } })),
     applyGraphSnapshot,
     getStrategy: vi.fn(),
     streamState: {
@@ -116,6 +134,7 @@ export function makeCtx(overrides?: Partial<any>) {
       optimizationProgress: null,
     },
     setOptimizationProgress: vi.fn(),
+    setSelectedModelId: vi.fn(),
   };
 
   const ctx = { ...base, ...(overrides ?? {}) };

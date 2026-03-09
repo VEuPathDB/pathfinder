@@ -3,23 +3,18 @@
 Covers:
 - parse_wdk_strategy_id: extraction of int strategy IDs from WDK items
 - extract_wdk_is_saved: extraction of isSaved flag with type guards
-- wdk_error_boundary: async context manager error handling
 - fetch_and_convert: WDK → AST conversion via mocked StrategyAPI
 - Graph reconstruction: linear chains, nested trees, parameter preservation
 """
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from veupath_chatbot.domain.strategy.ops import CombineOp
-from veupath_chatbot.platform.errors import AppError, ErrorCode, WDKError
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.strategies.wdk_bridge import (
     extract_wdk_is_saved,
     fetch_and_convert,
     parse_wdk_strategy_id,
-    wdk_error_boundary,
 )
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -128,61 +123,6 @@ class TestExtractWdkIsSaved:
     def test_with_other_keys(self) -> None:
         payload: JSONObject = {"isSaved": True, "name": "S1", "strategyId": 5}
         assert extract_wdk_is_saved(payload) is True
-
-
-# ── wdk_error_boundary ────────────────────────────────────────────────
-
-
-class TestWdkErrorBoundary:
-    """Async context manager for consistent WDK error handling."""
-
-    async def test_no_error_passes_through(self) -> None:
-        async with wdk_error_boundary("test_op"):
-            result = 1 + 1
-        assert result == 2
-
-    async def test_wdk_error_reraised_as_is(self) -> None:
-        with pytest.raises(WDKError) as exc_info:
-            async with wdk_error_boundary("fetch"):
-                raise WDKError("upstream timeout")
-        assert "upstream timeout" in str(exc_info.value.detail)
-
-    async def test_app_error_reraised_as_is(self) -> None:
-        with pytest.raises(AppError) as exc_info:
-            async with wdk_error_boundary("validate"):
-                raise AppError(
-                    code=ErrorCode.VALIDATION_ERROR,
-                    title="Bad input",
-                    status=422,
-                )
-        assert exc_info.value.title == "Bad input"
-
-    async def test_generic_exception_wrapped_in_wdk_error(self) -> None:
-        with pytest.raises(WDKError) as exc_info:
-            async with wdk_error_boundary("connect"):
-                raise ConnectionError("refused")
-        assert exc_info.value.detail is not None
-        assert "connect" in exc_info.value.detail
-        assert "refused" in exc_info.value.detail
-
-    async def test_runtime_error_wrapped(self) -> None:
-        with pytest.raises(WDKError) as exc_info:
-            async with wdk_error_boundary("process"):
-                raise RuntimeError("unexpected")
-        assert isinstance(exc_info.value, WDKError)
-        assert exc_info.value.__cause__ is not None
-        assert isinstance(exc_info.value.__cause__, RuntimeError)
-
-    async def test_value_error_wrapped(self) -> None:
-        with pytest.raises(WDKError):
-            async with wdk_error_boundary("parse"):
-                raise ValueError("bad data")
-
-    async def test_keyboard_interrupt_not_caught(self) -> None:
-        """BaseException subclasses (KeyboardInterrupt) should propagate normally."""
-        with pytest.raises(KeyboardInterrupt):
-            async with wdk_error_boundary("op"):
-                raise KeyboardInterrupt()
 
 
 # ── fetch_and_convert: single step tree → AST ─────────────────────────

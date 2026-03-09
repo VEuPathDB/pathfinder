@@ -20,15 +20,21 @@ interface PairwiseResult {
 }
 
 export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
+  const unresolvedSets = sets.filter(
+    (s) => (s.geneIds ?? []).length === 0 && s.wdkStepId != null,
+  );
+
   const analysis = useMemo(() => {
     // Pairwise comparisons
     const pairwise: PairwiseResult[] = [];
     for (let i = 0; i < sets.length; i++) {
       for (let j = i + 1; j < sets.length; j++) {
-        const a = new Set(sets[i].geneIds);
-        const b = new Set(sets[j].geneIds);
-        const shared = sets[i].geneIds.filter((id) => b.has(id)).length;
-        const unionSize = new Set([...sets[i].geneIds, ...sets[j].geneIds]).size;
+        const idsA = sets[i].geneIds ?? [];
+        const idsB = sets[j].geneIds ?? [];
+        const a = new Set(idsA);
+        const b = new Set(idsB);
+        const shared = idsA.filter((id) => b.has(id)).length;
+        const unionSize = new Set([...idsA, ...idsB]).size;
         pairwise.push({
           nameA: sets[i].name,
           nameB: sets[j].name,
@@ -41,8 +47,8 @@ export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
     }
 
     // Universal genes (in ALL sets)
-    const allSets = sets.map((s) => new Set(s.geneIds));
-    const allGenes = new Set(sets.flatMap((s) => s.geneIds));
+    const allSets = sets.map((s) => new Set(s.geneIds ?? []));
+    const allGenes = new Set(sets.flatMap((s) => s.geneIds ?? []));
     const universal = [...allGenes].filter((g) => allSets.every((s) => s.has(g)));
 
     // Total unique genes
@@ -60,6 +66,14 @@ export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
       showCloseButton
     >
       <div className="p-5 space-y-5">
+        {/* Warning for unresolved strategy-backed sets */}
+        {unresolvedSets.length > 0 && (
+          <div className="rounded-md border border-yellow-500/50 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-700 dark:text-yellow-400">
+            Overlap cannot be computed for strategy-backed sets without resolved gene
+            IDs: {unresolvedSets.map((s) => s.name).join(", ")}
+          </div>
+        )}
+
         {/* Summary */}
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-md border border-border bg-muted/50 px-3 py-2 text-center">
@@ -91,7 +105,7 @@ export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
               >
                 <span className="text-sm font-medium truncate mr-2">{s.name}</span>
                 <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {s.geneIds.length.toLocaleString()} genes
+                  {(s.geneIds ?? []).length.toLocaleString()} genes
                 </span>
               </div>
             ))}

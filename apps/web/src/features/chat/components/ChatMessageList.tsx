@@ -11,7 +11,7 @@ import type {
 import { decodeNodeSelection } from "@/features/chat/node_selection";
 import { ChatEmptyState } from "@/features/chat/components/ChatEmptyState";
 import { NodeCard } from "@/features/chat/components/delegation/NodeCard";
-import { ChatMarkdown } from "@/features/chat/components/message/ChatMarkdown";
+import { ChatMarkdown } from "@/lib/components/ChatMarkdown";
 import { ThinkingPanel } from "@/features/chat/components/thinking/ThinkingPanel";
 import { OptimizationProgressPanel } from "@/features/chat/components/optimization/OptimizationProgressPanel";
 import { AssistantMessageParts } from "@/features/chat/components/message/AssistantMessageParts";
@@ -27,6 +27,7 @@ interface ChatMessageListProps {
   displayName: string;
   firstName?: string;
   isStreaming: boolean;
+  isLoading?: boolean;
   messages: Message[];
   undoSnapshots: Record<number, Strategy>;
   onSend: (content: string) => void;
@@ -50,6 +51,7 @@ export function ChatMessageList({
   displayName,
   firstName,
   isStreaming,
+  isLoading = false,
   messages,
   undoSnapshots,
   onSend,
@@ -87,15 +89,19 @@ export function ChatMessageList({
           isCompact ? "p-2" : "p-4"
         }`}
       >
-        <ChatEmptyState
-          isCompact={isCompact}
-          siteId={siteId}
-          displayName={displayName}
-          firstName={firstName}
-          onSend={onSend}
-          isStreaming={isStreaming}
-          hasMessages={messages.length > 0}
-        />
+        {isLoading ? (
+          <ChatLoadingSkeleton />
+        ) : (
+          <ChatEmptyState
+            isCompact={isCompact}
+            siteId={siteId}
+            displayName={displayName}
+            firstName={firstName}
+            onSend={onSend}
+            isStreaming={isStreaming}
+            hasMessages={messages.length > 0}
+          />
+        )}
 
         {messages.map((message, index) => {
           const decoded =
@@ -226,6 +232,19 @@ function MentionChips({ mentions }: { mentions: ChatMention[] }) {
           </span>
         );
       })}
+    </div>
+  );
+}
+
+function ChatLoadingSkeleton() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 animate-fade-in">
+      <div className="flex gap-1.5">
+        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:0ms]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:150ms]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:300ms]" />
+      </div>
+      <p className="text-xs text-muted-foreground">Loading conversation…</p>
     </div>
   );
 }

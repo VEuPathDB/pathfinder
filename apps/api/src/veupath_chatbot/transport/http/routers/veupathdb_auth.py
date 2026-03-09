@@ -32,10 +32,6 @@ class LoginPayload(BaseModel):
     password: str
 
 
-class TokenPayload(BaseModel):
-    token: str
-
-
 def _pick_redirect_url(candidate: str | None) -> str:
     from urllib.parse import urlparse
 
@@ -180,22 +176,6 @@ async def login_with_password(
         logger.warning("Authorization cookie missing in VEuPathDB login response")
         raise UnauthorizedError(detail="Login failed")
 
-    auth_token, _email = await _link_internal_user(user_repo, token)
-    return _build_success_response(token, auth_token)
-
-
-@router.post("/token", response_model=AuthSuccessResponse)
-async def accept_token(
-    user_repo: UserRepo,
-    payload: TokenPayload | None = None,
-) -> JSONResponse:
-    """Accept a VEuPathDB Authorization token and store it as a cookie."""
-    if not payload or not payload.token:
-        raise ValidationError(
-            detail="Token required",
-            errors=[{"path": "token", "message": "Required", "code": "MISSING_FIELD"}],
-        )
-    token = payload.token
     auth_token, _email = await _link_internal_user(user_repo, token)
     return _build_success_response(token, auth_token)
 

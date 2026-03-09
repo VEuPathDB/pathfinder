@@ -10,6 +10,9 @@ import type {
 } from "@pathfinder/shared";
 import type { useThinkingState } from "@/features/chat/hooks/useThinkingState";
 import type { StreamingSession } from "@/features/chat/streaming/StreamingSession";
+import type { GraphSnapshotInput } from "@/features/chat/utils/graphSnapshot";
+import type { ToolResultPayload } from "@/features/chat/utils/parseToolResult";
+import type { ToolArguments } from "@/features/chat/utils/parseToolArguments";
 
 type Thinking = ReturnType<typeof useThinkingState>;
 
@@ -57,15 +60,23 @@ export type ChatEventContext = {
   setUndoSnapshots: Dispatch<SetStateAction<Record<number, Strategy>>>;
 
   // Helpers
-  parseToolArguments: (args: unknown) => Record<string, unknown>;
-  parseToolResult: (
-    result?: string | null,
-  ) => { graphSnapshot?: Record<string, unknown> } | null;
-  applyGraphSnapshot: (graphSnapshot: Record<string, unknown>) => void;
+  parseToolArguments: (args: unknown) => ToolArguments;
+  parseToolResult: (result?: string | null) => ToolResultPayload | null;
+  applyGraphSnapshot: (graphSnapshot: GraphSnapshotInput) => void;
   getStrategy: (id: string) => Promise<Strategy>;
   streamState: StreamSessionState;
 
   setOptimizationProgress: Dispatch<SetStateAction<OptimizationProgressData | null>>;
 
+  setSelectedModelId?: (modelId: string | null) => void;
   onApiError?: (message: string) => void;
+
+  /** Callback for workbench_gene_set events — decouples from workbench store. */
+  onWorkbenchGeneSet?: (geneSet: {
+    id: string;
+    name: string;
+    geneCount: number;
+    source: string;
+    siteId: string;
+  }) => void;
 };

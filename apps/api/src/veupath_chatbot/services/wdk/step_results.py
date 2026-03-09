@@ -9,6 +9,7 @@ from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.wdk.helpers import (
     build_attribute_list,
+    extract_detail_attributes,
     merge_analysis_params,
     order_primary_key,
 )
@@ -137,14 +138,16 @@ class StepResultsService:
     ) -> JSONObject:
         """Get a single record's full details by primary key.
 
-        Fetches record type info to reorder PK parts.  We intentionally
-        pass ``attributes=None`` (WDK default set) instead of all
-        displayable attributes — some record types have thousands of
-        attributes and requesting them all causes WDK to timeout.
+        Fetches record type info to reorder PK parts and to extract
+        a capped set of ``isInReport`` attribute names.  WDK interprets
+        ``"attributes": []`` as "return zero attributes", so we must
+        always pass explicit names.
         """
         from veupath_chatbot.integrations.veupathdb.factory import get_site
 
         pk_parts = primary_key
+        detail_attrs: list[str] = []
+        display_names: dict[str, str] = {}
         try:
             info = await self._api.get_record_type_info(self._record_type)
 
@@ -158,6 +161,9 @@ class StepResultsService:
                         ref_strings,
                         pk_defaults={"project_id": site.project_id},
                     )
+
+            attrs_raw = info.get("attributes") or info.get("attributesMap") or {}
+            detail_attrs, display_names = extract_detail_attributes(attrs_raw)
         except Exception:
             logger.warning(
                 "Failed to fetch record type info; falling back to raw PK",
@@ -166,7 +172,10 @@ class StepResultsService:
                 exc_info=True,
             )
 
-        return await self._api.get_single_record(
+        record = await self._api.get_single_record(
             record_type=self._record_type,
             primary_key=pk_parts,
+            attributes=detail_attrs or None,
         )
+        record["attributeNames"] = display_names
+        return record

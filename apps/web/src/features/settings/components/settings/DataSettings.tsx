@@ -6,7 +6,7 @@
 
 import { useState, useCallback } from "react";
 import { useSettingsStore } from "@/state/useSettingsStore";
-import { listStrategies, deleteStrategy } from "@/lib/api/client";
+import { listStrategies, deleteStrategy } from "@/lib/api/strategies";
 import { useAsyncAction } from "@/lib/utils/asyncAction";
 import { Loader2, Trash2 } from "lucide-react";
 

@@ -1,9 +1,10 @@
 import { useEffect } from "react";
+import type { NodeSelection } from "@/lib/types/nodeSelection";
 
 export function useConsumePendingAskNode(args: {
   enabled: boolean;
-  pendingAskNode: Record<string, unknown> | null;
-  setDraftSelection: (value: Record<string, unknown> | null) => void;
+  pendingAskNode: NodeSelection | null;
+  setDraftSelection: (value: NodeSelection | null) => void;
   onConsumeAskNode?: () => void;
 }) {
   const { enabled, pendingAskNode, setDraftSelection, onConsumeAskNode } = args;

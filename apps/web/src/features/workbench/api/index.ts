@@ -24,7 +24,7 @@ export type {
   RecordsResponse,
   StrategyNode,
   StrategyResponse,
-} from "./experiments";
+} from "@/lib/types/wdk";
 
 export type { ResolvedGene, GeneResolveResult } from "./geneSets";
 

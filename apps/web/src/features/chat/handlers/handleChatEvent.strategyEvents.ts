@@ -1,5 +1,14 @@
 import type { Step } from "@pathfinder/shared";
 import type { ChatEventContext } from "./handleChatEvent.types";
+import type {
+  StrategyUpdateData,
+  GraphSnapshotData,
+  StrategyLinkData,
+  StrategyMetaData,
+  GraphPlanData,
+  ExecutorBuildRequestData,
+  GraphClearedData,
+} from "@/features/chat/sse_events";
 
 /**
  * Resolve the target graph ID from event candidates, falling back to
@@ -16,26 +25,11 @@ function resolveTargetGraph(
   return id;
 }
 
-export function handleStrategyUpdateEvent(ctx: ChatEventContext, data: unknown) {
-  const { step, graphId } = data as {
-    graphId?: string;
-    step: {
-      stepId: string;
-      kind?: string;
-      displayName: string;
-      searchName?: string;
-      transformName?: string;
-      operator?: string;
-      primaryInputStepId?: string;
-      secondaryInputStepId?: string;
-      parameters?: Record<string, unknown>;
-      name?: string | null;
-      description?: string | null;
-      recordType?: string;
-      graphId?: string;
-      graphName?: string;
-    };
-  };
+export function handleStrategyUpdateEvent(
+  ctx: ChatEventContext,
+  data: StrategyUpdateData,
+) {
+  const { step, graphId } = data;
   if (!step) return;
   const targetGraphId = resolveTargetGraph(ctx, graphId, step.graphId);
   if (!targetGraphId) return;
@@ -62,24 +56,17 @@ export function handleStrategyUpdateEvent(ctx: ChatEventContext, data: unknown) 
   ctx.session.markSnapshotApplied();
 }
 
-export function handleGraphSnapshotEvent(ctx: ChatEventContext, data: unknown) {
-  const { graphSnapshot } = data as {
-    graphSnapshot?: Record<string, unknown>;
-  };
+export function handleGraphSnapshotEvent(
+  ctx: ChatEventContext,
+  data: GraphSnapshotData,
+) {
+  const { graphSnapshot } = data;
   if (graphSnapshot) ctx.applyGraphSnapshot(graphSnapshot);
 }
 
-export function handleStrategyLinkEvent(ctx: ChatEventContext, data: unknown) {
-  const { graphId, wdkStrategyId, wdkUrl, name, description, strategySnapshotId } =
-    data as {
-      graphId?: string;
-      wdkStrategyId?: number;
-      wdkUrl?: string;
-      name?: string;
-      description?: string;
-      strategySnapshotId?: string;
-    };
-  const targetGraphId = resolveTargetGraph(ctx, graphId, strategySnapshotId);
+export function handleStrategyLinkEvent(ctx: ChatEventContext, data: StrategyLinkData) {
+  const { graphId, wdkStrategyId, wdkUrl, name, description } = data;
+  const targetGraphId = resolveTargetGraph(ctx, graphId);
   if (!targetGraphId) return;
 
   if (wdkStrategyId) ctx.setWdkInfo(wdkStrategyId, wdkUrl, name, description);
@@ -106,14 +93,8 @@ export function handleStrategyLinkEvent(ctx: ChatEventContext, data: unknown) {
   }
 }
 
-export function handleStrategyMetaEvent(ctx: ChatEventContext, data: unknown) {
-  const { graphId, name, description, recordType, graphName } = data as {
-    graphId?: string;
-    name?: string;
-    description?: string;
-    recordType?: string | null;
-    graphName?: string;
-  };
+export function handleStrategyMetaEvent(ctx: ChatEventContext, data: StrategyMetaData) {
+  const { graphId, name, description, recordType, graphName } = data;
   if (!resolveTargetGraph(ctx, graphId)) return;
   ctx.setStrategyMeta({
     name: name ?? graphName ?? undefined,
@@ -122,8 +103,31 @@ export function handleStrategyMetaEvent(ctx: ChatEventContext, data: unknown) {
   });
 }
 
-export function handleStrategyClearedEvent(ctx: ChatEventContext, data: unknown) {
-  const { graphId } = data as { graphId?: string };
+export function handleGraphPlanEvent(ctx: ChatEventContext, data: GraphPlanData) {
+  const { graphId, name, description, recordType } = data;
+  if (!resolveTargetGraph(ctx, graphId)) return;
+  // Update strategy metadata from the plan event.
+  ctx.setStrategyMeta({
+    name: name ?? undefined,
+    description: description ?? undefined,
+    recordType: recordType ?? undefined,
+  });
+}
+
+export function handleExecutorBuildRequestEvent(
+  _ctx: ChatEventContext,
+  _data: ExecutorBuildRequestData,
+) {
+  // executor_build_request is an informational event emitted when the backend
+  // begins a build request.  No frontend action is needed — the subsequent
+  // strategy_link / graph_plan events carry the actual results.
+}
+
+export function handleStrategyClearedEvent(
+  ctx: ChatEventContext,
+  data: GraphClearedData,
+) {
+  const { graphId } = data;
   if (!resolveTargetGraph(ctx, graphId)) return;
   ctx.clearStrategy();
 }

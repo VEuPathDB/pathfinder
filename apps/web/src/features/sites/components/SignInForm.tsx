@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getVeupathdbAuthStatus, loginVeupathdb } from "@/lib/api/client";
+import { getVeupathdbAuthStatus, loginVeupathdb } from "@/lib/api/veupathdb-auth";
 import { useSessionStore } from "@/state/useSessionStore";
 
 interface SignInFormProps {

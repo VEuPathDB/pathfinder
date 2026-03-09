@@ -2,6 +2,13 @@ import { APIError } from "./http";
 import { AppError } from "@/lib/errors/AppError";
 import { isRecord } from "@/lib/utils/isRecord";
 
+/** FastAPI validation error item: `{loc: [...], msg: string, type: string}`. */
+export type ValidationErrorItem = {
+  loc?: (string | number)[];
+  msg?: string;
+  type?: string;
+};
+
 export type ProblemDetail = {
   type?: string;
   title?: string;
@@ -9,7 +16,7 @@ export type ProblemDetail = {
   detail?: string;
   instance?: string;
   code?: string;
-  errors?: Array<Record<string, unknown>>;
+  errors?: ValidationErrorItem[];
 };
 
 export function isProblemDetail(value: unknown): value is ProblemDetail {

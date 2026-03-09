@@ -1,5 +1,10 @@
 import type { GeneSearchResponse, GeneResolveResponse } from "@pathfinder/shared";
-import { requestJson } from "./http";
+import { requestJsonValidated } from "./http";
+import {
+  GeneResolveResponseSchema,
+  GeneSearchResponseSchema,
+  OrganismListResponseSchema,
+} from "./schemas/gene";
 
 /**
  * Re-exports from @pathfinder/shared for backward compatibility.
@@ -13,7 +18,8 @@ export type {
 } from "@pathfinder/shared";
 
 export async function listOrganisms(siteId: string): Promise<string[]> {
-  const resp = await requestJson<{ organisms: string[] }>(
+  const resp = await requestJsonValidated(
+    OrganismListResponseSchema,
     `/api/v1/sites/${encodeURIComponent(siteId)}/organisms`,
   );
   return resp.organisms;
@@ -29,18 +35,20 @@ export async function searchGenes(
   const params: Record<string, string> = { q: query, limit: String(limit) };
   if (organism) params.organism = organism;
   if (offset > 0) params.offset = String(offset);
-  return await requestJson<GeneSearchResponse>(
+  return (await requestJsonValidated(
+    GeneSearchResponseSchema,
     `/api/v1/sites/${encodeURIComponent(siteId)}/genes/search`,
     { query: params },
-  );
+  )) as GeneSearchResponse;
 }
 
 export async function resolveGeneIds(
   siteId: string,
   geneIds: string[],
 ): Promise<GeneResolveResponse> {
-  return await requestJson<GeneResolveResponse>(
+  return (await requestJsonValidated(
+    GeneResolveResponseSchema,
     `/api/v1/sites/${encodeURIComponent(siteId)}/genes/resolve`,
     { method: "POST", body: { geneIds } },
-  );
+  )) as GeneResolveResponse;
 }

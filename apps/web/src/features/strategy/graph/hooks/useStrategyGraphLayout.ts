@@ -6,6 +6,7 @@ import { useEventListener } from "usehooks-ts";
 import { usePrevious } from "@/lib/hooks/usePrevious";
 import type { Step, Strategy } from "@pathfinder/shared";
 import { useStrategyStore } from "@/state/useStrategyStore";
+import { useStrategyHistory } from "@/state/useStrategySelectors";
 import { useNodePositionHistory } from "@/features/strategy/graph/hooks/useNodePositionHistory";
 import { deserializeStrategyToGraph } from "@/lib/strategyGraph";
 
@@ -49,10 +50,7 @@ export function useStrategyGraphLayout(options: UseStrategyGraphLayoutOptions) {
   const prevStrategyId = usePrevious(strategy?.id ?? null);
 
   const updateStep = useStrategyStore((state) => state.updateStep);
-  const undo = useStrategyStore((state) => state.undo);
-  const redo = useStrategyStore((state) => state.redo);
-  const canUndo = useStrategyStore((state) => state.canUndo);
-  const canRedo = useStrategyStore((state) => state.canRedo);
+  const { undo, redo, canUndo, canRedo } = useStrategyHistory();
   const draftStrategy = useStrategyStore((state) => state.strategy);
 
   // --- Auto-fit viewport when nodes are added ---

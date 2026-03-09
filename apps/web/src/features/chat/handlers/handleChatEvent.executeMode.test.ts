@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { handleChatEvent } from "./handleChatEvent";
+import type { ChatEventContext } from "./handleChatEvent.types";
 import type { ChatSSEEvent } from "@/features/chat/sse_events";
-import type { ToolCall } from "@pathfinder/shared";
+import type { Citation, PlanningArtifact, ToolCall } from "@pathfinder/shared";
 import { StreamingSession } from "@/features/chat/streaming/StreamingSession";
 import { EXECUTE_EPITOPE_SEARCH_EVENTS } from "./__fixtures__/realisticEvents";
 import { makeBatchingStateSetters, makeCtx } from "./handleChatEvent.testUtils";
@@ -82,8 +83,8 @@ describe("handleChatEvent — realistic execute mode", () => {
   it("handles batched delivery (React 18 batching) of realistic events", () => {
     const batchState = makeBatchingStateSetters();
     const toolCallsBuffer: ToolCall[] = [];
-    const citationsBuffer: any[] = [];
-    const planningArtifactsBuffer: any[] = [];
+    const citationsBuffer: Citation[] = [];
+    const planningArtifactsBuffer: PlanningArtifact[] = [];
     const subKaniCallsBuffer: Record<string, ToolCall[]> = {};
     const subKaniStatusBuffer: Record<string, string> = {};
 
@@ -96,14 +97,23 @@ describe("handleChatEvent — realistic execute mode", () => {
       subKaniCallsBuffer,
       subKaniStatusBuffer,
       thinking: {
+        activeToolCalls: [],
+        lastToolCalls: [],
+        subKaniCalls: {},
+        subKaniStatus: {},
+        reasoning: null,
+        subKaniActivity: undefined,
+        reset: vi.fn(),
+        applyThinkingPayload: vi.fn(() => false),
         updateActiveFromBuffer: vi.fn(),
+        finalizeToolCalls: vi.fn(),
         updateReasoning: vi.fn(),
         snapshotSubKaniActivity: vi.fn(() => ({ calls: {}, status: {} })),
         subKaniTaskStart: vi.fn(),
         subKaniToolCallStart: vi.fn(),
         subKaniToolCallEnd: vi.fn(),
         subKaniTaskEnd: vi.fn(),
-      } as any,
+      } satisfies ChatEventContext["thinking"],
       setStrategyId: vi.fn(),
       addStrategy: vi.fn(),
       addExecutedStrategy: vi.fn(),

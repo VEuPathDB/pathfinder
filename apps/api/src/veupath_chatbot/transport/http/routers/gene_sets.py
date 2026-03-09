@@ -17,15 +17,30 @@ from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.security import limiter
 from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.experiment.types import to_json
+from veupath_chatbot.services.gene_sets.confidence import (
+    compute_gene_confidence,
+)
+from veupath_chatbot.services.gene_sets.ensemble import (
+    EnsembleScore,
+    compute_ensemble_scores,
+)
 from veupath_chatbot.services.gene_sets.operations import GeneSetService
+from veupath_chatbot.services.gene_sets.reverse_search import (
+    GeneSetCandidate,
+    rank_gene_sets_by_recall,
+)
 from veupath_chatbot.services.gene_sets.store import get_gene_set_store
 from veupath_chatbot.services.gene_sets.types import GeneSet
 from veupath_chatbot.transport.http.deps import CurrentUser
 from veupath_chatbot.transport.http.schemas.gene_sets import (
     CreateGeneSetRequest,
+    EnsembleScoringRequest,
+    GeneConfidenceRequest,
+    GeneConfidenceScoreResponse,
     GeneSetEnrichRequest,
     GeneSetResponse,
-    RunGeneSetAnalysisRequest,
+    ReverseSearchRequest,
+    ReverseSearchResultItem,
     SetOperationRequest,
 )
 from veupath_chatbot.transport.http.schemas.steps import RecordDetailRequest
@@ -157,6 +172,70 @@ async def set_operations(
 
 
 # ---------------------------------------------------------------------------
+# Reverse search
+# ---------------------------------------------------------------------------
+
+
+@router.post("/reverse-search")
+async def reverse_search(
+    body: ReverseSearchRequest,
+    user_id: CurrentUser,
+) -> list[ReverseSearchResultItem]:
+    """Rank the user's gene sets by how well they recover the given positive genes."""
+    sets = await _svc().list_for_user(user_id, site_id=body.site_id)
+    candidates = [
+        GeneSetCandidate(
+            id=gs.id,
+            name=gs.name,
+            gene_ids=gs.gene_ids,
+            search_name=gs.search_name,
+        )
+        for gs in sets
+    ]
+    ranked = rank_gene_sets_by_recall(
+        candidates,
+        body.positive_gene_ids,
+        body.negative_gene_ids,
+    )
+    return [
+        ReverseSearchResultItem(
+            geneSetId=r.gene_set_id,
+            name=r.name,
+            searchName=r.search_name,
+            recall=r.recall,
+            precision=r.precision,
+            f1=r.f1,
+            resultCount=r.result_count,
+            overlapCount=r.overlap_count,
+        )
+        for r in ranked
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Ensemble scoring
+# ---------------------------------------------------------------------------
+
+
+@router.post("/ensemble")
+async def ensemble_scoring(
+    body: EnsembleScoringRequest,
+    user_id: CurrentUser,
+) -> list[EnsembleScore]:
+    """Score genes by frequency across multiple gene sets."""
+    service = _svc()
+    gene_sets: list[list[str]] = []
+    for gs_id in body.gene_set_ids:
+        try:
+            gs = await service.get_for_user(user_id, gs_id)
+        except KeyError as exc:
+            raise _not_found(exc) from exc
+        gene_sets.append(gs.gene_ids)
+
+    return compute_ensemble_scores(gene_sets, body.positive_controls)
+
+
+# ---------------------------------------------------------------------------
 # Enrichment
 # ---------------------------------------------------------------------------
 
@@ -266,6 +345,22 @@ async def get_gene_set_records(
     )
 
 
+@router.get("/{gene_set_id}/results/distributions/{attribute_name}")
+async def get_gene_set_distribution(
+    gene_set_id: str,
+    attribute_name: str,
+    user_id: CurrentUser,
+) -> JSONObject:
+    """Get distribution data for an attribute using the byValue column reporter."""
+    try:
+        svc = await _svc().get_step_results_service(user_id, gene_set_id)
+    except KeyError as exc:
+        raise _not_found(exc) from exc
+    except ValueError as exc:
+        raise _no_strategy(exc) from exc
+    return await svc.get_distribution(attribute_name)
+
+
 @router.post("/{gene_set_id}/results/record")
 async def get_gene_set_record_detail(
     gene_set_id: str,
@@ -289,51 +384,31 @@ async def get_gene_set_record_detail(
 
 
 # ---------------------------------------------------------------------------
-# WDK step analysis endpoints
+# Confidence scoring
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{gene_set_id}/analyses/types")
-async def get_gene_set_analysis_types(
-    gene_set_id: str,
-    user_id: CurrentUser,
-) -> JSONObject:
-    """List available WDK step analysis types for a gene set."""
-    try:
-        svc = await _svc().get_step_results_service(user_id, gene_set_id)
-    except KeyError as exc:
-        raise _not_found(exc) from exc
-    except ValueError as exc:
-        raise _no_strategy(exc) from exc
-    return await svc.list_analysis_types()
-
-
-@router.post("/{gene_set_id}/analyses/run")
-async def run_gene_set_analysis(
-    gene_set_id: str,
-    request: RunGeneSetAnalysisRequest,
-    user_id: CurrentUser,
-) -> JSONObject:
-    """Run a WDK step analysis on a gene set."""
-    try:
-        svc = await _svc().get_step_results_service(user_id, gene_set_id)
-    except KeyError as exc:
-        raise _not_found(exc) from exc
-    except ValueError as exc:
-        raise _no_strategy(exc) from exc
-    return await svc.run_analysis(request.analysis_name, dict(request.parameters))
-
-
-@router.get("/{gene_set_id}/strategy")
-async def get_gene_set_strategy(
-    gene_set_id: str,
-    user_id: CurrentUser,
-) -> JSONObject:
-    """Get the WDK strategy tree for a gene set."""
-    try:
-        _, tree = await _svc().get_strategy_tree(user_id, gene_set_id)
-    except KeyError as exc:
-        raise _not_found(exc) from exc
-    except ValueError as exc:
-        raise _no_strategy(exc) from exc
-    return tree
+@router.post("/confidence")
+async def gene_confidence(
+    body: GeneConfidenceRequest,
+) -> list[GeneConfidenceScoreResponse]:
+    """Compute per-gene composite confidence scores from classification data."""
+    scores = compute_gene_confidence(
+        tp_ids=body.tp_ids,
+        fp_ids=body.fp_ids,
+        fn_ids=body.fn_ids,
+        tn_ids=body.tn_ids,
+        ensemble_scores=body.ensemble_scores,
+        enrichment_gene_counts=body.enrichment_gene_counts,
+        max_enrichment_terms=body.max_enrichment_terms,
+    )
+    return [
+        GeneConfidenceScoreResponse(
+            geneId=s.gene_id,
+            compositeScore=s.composite_score,
+            classificationScore=s.classification_score,
+            ensembleScore=s.ensemble_score,
+            enrichmentScore=s.enrichment_score,
+        )
+        for s in scores
+    ]

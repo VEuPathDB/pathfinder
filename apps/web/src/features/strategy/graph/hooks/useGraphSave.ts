@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { normalizePlan, updateStrategy } from "@/lib/api/client";
+import { normalizePlan, updateStrategy } from "@/lib/api/strategies";
 import { APIError } from "@/lib/api/http";
 import { toUserMessage } from "@/lib/api/errors";
 import type { StrategyPlan, Step, Strategy } from "@pathfinder/shared";
@@ -100,18 +100,16 @@ export function useGraphSave({
         return;
       }
       let nextPlan = { ...result.plan };
-      const nextMeta =
-        typeof nextPlan.metadata === "object" && nextPlan.metadata !== null
-          ? { ...(nextPlan.metadata as Record<string, unknown>) }
-          : {};
       const nextName = overrideName || result.name;
       const nextDescription =
         overrideDescription !== undefined
           ? overrideDescription
           : (draftStrategy?.description ?? null);
-      nextMeta.name = nextName;
-      nextMeta.description = nextDescription;
-      nextPlan.metadata = nextMeta;
+      nextPlan.metadata = {
+        ...nextPlan.metadata,
+        name: nextName,
+        description: nextDescription ?? undefined,
+      };
       setIsSaving(true);
       try {
         const normalized = await normalizePlan(draftStrategy.siteId, nextPlan);

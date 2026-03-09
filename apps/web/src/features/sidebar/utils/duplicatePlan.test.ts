@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import type { Strategy } from "@pathfinder/shared";
+import type { SerializedStrategyPlan } from "@/lib/strategyGraph/serialize";
 import { AppError } from "@/lib/errors/AppError";
 
 vi.mock("@/lib/strategyGraph", () => ({
@@ -8,10 +10,21 @@ vi.mock("@/lib/strategyGraph", () => ({
 import { serializeStrategyPlan } from "@/lib/strategyGraph";
 import { buildDuplicatePlan } from "@/features/sidebar/utils/duplicatePlan";
 
+const base: Strategy = {
+  id: "s1",
+  steps: [{ id: "a", displayName: "A" }],
+  name: "X",
+  description: "",
+  siteId: "s",
+  recordType: null,
+  rootStepId: null,
+  createdAt: "t",
+  updatedAt: "t",
+};
+
 describe("buildDuplicatePlan", () => {
   it("throws AppError when serialization fails", () => {
-    vi.mocked(serializeStrategyPlan).mockReturnValueOnce(null as any);
-    const base: any = { steps: [{ id: "a" }], name: "X", description: "", siteId: "s" };
+    vi.mocked(serializeStrategyPlan).mockReturnValueOnce(null);
     expect(() =>
       buildDuplicatePlan({ baseStrategy: base, name: "N", description: "D" }),
     ).toThrowError(AppError);
@@ -20,8 +33,9 @@ describe("buildDuplicatePlan", () => {
   it("returns serialized plan on success", () => {
     vi.mocked(serializeStrategyPlan).mockReturnValueOnce({
       plan: { recordType: "gene", root: { searchName: "s" } },
-    } as any);
-    const base: any = { steps: [{ id: "a" }], name: "X", description: "", siteId: "s" };
+      name: "N",
+      recordType: "gene",
+    } satisfies SerializedStrategyPlan);
     const plan = buildDuplicatePlan({
       baseStrategy: base,
       name: "N",

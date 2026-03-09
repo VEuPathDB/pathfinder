@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { Step, Strategy } from "@pathfinder/shared";
 import { buildStrategyFromGraphSnapshot } from "./graphSnapshot";
+import type { GraphSnapshotInput } from "./graphSnapshot";
 
 describe("features/chat/utils/graphSnapshot", () => {
   it("treats missing steps field as metadata-only update (keeps existing steps)", () => {
@@ -8,18 +10,18 @@ describe("features/chat/utils/graphSnapshot", () => {
       siteId: "plasmodb",
       graphSnapshot: { name: "New" }, // no steps field
       stepsById: {
-        a: { id: "a", displayName: "A", kind: "search" as any },
+        a: { id: "a", displayName: "A", kind: "search" } satisfies Step,
       },
       existingStrategy: {
         id: "old",
         name: "Old",
         siteId: "plasmodb",
         recordType: "gene",
-        steps: [{ id: "a", displayName: "A" } as any],
+        steps: [{ id: "a", displayName: "A" }] satisfies Step[],
         rootStepId: "a",
         createdAt: "t",
         updatedAt: "t",
-      } as any,
+      } satisfies Strategy,
     });
 
     expect(strategy.id).toBe("s1");
@@ -32,8 +34,8 @@ describe("features/chat/utils/graphSnapshot", () => {
     const strategy = buildStrategyFromGraphSnapshot({
       snapshotId: "s1",
       siteId: "plasmodb",
-      graphSnapshot: { steps: null as any },
-      stepsById: { a: { id: "a", displayName: "A", kind: "search" as any } },
+      graphSnapshot: { steps: null } as unknown as GraphSnapshotInput,
+      stepsById: { a: { id: "a", displayName: "A", kind: "search" } satisfies Step },
       existingStrategy: null,
     });
     expect(strategy.steps).toEqual([]);
@@ -43,24 +45,24 @@ describe("features/chat/utils/graphSnapshot", () => {
     const strategy = buildStrategyFromGraphSnapshot({
       snapshotId: "s1",
       siteId: "plasmodb",
-      graphSnapshot: { steps: undefined as any },
-      stepsById: { a: { id: "a", displayName: "A", kind: "search" as any } },
+      graphSnapshot: { steps: undefined },
+      stepsById: { a: { id: "a", displayName: "A", kind: "search" } satisfies Step },
       existingStrategy: {
         id: "s1",
         name: "Old",
         siteId: "plasmodb",
         recordType: "gene",
-        steps: [{ id: "a", displayName: "A" } as any],
+        steps: [{ id: "a", displayName: "A" }] satisfies Step[],
         rootStepId: "a",
         createdAt: "t",
         updatedAt: "t",
-      } as any,
+      } satisfies Strategy,
     });
     expect(strategy.steps).toEqual([]);
   });
 
   it("uses existing recordType when snapshot recordType is undefined, and can explicitly null it", () => {
-    const existing = {
+    const existing: Strategy = {
       id: "s1",
       name: "Old",
       siteId: "plasmodb",
@@ -69,7 +71,7 @@ describe("features/chat/utils/graphSnapshot", () => {
       rootStepId: null,
       createdAt: "t",
       updatedAt: "t",
-    } as any;
+    };
 
     const keep = buildStrategyFromGraphSnapshot({
       snapshotId: "s1",
@@ -108,9 +110,9 @@ describe("features/chat/utils/graphSnapshot", () => {
         a: {
           id: "a",
           displayName: "Curated Name",
-          kind: "search" as any,
+          kind: "search",
           searchName: "q",
-        },
+        } satisfies Step,
       },
       existingStrategy: null,
     });
@@ -128,9 +130,9 @@ describe("features/chat/utils/graphSnapshot", () => {
         a: {
           id: "a",
           displayName: "My Custom Name",
-          kind: "search" as any,
+          kind: "search",
           searchName: "q",
-        },
+        } satisfies Step,
       },
       existingStrategy: null,
     });
@@ -148,7 +150,7 @@ describe("features/chat/utils/graphSnapshot", () => {
             id: "c",
             displayName: "C",
             kind: "combine",
-            inputStepIds: ["a", "b", 123] as any,
+            inputStepIds: ["a", "b", 123] as unknown as string[],
           },
         ],
       },

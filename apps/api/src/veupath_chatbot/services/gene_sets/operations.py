@@ -157,11 +157,19 @@ class GeneSetService:
                     error=str(exc),
                 )
 
+        # Deduplicate gene IDs while preserving order
+        seen: set[str] = set()
+        unique_gene_ids: list[str] = []
+        for gid in gene_ids:
+            if gid not in seen:
+                seen.add(gid)
+                unique_gene_ids.append(gid)
+
         gs = GeneSet(
             id=str(uuid4()),
             name=name,
             site_id=site_id,
-            gene_ids=gene_ids,
+            gene_ids=unique_gene_ids,
             source=source,
             user_id=user_id,
             wdk_strategy_id=wdk_strategy_id,

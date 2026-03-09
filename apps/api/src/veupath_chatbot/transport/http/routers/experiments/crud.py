@@ -1,18 +1,14 @@
-"""CRUD endpoints for experiments: list, get, update, delete, importable strategies."""
-
-from typing import cast
+"""CRUD endpoints for experiments: list, get, update, delete."""
 
 from fastapi import APIRouter, Response
 from pydantic import BaseModel, Field
 
-from veupath_chatbot.platform.errors import NotFoundError, ValidationError
-from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.experiment.store import get_experiment_store
 from veupath_chatbot.services.experiment.types import (
     experiment_summary_to_json,
     experiment_to_json,
 )
-from veupath_chatbot.services.wdk import get_strategy_api
 from veupath_chatbot.transport.http.deps import CurrentUser, ExperimentDep
 
 router = APIRouter()
@@ -21,155 +17,12 @@ router = APIRouter()
 # -- Non-parametric routes (must be defined before /{experiment_id}) ----------
 
 
-class CreateStrategyRequest(BaseModel):
-    """Request to create a WDK strategy from a step tree."""
-
-    site_id: str = Field(alias="siteId")
-    record_type: str = Field(alias="recordType", default="transcript")
-    step_tree: JSONValue = Field(alias="stepTree")
-    name: str = Field(default="Seed strategy", max_length=200)
-    description: str = Field(default="", max_length=2000)
-
-    model_config = {"populate_by_name": True}
-
-
 class PatchExperimentRequest(BaseModel):
     """Request body for PATCH /experiments/{experiment_id}."""
 
     notes: str | None = Field(default=None, max_length=5000)
 
     model_config = {"populate_by_name": True}
-
-
-@router.post("/create-strategy")
-async def create_strategy(
-    request: CreateStrategyRequest, user_id: CurrentUser
-) -> JSONObject:
-    """Create a WDK strategy from a step tree definition.
-
-    Materialises the step tree (creates WDK steps and a strategy) and returns
-    the WDK strategy ID so it can be used with ``mode="import"`` experiments.
-    """
-    from veupath_chatbot.services.experiment.helpers import extract_wdk_id
-    from veupath_chatbot.services.experiment.materialization import (
-        _materialize_step_tree,
-    )
-
-    if not isinstance(request.step_tree, dict):
-        raise ValidationError(
-            title="Invalid step tree",
-            detail="stepTree must be a JSON object",
-        )
-
-    api = get_strategy_api(request.site_id)
-    root = await _materialize_step_tree(api, request.step_tree, request.record_type)
-
-    created = await api.create_strategy(
-        step_tree=root,
-        name=request.name,
-        description=request.description,
-        is_saved=True,
-    )
-    strategy_id = extract_wdk_id(created)
-
-    return {
-        "wdkStrategyId": strategy_id,
-        "rootStepId": root.step_id,
-        "name": request.name,
-    }
-
-
-@router.get("/importable-strategies/{strategy_id}/details")
-async def get_strategy_details(
-    strategy_id: int, siteId: str, user_id: CurrentUser
-) -> JSONObject:
-    """Fetch full strategy step tree for import into the multi-step builder.
-
-    The WDK ``GET /strategies/{id}`` response includes:
-    - ``stepTree``: recursive tree with only ``stepId`` / ``primaryInput`` / ``secondaryInput``
-    - ``steps``: a **map** (object keyed by string step ID) of full step data
-      including ``searchName``, ``searchConfig.parameters``, ``customName``, etc.
-
-    This endpoint flattens the steps map into an array and enriches the
-    step tree so the frontend can display search names and parameters.
-    """
-    api = get_strategy_api(siteId)
-    raw = await api.get_strategy(strategy_id)
-    if not isinstance(raw, dict):
-        raise NotFoundError(title="Strategy not found")
-
-    step_tree = raw.get("stepTree")
-    raw_steps = raw.get("steps", {})
-    name = raw.get("name", "")
-    record_type = raw.get("recordClassName", "")
-
-    # WDK returns steps as { "stepId_string": { step_data }, ... }
-    steps_map: dict[str, JSONObject] = {}
-    if isinstance(raw_steps, dict):
-        for k, v in raw_steps.items():
-            if isinstance(v, dict):
-                steps_map[str(k)] = v
-    elif isinstance(raw_steps, list):
-        for v in raw_steps:
-            if isinstance(v, dict):
-                sid = v.get("id") or v.get("stepId")
-                if sid is not None:
-                    steps_map[str(sid)] = v
-
-    # Enrich the step tree nodes with search data from the steps map
-    def _enrich_tree(node: JSONObject) -> JSONObject:
-        if not isinstance(node, dict):
-            return node
-        sid = str(node.get("stepId", ""))
-        step_data = steps_map.get(sid, {})
-        search_config = (
-            step_data.get("searchConfig") if isinstance(step_data, dict) else {}
-        )
-        if not isinstance(search_config, dict):
-            search_config = {}
-
-        enriched: JSONObject = {
-            "stepId": node.get("stepId"),
-            "searchName": step_data.get("searchName", "")
-            if isinstance(step_data, dict)
-            else "",
-            "displayName": (
-                step_data.get("customName")
-                or step_data.get("displayName")
-                or step_data.get("searchName", "")
-            )
-            if isinstance(step_data, dict)
-            else "",
-            "parameters": search_config.get("parameters", {}),
-            "recordType": step_data.get("recordClassName", record_type)
-            if isinstance(step_data, dict)
-            else record_type,
-            "estimatedSize": step_data.get("estimatedSize")
-            if isinstance(step_data, dict)
-            else None,
-        }
-        pi = node.get("primaryInput")
-        si = node.get("secondaryInput")
-        if isinstance(pi, dict):
-            enriched["primaryInput"] = _enrich_tree(pi)
-        if isinstance(si, dict):
-            enriched["secondaryInput"] = _enrich_tree(si)
-        return enriched
-
-    enriched_tree = (
-        _enrich_tree(step_tree) if isinstance(step_tree, dict) else step_tree
-    )
-
-    # Also return a flat array of steps for convenience
-    steps_array: list[JSONObject] = list(steps_map.values())
-
-    return {
-        "wdkStrategyId": strategy_id,
-        "name": name,
-        "recordType": record_type,
-        "stepTree": enriched_tree,
-        "steps": cast(JSONValue, steps_array),
-    }
 
 
 # -- Parametric routes -------------------------------------------------------

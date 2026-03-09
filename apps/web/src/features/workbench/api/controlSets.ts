@@ -1,5 +1,5 @@
 import type { ControlSet } from "@pathfinder/shared";
-import { requestJson } from "@/lib/api/http";
+import { requestBlob, requestJson } from "@/lib/api/http";
 
 export async function listControlSets(siteId: string): Promise<ControlSet[]> {
   return await requestJson<ControlSet[]>("/api/v1/control-sets", {
@@ -33,11 +33,7 @@ export async function deleteControlSet(id: string): Promise<void> {
 }
 
 export async function getExperimentReport(experimentId: string): Promise<void> {
-  const resp = await fetch(`/api/v1/experiments/${experimentId}/report`, {
-    credentials: "include",
-  });
-  if (!resp.ok) throw new Error(`Report generation failed: ${resp.status}`);
-  const blob = await resp.blob();
+  const blob = await requestBlob(`/api/v1/experiments/${experimentId}/export`);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `experiment-report.html`;

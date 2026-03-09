@@ -35,7 +35,6 @@ from veupath_chatbot.transport.http.routers import (
     models,
     operations,
     sites,
-    steps,
     strategies,
     veupathdb_auth,
 )
@@ -222,7 +221,6 @@ def create_app() -> FastAPI:
     app.include_router(models.router)
     app.include_router(chat.router)
     app.include_router(strategies.router)
-    app.include_router(steps.router)
     app.include_router(experiments.router)
     app.include_router(control_sets.router)
     app.include_router(veupathdb_auth.router)

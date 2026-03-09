@@ -1,4 +1,3 @@
-import { ChevronDown, ChevronUp } from "lucide-react";
 import type {
   Message,
   OptimizationProgressData,
@@ -6,18 +5,13 @@ import type {
   ToolCall,
   Strategy,
 } from "@pathfinder/shared";
-import { ChatMarkdown } from "@/features/chat/components/message/ChatMarkdown";
 import { ChatThinkingDetails } from "@/features/chat/components/thinking/ChatThinkingDetails";
 import { OptimizationProgressPanel } from "@/features/chat/components/optimization/OptimizationProgressPanel";
 import { ThinkingPanel } from "@/features/chat/components/thinking/ThinkingPanel";
 import { extractDelegateSummaries } from "@/features/chat/utils/extractDelegateSummaries";
-
-type AssistantPartTag = "thought" | "response" | "sources" | "optimization";
-
-interface AssistantPart {
-  tag: AssistantPartTag;
-  key: string;
-}
+import { SourcesPart } from "./SourcesPart";
+import { ResponsePart } from "./ResponsePart";
+import { buildAssistantParts } from "./useAssistantParts";
 
 interface ThinkingState {
   activeToolCalls: ToolCall[];
@@ -42,38 +36,6 @@ interface AssistantMessagePartsProps {
   setShowCitationTags: React.Dispatch<React.SetStateAction<boolean>>;
   undoSnapshot?: Strategy;
   onUndoSnapshot: (snapshot: Strategy) => void;
-}
-
-function buildAssistantParts(
-  index: number,
-  message: Message,
-  isLiveStreaming: boolean,
-  liveOptimization: OptimizationProgressData | null | undefined,
-): AssistantPart[] {
-  const parts: AssistantPart[] = [];
-
-  if (isLiveStreaming) {
-    parts.push({ tag: "thought", key: `${index}-thought` });
-  } else {
-    const hasToolCalls = (message.toolCalls?.length ?? 0) > 0;
-    const hasSubKani = Object.keys(message.subKaniActivity?.calls ?? {}).length > 0;
-    const hasReasoning = Boolean(message.reasoning?.trim());
-    if (hasToolCalls || hasSubKani || hasReasoning) {
-      parts.push({ tag: "thought", key: `${index}-thought` });
-    }
-  }
-
-  parts.push({ tag: "response", key: `${index}-response` });
-
-  if (Array.isArray(message.citations) && message.citations.length > 0) {
-    parts.push({ tag: "sources", key: `${index}-sources` });
-  }
-
-  if (liveOptimization || message.optimizationProgress) {
-    parts.push({ tag: "optimization", key: `${index}-optimization` });
-  }
-
-  return parts;
 }
 
 export function AssistantMessageParts({
@@ -126,46 +88,15 @@ export function AssistantMessageParts({
             );
           case "response":
             return (
-              <div
+              <ResponsePart
                 key={part.key}
-                className="rounded-lg px-3 py-2 border border-border bg-muted text-foreground"
-              >
-                <ChatMarkdown
-                  content={message.content}
-                  citations={message.citations}
-                  tone="default"
-                />
-                {Array.isArray(message.planningArtifacts) &&
-                  message.planningArtifacts.length > 0 && (
-                    <div className="mt-2 rounded-md border border-border bg-card px-2 py-2 text-sm text-foreground">
-                      <div className="mb-1 font-medium text-foreground">
-                        Saved planning artifacts
-                      </div>
-                      <ul className="list-disc space-y-1 pl-4">
-                        {message.planningArtifacts.map((a) => (
-                          <li key={a.id}>
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium">{a.title}</span>
-                              {a.proposedStrategyPlan && onApplyPlanningArtifact ? (
-                                <button
-                                  type="button"
-                                  onClick={() => onApplyPlanningArtifact(a)}
-                                  className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground transition-colors duration-150 hover:bg-accent"
-                                >
-                                  Apply to strategy
-                                </button>
-                              ) : null}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-              </div>
+                message={message}
+                onApplyPlanningArtifact={onApplyPlanningArtifact}
+              />
             );
           case "sources":
             return (
-              <SourcesSection
+              <SourcesPart
                 key={part.key}
                 messageKey={messageKey}
                 citations={message.citations!}
@@ -191,107 +122,6 @@ export function AssistantMessageParts({
       })}
 
       {undoSnapshot && <UndoButton onClick={() => onUndoSnapshot(undoSnapshot)} />}
-    </div>
-  );
-}
-
-function SourcesSection({
-  messageKey,
-  citations,
-  expandedSources,
-  setExpandedSources,
-  showCitationTags,
-  setShowCitationTags,
-}: {
-  messageKey: string;
-  citations: NonNullable<Message["citations"]>;
-  expandedSources: Record<string, boolean>;
-  setExpandedSources: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  showCitationTags: boolean;
-  setShowCitationTags: React.Dispatch<React.SetStateAction<boolean>>;
-}) {
-  const total = citations.length;
-  const expanded = Boolean(expandedSources[messageKey]);
-
-  return (
-    <div className="rounded-md border border-border bg-card px-2 py-2 text-sm text-foreground">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <div className="font-medium text-foreground">Sources</div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className={`rounded-md border px-2 py-1 text-xs transition-colors ${
-              showCitationTags
-                ? "border-input bg-accent text-foreground"
-                : "border-border bg-card text-foreground hover:bg-accent"
-            }`}
-            onClick={() => setShowCitationTags((v) => !v)}
-            aria-pressed={showCitationTags}
-            title="Toggle citation tags"
-          >
-            {showCitationTags ? "Hide citation tags" : "Show citation tags"}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center justify-center rounded-md border border-border bg-card p-1 text-foreground transition-colors duration-150 hover:bg-accent"
-            onClick={() =>
-              setExpandedSources((prev) => ({
-                ...prev,
-                [messageKey]: !expanded,
-              }))
-            }
-            aria-label={expanded ? "Collapse sources" : "Expand sources"}
-            title={expanded ? "Collapse sources" : "Expand sources"}
-          >
-            {expanded ? (
-              <ChevronUp className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <ChevronDown className="h-4 w-4" aria-hidden="true" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {!expanded ? (
-        <div className="text-xs text-muted-foreground">
-          {total} source{total === 1 ? "" : "s"}
-        </div>
-      ) : (
-        <ol className="list-decimal space-y-1 pl-4">
-          {citations.map((c, i) => (
-            <li key={c.id} id={`cite-${i + 1}`}>
-              {showCitationTags && c.tag ? (
-                <span className="mr-2 font-mono text-xs text-muted-foreground">
-                  [{c.tag}]{" "}
-                </span>
-              ) : null}
-              {Array.isArray(c.authors) && c.authors.length > 0 ? (
-                <span className="text-muted-foreground">
-                  {`${c.authors.filter(Boolean).join(", ")} `}
-                </span>
-              ) : null}
-              {c.url ? (
-                <a
-                  href={c.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-muted-foreground"
-                >
-                  {c.title}
-                </a>
-              ) : (
-                <span>{c.title}</span>
-              )}
-              {c.year ? (
-                <span className="text-muted-foreground"> ({c.year})</span>
-              ) : null}
-              {c.doi ? (
-                <span className="text-muted-foreground"> · DOI: {c.doi}</span>
-              ) : null}
-            </li>
-          ))}
-        </ol>
-      )}
     </div>
   );
 }

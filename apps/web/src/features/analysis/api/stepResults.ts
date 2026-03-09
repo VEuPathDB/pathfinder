@@ -9,10 +9,12 @@
 import { requestJson } from "@/lib/api/http";
 import type {
   RecordAttribute,
+  RecordDetail,
   RecordsResponse,
-} from "@/features/workbench/api/experiments";
+  DistributionResponse,
+} from "@/lib/types/wdk";
 
-export type { RecordAttribute, RecordsResponse };
+export type { RecordAttribute, RecordDetail, RecordsResponse, DistributionResponse };
 
 export type EntityRef =
   | { type: "experiment"; id: string }
@@ -58,8 +60,8 @@ export function getRecords(
 export function getRecordDetail(
   ref: EntityRef,
   primaryKey: { name: string; value: string }[],
-): Promise<Record<string, unknown>> {
-  return requestJson(`${basePath(ref)}/results/record`, {
+): Promise<RecordDetail> {
+  return requestJson<RecordDetail>(`${basePath(ref)}/results/record`, {
     method: "POST",
     body: { primaryKey },
   });
@@ -68,8 +70,8 @@ export function getRecordDetail(
 export function getDistribution(
   ref: EntityRef,
   attributeName: string,
-): Promise<Record<string, unknown>> {
-  return requestJson(
+): Promise<DistributionResponse> {
+  return requestJson<DistributionResponse>(
     `${basePath(ref)}/results/distributions/${encodeURIComponent(attributeName)}`,
   );
 }

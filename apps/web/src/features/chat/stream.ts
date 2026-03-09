@@ -3,7 +3,7 @@ import {
   subscribeToOperation,
   type OperationSubscription,
 } from "@/lib/operationSubscribe";
-import type { ChatSSEEvent } from "./sse_events";
+import type { ChatSSEEvent, RawSSEData } from "./sse_events";
 import { parseChatSSEEvent } from "./sse_events";
 import type { ChatMention, ModelSelection } from "@pathfinder/shared";
 
@@ -50,10 +50,12 @@ export async function streamChat(
     },
   );
 
-  // Subscribe for events.
-  const subscription = subscribeToOperation<Record<string, unknown>>(resp.operationId, {
+  // Subscribe for events.  Raw SSE payloads are JSON objects with varying shapes
+  // depending on the event type; parseChatSSEEvent handles narrowing.
+  const subscription = subscribeToOperation<RawSSEData>(resp.operationId, {
     onEvent: ({ type, data }) => {
-      options.onMessage(parseChatSSEEvent({ type, data }));
+      const event = parseChatSSEEvent({ type, data });
+      if (event) options.onMessage(event);
     },
     onComplete: options.onComplete,
     onError: options.onError,

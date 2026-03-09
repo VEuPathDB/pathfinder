@@ -1,4 +1,4 @@
-import type { ThresholdSweepPoint } from "@/features/workbench/api";
+import type { ThresholdSweepPoint } from "@/lib/api/analysis";
 import { pct } from "../../utils/formatters";
 
 export function SweepTable({
@@ -31,22 +31,22 @@ export function SweepTable({
                 {formatValue(p.value)}
               </td>
               <td className="px-3 py-1.5 font-mono text-muted-foreground">
-                {pct(p.metrics!.sensitivity)}
+                {pct(p.metrics?.sensitivity)}
               </td>
               <td className="px-3 py-1.5 font-mono text-muted-foreground">
-                {pct(p.metrics!.specificity)}
+                {pct(p.metrics?.specificity)}
               </td>
               <td className="px-3 py-1.5 font-mono text-muted-foreground">
-                {pct(p.metrics!.f1Score)}
+                {pct(p.metrics?.f1Score)}
               </td>
               <td className="px-3 py-1.5 font-mono text-muted-foreground">
-                {pct(p.metrics!.mcc)}
+                {pct(p.metrics?.mcc)}
               </td>
               <td className="px-3 py-1.5 font-mono text-muted-foreground">
-                {pct(p.metrics!.balancedAccuracy)}
+                {pct(p.metrics?.balancedAccuracy)}
               </td>
               <td className="px-3 py-1.5 font-mono text-muted-foreground">
-                {p.metrics!.totalResults}
+                {p.metrics?.totalResults ?? "\u2014"}
               </td>
             </tr>
           ))}

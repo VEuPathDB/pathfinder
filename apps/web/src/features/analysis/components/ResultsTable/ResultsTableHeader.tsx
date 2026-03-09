@@ -1,7 +1,7 @@
 import { useRef, useEffect } from "react";
 import { Columns } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
-import type { RecordAttribute } from "@/features/workbench/api";
+import type { RecordAttribute } from "@/lib/types/wdk";
 
 interface ResultsTableHeaderProps {
   totalCount: number;

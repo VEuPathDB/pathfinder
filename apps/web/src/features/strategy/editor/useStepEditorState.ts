@@ -1,25 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, startTransition } from "react";
+import { useEffect, startTransition } from "react";
 import { usePrevious } from "@/lib/hooks/usePrevious";
-import type {
-  RecordType,
-  Search,
-  SearchValidationResponse,
-  Step,
-} from "@pathfinder/shared";
-import { getRecordTypes, getSearches, validateSearchParams } from "@/lib/api/client";
-import { useParamSpecs } from "./components/useParamSpecs";
-import {
-  extractSpecVocabulary,
-  extractVocabOptions,
-  type VocabOption,
-} from "./components/stepEditorUtils";
+import type { Step, SearchValidationResponse } from "@pathfinder/shared";
+import { validateSearchParams } from "@/lib/api/sites";
 import { coerceParametersForSpecs } from "@/features/strategy/parameters/coerce";
 import { normalizeRecordType } from "@/features/strategy/recordType";
 import { formatSearchValidationResponse } from "@/features/strategy/validation/format";
 import { toUserMessage } from "@/lib/api/errors";
-import { inferStepKind } from "@/lib/strategyGraph";
+import { useStepMetadata } from "./hooks/useStepMetadata";
+import { useStepRecordType } from "./hooks/useStepRecordType";
+import { useStepSearch } from "./hooks/useStepSearch";
+import { useStepParameters } from "./hooks/useStepParameters";
+import { useStepValidation } from "./hooks/useStepValidation";
 
 interface UseStepEditorStateArgs {
   step: Step;
@@ -37,232 +30,54 @@ export function useStepEditorState({
   onClose,
 }: UseStepEditorStateArgs) {
   // ---------------------------------------------------------------------------
-  // Local state
+  // Sub-hooks
   // ---------------------------------------------------------------------------
-  const [oldName, setOldName] = useState(step.displayName);
-  const [name, setName] = useState(step.displayName);
-  const [editableSearchName, setEditableSearchName] = useState(step.searchName || "");
-  const [operatorValue, setOperatorValue] = useState(step.operator || "");
-  const [colocationParams, setColocationParams] = useState(step.colocationParams);
-  const [recordTypeValue, setRecordTypeValue] = useState(
-    normalizeRecordType(step.recordType || recordType),
-  );
-  const [parameters, setParameters] = useState<Record<string, unknown>>(
-    step.parameters || {},
-  );
-  const [recordTypeOptions, setRecordTypeOptions] = useState<RecordType[]>([]);
-  const [recordTypeFilter, setRecordTypeFilter] = useState("");
-  const [searchOptions, setSearchOptions] = useState<Search[]>([]);
-  const [isLoadingSearches, setIsLoadingSearches] = useState(false);
-  const [searchListError, setSearchListError] = useState<string | null>(null);
-  const dependentOptions: Record<string, VocabOption[]> = {};
-  const dependentLoading: Record<string, boolean> = {};
-  const dependentErrors: Record<string, string | null> = {};
-  const prevStepId = usePrevious(step.id);
-  const [rawParams, setRawParams] = useState(
-    JSON.stringify(step.parameters || {}, null, 2),
-  );
-  const [showRaw, setShowRaw] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const metadata = useStepMetadata({ step });
 
-  // ---------------------------------------------------------------------------
-  // Derived values
-  // ---------------------------------------------------------------------------
-  const searchName = editableSearchName.trim();
-  const kind = inferStepKind(step);
-  const normalizedRecordTypeValue = normalizeRecordType(recordTypeValue);
-  const apiRecordTypeValue = normalizedRecordTypeValue;
-  const stepValidationError = step.validationError;
-
-  const selectedSearch = useMemo(() => {
-    if (!searchName) return null;
-    return searchOptions.find((option) => option.name === searchName) || null;
-  }, [searchName, searchOptions]);
-
-  const isSearchNameAvailable = useMemo(
-    () =>
-      searchName ? searchOptions.some((option) => option.name === searchName) : true,
-    [searchName, searchOptions],
-  );
-
-  const filteredSearchOptions = useMemo(() => {
-    const query = editableSearchName.trim().toLowerCase();
-    if (!query) return searchOptions;
-    return searchOptions.filter((option) => {
-      const label = (option.displayName || option.name).toLowerCase();
-      return label.includes(query) || option.name.toLowerCase().includes(query);
-    });
-  }, [editableSearchName, searchOptions]);
-
-  const filteredRecordTypes = useMemo(() => {
-    const query = recordTypeFilter.trim().toLowerCase();
-    if (!query) return recordTypeOptions;
-    return recordTypeOptions.filter((option) => {
-      const label = (option.displayName || option.name).toLowerCase();
-      return label.includes(query) || option.name.toLowerCase().includes(query);
-    });
-  }, [recordTypeFilter, recordTypeOptions]);
-
-  // ---------------------------------------------------------------------------
-  // Data fetching: record types
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    let isActive = true;
-    getRecordTypes(siteId)
-      .then((results) => {
-        if (!isActive) return;
-        const options = (results || [])
-          .filter((item): item is RecordType => Boolean(item && item.name))
-          .sort((a, b) =>
-            (a.displayName || a.name).localeCompare(b.displayName || b.name),
-          );
-        setRecordTypeOptions(options);
-      })
-      .catch((err) => {
-        console.error("[StepEditor.loadRecordTypes]", err);
-        if (!isActive) return;
-        setRecordTypeOptions([]);
-      });
-    return () => {
-      isActive = false;
-    };
-  }, [siteId]);
-
-  // Validate record type against available options
-  useEffect(() => {
-    if (recordTypeOptions.length === 0) return;
-    if (!recordTypeValue) return;
-    const normalized = normalizeRecordType(recordTypeValue);
-    const exists = recordTypeOptions.some((option) => option.name === normalized);
-    if (!exists) {
-      startTransition(() => {
-        setRecordTypeValue("");
-      });
-    }
-  }, [recordTypeOptions, recordTypeValue]);
-
-  const resolveRecordTypeForSearch = useCallback(
-    (searchRecordType?: string | null) => {
-      const normalized = normalizeRecordType(searchRecordType || "");
-      if (normalized) {
-        const exists = recordTypeOptions.some((option) => option.name === normalized);
-        if (exists) return normalized;
-      }
-      return normalizeRecordType(recordTypeValue || recordType) || "";
-    },
-    [recordType, recordTypeOptions, recordTypeValue],
-  );
-
-  // ---------------------------------------------------------------------------
-  // Param specs
-  // ---------------------------------------------------------------------------
-  const { paramSpecs, isLoading } = useParamSpecs({
+  const recordTypeState = useStepRecordType({
     siteId,
     recordType,
-    searchName,
-    selectedSearch,
-    isSearchNameAvailable,
-    apiRecordTypeValue,
-    resolveRecordTypeForSearch,
-    contextValues: parameters,
-    enabled: kind !== "combine",
+    initialRecordType: step.recordType || recordType,
   });
 
-  const validationErrorKeys = useMemo(() => {
-    if (!stepValidationError) return new Set<string>();
-    const keys = new Set<string>();
-    const paramNames = new Set(
-      paramSpecs.map((spec) => spec.name).filter(Boolean) as string[],
-    );
-    stepValidationError
-      .replace(/^Cannot be saved:\s*/i, "")
-      .split(";")
-      .map((part) => part.trim())
-      .forEach((part) => {
-        if (!part) return;
-        const splitIndex = part.indexOf(":");
-        if (splitIndex === -1) return;
-        const key = part.slice(0, splitIndex).trim();
-        if (paramNames.has(key)) {
-          keys.add(key);
-        }
-      });
-    return keys;
-  }, [stepValidationError, paramSpecs]);
+  const searchState = useStepSearch({
+    siteId,
+    recordType,
+    initialSearchName: step.searchName || "",
+    resolveRecordTypeForSearch: recordTypeState.resolveRecordTypeForSearch,
+  });
 
-  // ---------------------------------------------------------------------------
-  // Data fetching: searches
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    let isActive = true;
-    const resolvedRecordType = resolveRecordTypeForSearch();
-    const normalizedRecordType = normalizeRecordType(resolvedRecordType || recordType);
-    if (!normalizedRecordType) {
-      startTransition(() => {
-        setSearchOptions([]);
-        setSearchListError(null);
-      });
-      return;
-    }
-    startTransition(() => {
-      setIsLoadingSearches(true);
-      setSearchListError(null);
-    });
-    getSearches(siteId, normalizedRecordType)
-      .then((results) => {
-        if (!isActive) return;
-        const options = (results || [])
-          .filter((item): item is Search => Boolean(item && item.name))
-          .sort((a, b) =>
-            (a.displayName || a.name).localeCompare(b.displayName || b.name),
-          );
-        setSearchOptions(options);
-        if (options.length === 0) {
-          setSearchListError("No searches available for this record type.");
-        }
-      })
-      .catch((err) => {
-        console.error("[StepEditor.loadSearches]", err);
-        if (!isActive) return;
-        setSearchOptions([]);
-        setSearchListError("Failed to load search list.");
-      })
-      .finally(() => {
-        if (!isActive) return;
-        setIsLoadingSearches(false);
-      });
-    return () => {
-      isActive = false;
-    };
-  }, [siteId, recordType, resolveRecordTypeForSearch]);
+  const paramState = useStepParameters({
+    stepId: step.id,
+    siteId,
+    recordType,
+    kind: metadata.kind,
+    searchName: searchState.searchName,
+    selectedSearch: searchState.selectedSearch,
+    isSearchNameAvailable: searchState.isSearchNameAvailable,
+    apiRecordTypeValue: recordTypeState.apiRecordTypeValue,
+    resolveRecordTypeForSearch: recordTypeState.resolveRecordTypeForSearch,
+    initialParameters: step.parameters || {},
+  });
 
-  // ---------------------------------------------------------------------------
-  // Reset params when spec key changes (step, record type, or search changed)
-  // ---------------------------------------------------------------------------
-  const resolvedSpecRecordType = resolveRecordTypeForSearch(selectedSearch?.recordType);
-  const specKey = `${step.id}:${resolvedSpecRecordType || ""}:${searchName || ""}`;
-  const prevSpecKey = usePrevious(specKey);
-
-  useEffect(() => {
-    if (prevSpecKey === undefined) return;
-    if (prevSpecKey === specKey) return;
-    startTransition(() => {
-      setParameters({});
-      setRawParams("{}");
-    });
-  }, [specKey, prevSpecKey]);
+  const validation = useStepValidation({
+    stepValidationError: metadata.stepValidationError,
+    paramSpecs: paramState.paramSpecs,
+  });
 
   // ---------------------------------------------------------------------------
   // Sync form state when a different step is selected
   // ---------------------------------------------------------------------------
+  const prevStepId = usePrevious(step.id);
+
   useEffect(() => {
     const isNewStep = prevStepId !== step.id;
     if (!isNewStep) return;
-    if (isLoading) return; // Wait for param specs to load for the new step.
+    if (paramState.isLoading) return; // Wait for param specs to load for the new step.
 
     const nextParams = coerceParametersForSpecs(
-      (step.parameters || {}) as Record<string, unknown>,
-      paramSpecs,
+      step.parameters || {},
+      paramState.paramSpecs,
       // Normal UI flow: do not accept/parse stringified arrays or CSV.
       { allowStringParsing: false },
     );
@@ -273,20 +88,20 @@ export function useStepEditorState({
     const nextRawParams = JSON.stringify(nextParams, null, 2);
     // Batch state updates to avoid cascading renders
     startTransition(() => {
-      setOldName(nextOldName);
-      setName(nextName);
-      setEditableSearchName(nextSearchName);
-      setOperatorValue(step.operator || "");
-      setColocationParams(step.colocationParams);
-      setRecordTypeValue(nextRecordType);
-      setParameters(nextParams);
-      setRawParams(nextRawParams);
-      setShowRaw(false);
+      metadata.setOldName(nextOldName);
+      metadata.setName(nextName);
+      searchState.setEditableSearchName(nextSearchName);
+      metadata.setOperatorValue(step.operator || "");
+      metadata.setColocationParams(step.colocationParams);
+      recordTypeState.setRecordTypeValue(nextRecordType);
+      paramState.setParameters(nextParams);
+      paramState.setRawParams(nextRawParams);
+      paramState.setShowRaw(false);
     });
   }, [
     prevStepId,
-    isLoading,
-    paramSpecs,
+    paramState.isLoading,
+    paramState.paramSpecs,
     recordType,
     step.colocationParams,
     step.displayName,
@@ -295,61 +110,55 @@ export function useStepEditorState({
     step.parameters,
     step.recordType,
     step.searchName,
+    metadata,
+    searchState,
+    recordTypeState,
+    paramState,
   ]);
-
-  // ---------------------------------------------------------------------------
-  // Vocabulary options (derived from param specs)
-  // ---------------------------------------------------------------------------
-  const vocabOptions = useMemo(() => {
-    return paramSpecs.reduce<Record<string, VocabOption[]>>((acc, spec) => {
-      if (!spec.name) return acc;
-      const vocabulary = extractSpecVocabulary(spec);
-      if (vocabulary) {
-        acc[spec.name] = extractVocabOptions(vocabulary);
-      }
-      return acc;
-    }, {});
-  }, [paramSpecs]);
 
   // ---------------------------------------------------------------------------
   // Save handler
   // ---------------------------------------------------------------------------
   const handleSave = async () => {
     try {
-      const nextName = (name || "").trim() || oldName;
-      const nextSearchName = searchName || step.searchName || "";
-      let parsedParams = parameters;
-      if (showRaw) {
-        parsedParams = JSON.parse(rawParams);
+      const nextName = (metadata.name || "").trim() || metadata.oldName;
+      const nextSearchName = searchState.searchName || step.searchName || "";
+      let parsedParams = paramState.parameters;
+      if (paramState.showRaw) {
+        parsedParams = JSON.parse(paramState.rawParams);
       }
       parsedParams = coerceParametersForSpecs(
-        parsedParams as Record<string, unknown>,
-        paramSpecs,
+        parsedParams,
+        paramState.paramSpecs,
         // Normal save path: do not accept stringified arrays/CSV.
         { allowStringParsing: false },
       );
       // Do not enforce business-required checks here (backend is authoritative).
       const updates: Partial<Step> = {
         displayName: nextName,
-        parameters: parsedParams as Record<string, unknown>,
+        parameters: parsedParams,
       };
-      const selectedRecordType = resolveRecordTypeForSearch(selectedSearch?.recordType);
+      const selectedRecordType = recordTypeState.resolveRecordTypeForSearch(
+        searchState.selectedSearch?.recordType,
+      );
       const resolvedRecordType = normalizeRecordType(selectedRecordType);
       if (selectedRecordType) {
         updates.recordType = selectedRecordType;
       }
-      if (kind !== "combine") {
+      if (metadata.kind !== "combine") {
         updates.searchName = nextSearchName;
       }
-      if (kind === "combine") {
-        const nextOperator = operatorValue || step.operator;
-        if (nextOperator) {
-          updates.operator = nextOperator as Step["operator"];
+      if (metadata.kind === "combine") {
+        const nextOperator = metadata.operatorValue || step.operator;
+        if (!nextOperator) {
+          validation.setError("Combine steps require an operator to be selected.");
+          return;
         }
+        updates.operator = nextOperator as Step["operator"];
         if (nextOperator === "COLOCATE") {
-          updates.colocationParams = colocationParams ?? {
-            upstream: 0,
-            downstream: 0,
+          updates.colocationParams = metadata.colocationParams ?? {
+            upstream: 1000,
+            downstream: 1000,
             strand: "both",
           };
         } else {
@@ -357,12 +166,12 @@ export function useStepEditorState({
         }
       }
       let validationError: string | null = null;
-      if (!isSearchNameAvailable && kind === "search") {
+      if (!searchState.isSearchNameAvailable && metadata.kind === "search") {
         validationError =
           "Cannot be saved: search name is not available for this record type.";
       }
       if (
-        kind === "search" &&
+        metadata.kind === "search" &&
         resolvedRecordType &&
         nextSearchName &&
         !validationError
@@ -372,7 +181,7 @@ export function useStepEditorState({
             siteId,
             resolvedRecordType,
             nextSearchName,
-            parsedParams as Record<string, unknown>,
+            parsedParams,
           );
           const formatted = formatSearchValidationResponse(response);
           if (formatted.message) {
@@ -386,69 +195,69 @@ export function useStepEditorState({
       onUpdate(updates);
       onClose();
     } catch {
-      setError("Invalid JSON in parameters");
+      validation.setError("Invalid JSON in parameters");
     }
   };
 
   // ---------------------------------------------------------------------------
-  // Public surface
+  // Public surface -- same shape as before for consumers
   // ---------------------------------------------------------------------------
   return {
     // Step metadata
-    kind,
-    stepValidationError,
+    kind: metadata.kind,
+    stepValidationError: metadata.stepValidationError,
 
     // Name fields
-    oldName,
-    name,
-    setName,
+    oldName: metadata.oldName,
+    name: metadata.name,
+    setName: metadata.setName,
 
     // Search selector
     siteId,
-    editableSearchName,
-    setEditableSearchName,
-    searchName,
-    selectedSearch,
-    isSearchNameAvailable,
-    searchOptions,
-    filteredSearchOptions,
-    isLoadingSearches,
-    searchListError,
+    editableSearchName: searchState.editableSearchName,
+    setEditableSearchName: searchState.setEditableSearchName,
+    searchName: searchState.searchName,
+    selectedSearch: searchState.selectedSearch,
+    isSearchNameAvailable: searchState.isSearchNameAvailable,
+    searchOptions: searchState.searchOptions,
+    filteredSearchOptions: searchState.filteredSearchOptions,
+    isLoadingSearches: searchState.isLoadingSearches,
+    searchListError: searchState.searchListError,
 
     // Record type
-    recordTypeValue,
-    setRecordTypeValue,
-    normalizedRecordTypeValue,
-    recordTypeFilter,
-    setRecordTypeFilter,
-    recordTypeOptions,
-    filteredRecordTypes,
+    recordTypeValue: recordTypeState.recordTypeValue,
+    setRecordTypeValue: recordTypeState.setRecordTypeValue,
+    normalizedRecordTypeValue: recordTypeState.normalizedRecordTypeValue,
+    recordTypeFilter: recordTypeState.recordTypeFilter,
+    setRecordTypeFilter: recordTypeState.setRecordTypeFilter,
+    recordTypeOptions: recordTypeState.recordTypeOptions,
+    filteredRecordTypes: recordTypeState.filteredRecordTypes,
     recordType,
 
     // Parameters
-    paramSpecs,
-    parameters,
-    setParameters,
-    vocabOptions,
-    dependentOptions,
-    dependentLoading,
-    dependentErrors,
-    validationErrorKeys,
+    paramSpecs: paramState.paramSpecs,
+    parameters: paramState.parameters,
+    setParameters: paramState.setParameters,
+    vocabOptions: paramState.vocabOptions,
+    dependentOptions: paramState.dependentOptions,
+    dependentLoading: paramState.dependentLoading,
+    dependentErrors: paramState.dependentErrors,
+    validationErrorKeys: validation.validationErrorKeys,
 
     // Raw params editor
-    showRaw,
-    setShowRaw,
-    rawParams,
-    setRawParams,
-    error,
-    setError,
-    isLoading,
+    showRaw: paramState.showRaw,
+    setShowRaw: paramState.setShowRaw,
+    rawParams: paramState.rawParams,
+    setRawParams: paramState.setRawParams,
+    error: validation.error,
+    setError: validation.setError,
+    isLoading: paramState.isLoading,
 
     // Combine operator
-    operatorValue,
-    setOperatorValue,
-    colocationParams,
-    setColocationParams,
+    operatorValue: metadata.operatorValue,
+    setOperatorValue: metadata.setOperatorValue,
+    colocationParams: metadata.colocationParams,
+    setColocationParams: metadata.setColocationParams,
 
     // Actions
     handleSave,

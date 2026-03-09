@@ -123,7 +123,11 @@ export function getConnectionEffect(
 export function edgeToInputPatch(edge: Edge): Partial<Step> | null {
   if (edge.targetHandle === "left") return { primaryInputStepId: undefined };
   if (edge.targetHandle === "left-secondary")
-    return { secondaryInputStepId: undefined };
+    return {
+      secondaryInputStepId: undefined,
+      operator: undefined,
+      colocationParams: undefined,
+    };
   if (edge.id.endsWith("-primary")) return { primaryInputStepId: undefined };
   if (edge.id.endsWith("-secondary")) return { secondaryInputStepId: undefined };
   return null;

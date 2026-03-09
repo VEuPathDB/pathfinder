@@ -7,7 +7,7 @@
  * are received via props from the parent sidebar.
  */
 
-import { useStrategyStore } from "@/state/useStrategyStore";
+import { useStrategyList } from "@/state/useStrategySelectors";
 import type { Strategy } from "@pathfinder/shared";
 import type { ConversationItem } from "@/features/sidebar/components/conversationSidebarTypes";
 import { ConversationListItem } from "@/features/sidebar/components/ConversationListItem";
@@ -15,6 +15,7 @@ import { ConversationListItem } from "@/features/sidebar/components/Conversation
 interface ConversationListProps {
   items: ConversationItem[];
   query: string;
+  hasInitiallyLoaded: boolean;
   activeId: string | null;
   renamingId: string | null;
   renameValue: string;
@@ -31,6 +32,7 @@ interface ConversationListProps {
 export function ConversationList({
   items,
   query,
+  hasInitiallyLoaded,
   activeId,
   renamingId,
   renameValue,
@@ -43,12 +45,12 @@ export function ConversationList({
   onStartDuplicate,
   onToggleSaved,
 }: ConversationListProps) {
-  const graphValidationStatus = useStrategyStore((s) => s.graphValidationStatus);
+  const { graphValidationStatus } = useStrategyList();
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pr-1">
       <div className="space-y-1">
-        {items.length === 0 && (
+        {items.length === 0 && hasInitiallyLoaded && (
           <div className="py-4 text-center text-sm text-muted-foreground">
             {query.trim()
               ? "No conversations match your search."

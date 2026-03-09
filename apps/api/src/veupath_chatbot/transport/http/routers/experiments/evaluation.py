@@ -1,14 +1,10 @@
-"""Evaluation endpoints: re-evaluate, threshold-sweep, step-contributions, report."""
-
-from typing import cast
+"""Evaluation endpoints: re-evaluate, threshold-sweep, export."""
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 
-from veupath_chatbot.platform.types import JSONObject, JSONValue
+from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.experiment.evaluation import (
-    compute_step_contributions,
     compute_sweep_values,
     generate_sweep_events,
     re_evaluate,
@@ -16,15 +12,6 @@ from veupath_chatbot.services.experiment.evaluation import (
 )
 from veupath_chatbot.transport.http.deps import CurrentUser, ExperimentDep
 from veupath_chatbot.transport.http.schemas.experiments import ThresholdSweepRequest
-
-
-class StepContributionsRequest(BaseModel):
-    """Request body for step contributions analysis."""
-
-    step_tree: JSONObject = Field(alias="stepTree")
-
-    model_config = {"populate_by_name": True}
-
 
 router = APIRouter()
 
@@ -69,18 +56,7 @@ async def threshold_sweep(
     )
 
 
-@router.post("/{experiment_id}/step-contributions")
-async def step_contributions(
-    exp: ExperimentDep,
-    body: StepContributionsRequest,
-    user_id: CurrentUser,
-) -> JSONObject:
-    """Analyse per-step contribution to overall result for multi-step experiments."""
-    contributions = await compute_step_contributions(exp, body.step_tree)
-    return {"contributions": cast(JSONValue, contributions)}
-
-
-@router.get("/{experiment_id}/report")
+@router.get("/{experiment_id}/export")
 async def get_experiment_report(
     exp: ExperimentDep, user_id: CurrentUser
 ) -> StreamingResponse:

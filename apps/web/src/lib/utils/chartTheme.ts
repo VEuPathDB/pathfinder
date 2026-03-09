@@ -3,13 +3,6 @@
  * to colour strings that Recharts / SVG props accept directly.
  */
 
-/** Resolve a chart palette colour at runtime from the computed CSS variables. */
-export function getChartColor(index: number): string {
-  const style = getComputedStyle(document.documentElement);
-  const hsl = style.getPropertyValue(`--chart-${(index % 6) + 1}`).trim();
-  return `hsl(${hsl})`;
-}
-
 /** Static HSL references that work in JSX without touching the DOM. */
 export const CHART_COLORS = {
   positive: "hsl(var(--chart-positive))",

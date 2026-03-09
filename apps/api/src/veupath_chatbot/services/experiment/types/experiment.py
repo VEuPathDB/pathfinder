@@ -76,6 +76,7 @@ class ExperimentConfig:
     sort_attribute: str | None = None
     sort_direction: str = "ASC"
     parent_experiment_id: str | None = None
+    target_gene_ids: list[str] | None = None
 
     @property
     def is_tree_mode(self) -> bool:

@@ -33,7 +33,7 @@ describe("duplicateModalState", () => {
     const next = applyDuplicateLoadSuccess(prev, {
       name: "New",
       description: "D",
-    } as any);
+    } as Strategy);
     expect(next.isLoading).toBe(false);
     expect(next.name).toBe("New");
     expect(next.description).toBe("D");

@@ -9,14 +9,11 @@ module with a clean public API:
 - ``compute_step_counts`` — compile plan in WDK and read estimatedSize values
 - ``parse_wdk_strategy_id`` — extract int ID from WDK list-strategies item
 - ``extract_wdk_is_saved`` — extract isSaved flag from WDK payload
-- ``wdk_error_boundary`` — async context manager for consistent WDK error handling
 """
 
 import hashlib
 import json
 from collections import OrderedDict
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from uuid import UUID
 
 from veupath_chatbot.domain.parameters.normalize import ParameterNormalizer
@@ -34,7 +31,6 @@ from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
 from veupath_chatbot.persistence.models import StreamProjection
 from veupath_chatbot.persistence.repositories.stream import StreamRepository
-from veupath_chatbot.platform.errors import AppError, WDKError
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import (
     JSONArray,
@@ -49,21 +45,6 @@ from .step_builders import build_steps_data_from_ast
 logger = get_logger(__name__)
 
 # ── Public API ──────────────────────────────────────────────────────────
-
-
-@asynccontextmanager
-async def wdk_error_boundary(operation: str) -> AsyncIterator[None]:
-    """Wrap WDK operations with consistent error handling."""
-    try:
-        yield
-    except AppError:
-        raise
-    except WDKError as e:
-        logger.error(f"{operation} failed", error=str(e))
-        raise
-    except Exception as e:
-        logger.error(f"{operation} failed", error=str(e))
-        raise WDKError(f"Failed to {operation}: {e}") from e
 
 
 def extract_wdk_is_saved(payload: JSONObject) -> bool:

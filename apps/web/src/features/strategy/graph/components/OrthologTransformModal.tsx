@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, startTransition } from "react";
 import type { Search } from "@pathfinder/shared";
-import { getSearches } from "@/lib/api/client";
+import { getSearches } from "@/lib/api/sites";
 import { Modal } from "@/lib/components/Modal";
 
 function looksLikeOrthologSearch(s: Search) {

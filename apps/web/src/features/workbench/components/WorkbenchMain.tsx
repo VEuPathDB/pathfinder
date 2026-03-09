@@ -3,6 +3,8 @@
 import { useWorkbenchStore } from "../store";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { Layers } from "lucide-react";
+import { BlockingOverlay } from "./BlockingOverlay";
+import { SOURCE_CONFIG } from "./geneSetSourceConfig";
 import {
   EnrichmentPanel,
   DistributionsPanel,
@@ -11,10 +13,16 @@ import {
   AiInterpretationPanel,
   SweepPanel,
   ResultsTablePanel,
+  StepContributionPanel,
+  BatchPanel,
+  BenchmarkPanel,
+  EnsemblePanel,
+  ConfidencePanel,
+  ReverseSearchPanel,
 } from "./panels";
 
 // ---------------------------------------------------------------------------
-// Active set header
+// Active set header — rich version
 // ---------------------------------------------------------------------------
 
 function ActiveSetHeader() {
@@ -24,16 +32,56 @@ function ActiveSetHeader() {
 
   if (!activeSet) return null;
 
+  const colorClass =
+    SOURCE_CONFIG[activeSet.source]?.badgeClass ?? SOURCE_CONFIG.saved.badgeClass;
+
   return (
-    <div className="mb-4">
-      <h1 className="text-lg font-semibold">{activeSet.name}</h1>
-      <p className="text-sm text-muted-foreground">
-        {activeSet.geneCount.toLocaleString()} genes &middot; {activeSet.source}
-        {activeSet.searchName ? ` \u00b7 ${activeSet.searchName}` : ""}
-      </p>
+    <div className="mb-4 rounded-lg border bg-card px-4 py-3 animate-fade-in">
+      <div className="flex items-center gap-3">
+        <h1 className="text-base font-semibold text-foreground">{activeSet.name}</h1>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+          {activeSet.geneCount.toLocaleString()} genes
+        </span>
+        <span
+          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize ${colorClass}`}
+        >
+          {activeSet.source}
+        </span>
+        <span className="text-xs text-muted-foreground">{activeSet.siteId}</span>
+      </div>
+      {activeSet.searchName && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {activeSet.searchName}
+          {activeSet.parameters &&
+            Object.entries(activeSet.parameters)
+              .slice(0, 3)
+              .map(([k, v]) => ` \u00b7 ${k}: ${String(v)}`)
+              .join("")}
+        </p>
+      )}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Panel list with staggered animation
+// ---------------------------------------------------------------------------
+
+const PANELS = [
+  ResultsTablePanel,
+  EnrichmentPanel,
+  DistributionsPanel,
+  EvaluatePanel,
+  StepContributionPanel,
+  ConfidencePanel,
+  EnsemblePanel,
+  ReverseSearchPanel,
+  BatchPanel,
+  BenchmarkPanel,
+  CustomEnrichmentPanel,
+  AiInterpretationPanel,
+  SweepPanel,
+];
 
 // ---------------------------------------------------------------------------
 // Main content area
@@ -54,26 +102,25 @@ export function WorkbenchMain() {
   }
 
   if (!activeSetId) {
-    return (
-      <EmptyState
-        icon={<Layers className="h-10 w-10" />}
-        heading="No set selected"
-        description="Select a gene set from the sidebar to view analysis panels."
-      />
-    );
+    return <BlockingOverlay />;
   }
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-5xl space-y-3 p-6">
         <ActiveSetHeader />
-        <EnrichmentPanel />
-        <DistributionsPanel />
-        <EvaluatePanel />
-        <CustomEnrichmentPanel />
-        <AiInterpretationPanel />
-        <SweepPanel />
-        <ResultsTablePanel />
+        {PANELS.map((Panel, i) => (
+          <div
+            key={i}
+            className="animate-fade-in"
+            style={{
+              animationDelay: `${i * 40}ms`,
+              animationFillMode: "backwards",
+            }}
+          >
+            <Panel />
+          </div>
+        ))}
       </div>
     </div>
   );

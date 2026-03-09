@@ -1,3 +1,25 @@
+import type { z } from "zod";
+
+export class SchemaValidationError extends Error {
+  url: string;
+  issues: unknown[];
+
+  constructor(url: string, issues: unknown[]) {
+    const summary = issues
+      .slice(0, 3)
+      .map((i) =>
+        typeof i === "object" && i && "message" in i
+          ? String((i as { message: string }).message)
+          : String(i),
+      )
+      .join("; ");
+    super(`API response validation failed for ${url}: ${summary}`);
+    this.name = "SchemaValidationError";
+    this.url = url;
+    this.issues = issues;
+  }
+}
+
 export class APIError extends Error {
   status: number;
   statusText: string;
@@ -112,12 +134,8 @@ export async function requestJson<T>(
 
   if (!resp.ok) {
     let msg = `HTTP ${resp.status} ${resp.statusText}`;
-    if (
-      typeof data === "object" &&
-      data &&
-      "detail" in (data as Record<string, unknown>)
-    ) {
-      const detail = (data as Record<string, unknown>).detail;
+    if (typeof data === "object" && data !== null && "detail" in data) {
+      const detail = (data as { detail: unknown }).detail;
       if (typeof detail === "string") {
         msg = detail;
       } else if (Array.isArray(detail)) {
@@ -140,4 +158,81 @@ export async function requestJson<T>(
   }
 
   return data as T;
+}
+
+/**
+ * Like `requestJson`, but validates the response against a Zod schema.
+ *
+ * Usage:
+ *   const strategy = await requestJsonValidated(StrategySchema, `/api/v1/strategies/${id}`);
+ *
+ * On validation failure a `SchemaValidationError` is thrown with the Zod issues
+ * attached.  In development mode the issues are also logged to console.warn so
+ * you notice contract drift without crashing the UI during early adoption.
+ */
+export async function requestJsonValidated<T>(
+  schema: z.ZodType<T>,
+  path: string,
+  args?: {
+    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+    query?: Record<string, string | number | boolean | null | undefined>;
+    body?: unknown;
+    headers?: Record<string, string>;
+    signal?: AbortSignal;
+  },
+): Promise<T> {
+  const raw = await requestJson<unknown>(path, args);
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    const url = buildUrl(path, args?.query);
+    const issues = result.error.issues;
+    if (process.env.NODE_ENV === "development") {
+      console.warn(`[SchemaValidation] ${path} response failed validation:`, issues);
+    }
+    throw new SchemaValidationError(url, issues);
+  }
+  return result.data;
+}
+
+/**
+ * Fetch a binary blob from the API (e.g. zip exports, HTML reports).
+ * Uses the same base-URL / cookie-auth conventions as `requestJson`.
+ */
+export async function requestBlob(
+  path: string,
+  args?: {
+    method?: "GET" | "POST";
+    query?: Record<string, string | number | boolean | null | undefined>;
+    body?: unknown;
+    headers?: Record<string, string>;
+  },
+): Promise<Blob> {
+  const method = args?.method ?? "GET";
+  const url = buildUrl(path, args?.query);
+
+  const hasBody = args && "body" in args && args.body !== undefined;
+  const headers: Record<string, string> = {
+    ...getAuthHeaders({
+      contentType: hasBody ? "application/json" : undefined,
+    }),
+    ...(args?.headers ?? {}),
+  };
+
+  const resp = await fetch(url, {
+    method,
+    headers,
+    body: hasBody ? JSON.stringify(args?.body ?? null) : undefined,
+    credentials: "include",
+  });
+
+  if (!resp.ok) {
+    throw new APIError(`HTTP ${resp.status} ${resp.statusText}`, {
+      status: resp.status,
+      statusText: resp.statusText,
+      url,
+      data: null,
+    });
+  }
+
+  return await resp.blob();
 }
