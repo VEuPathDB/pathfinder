@@ -23,7 +23,7 @@ import hmac
 import json
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -779,7 +779,7 @@ def main() -> None:
     print(f"\n{ok_count}/{len(results)} experiments completed successfully")
 
     # Show importable strategies
-    print(f"\nImportable strategies per site:")
+    print("\nImportable strategies per site:")
     for site in sorted({s.site_id for s in SEEDS}):
         try:
             r = httpx.get(
