@@ -69,26 +69,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sites/{siteId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Site
-         * @description Get a single site by ID.
-         */
-        get: operations["get_site_api_v1_sites__siteId__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sites/{siteId}/record-types": {
         parameters: {
             query?: never;
@@ -129,46 +109,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sites/{siteId}/searches/{recordType}/{searchName}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Search Details
-         * @description Get detailed search configuration with parameters.
-         */
-        get: operations["get_search_details_api_v1_sites__siteId__searches__recordType___searchName__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sites/{siteId}/searches/{recordType}/{searchName}/dependent-params": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Get Dependent Params
-         * @description Get dependent parameter vocabulary values.
-         */
-        post: operations["get_dependent_params_api_v1_sites__siteId__searches__recordType___searchName__dependent_params_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sites/{siteId}/searches/{recordType}/{searchName}/validate": {
         parameters: {
             query?: never;
@@ -196,17 +136,33 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Param Specs
-         * @description Return normalized parameter specs for UI consumption.
-         */
-        get: operations["get_param_specs_api_v1_sites__siteId__searches__recordType___searchName__param_specs_get"];
+        get?: never;
         put?: never;
         /**
          * Get Param Specs With Context
          * @description Return normalized parameter specs, using contextual WDK vocab when provided.
          */
         post: operations["get_param_specs_with_context_api_v1_sites__siteId__searches__recordType___searchName__param_specs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/organisms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Organisms
+         * @description Return all available organism names for a site via site-search.
+         */
+        get: operations["list_organisms_api_v1_sites__siteId__organisms_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -413,26 +369,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/strategies/wdk": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Wdk Strategies
-         * @description List strategies from VEuPathDB WDK.
-         */
-        get: operations["list_wdk_strategies_api_v1_strategies_wdk_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/strategies/sync-wdk": {
         parameters: {
             query?: never;
@@ -453,237 +389,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/strategies/wdk/{wdkStrategyId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Wdk Strategy
-         * @description Delete a strategy from VEuPathDB WDK.
-         */
-        delete: operations["delete_wdk_strategy_api_v1_strategies_wdk__wdkStrategyId__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/strategies/wdk/{wdkStrategyId}/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Import Wdk Strategy
-         * @description Import a WDK strategy as a local snapshot (CQRS only).
-         *
-         *     Upserts: if a stream already exists for this WDK strategy ID,
-         *     it is updated rather than creating a duplicate.
-         */
-        post: operations["import_wdk_strategy_api_v1_strategies_wdk__wdkStrategyId__import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/strategies/{strategyId}/sync-wdk": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Sync Strategy From Wdk
-         * @description Sync local stream projection from VEuPathDB WDK.
-         */
-        post: operations["sync_strategy_from_wdk_api_v1_strategies__strategyId__sync_wdk_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/strategies/{strategyId}/steps/{step_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Step
-         * @description Get a step from a strategy.
-         */
-        get: operations["get_step_api_v1_strategies__strategyId__steps__step_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/strategies/{strategyId}/steps/{step_id}/filters": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Step Filters
-         * @description List filters attached to a step.
-         */
-        get: operations["list_step_filters_api_v1_strategies__strategyId__steps__step_id__filters_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/strategies/{strategyId}/steps/{step_id}/filters/available": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Available Filters
-         * @description List available filters for a step (WDK-backed).
-         */
-        get: operations["list_available_filters_api_v1_strategies__strategyId__steps__step_id__filters_available_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/strategies/{strategyId}/steps/{step_id}/filters/{filter_name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Set Step Filter
-         * @description Add or update a filter for a step.
-         */
-        put: operations["set_step_filter_api_v1_strategies__strategyId__steps__step_id__filters__filter_name__put"];
-        post?: never;
-        /**
-         * Delete Step Filter
-         * @description Remove a filter from a step.
-         */
-        delete: operations["delete_step_filter_api_v1_strategies__strategyId__steps__step_id__filters__filter_name__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/strategies/{strategyId}/steps/{step_id}/analysis-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Analysis Types
-         * @description List available analysis types for a step.
-         */
-        get: operations["list_analysis_types_api_v1_strategies__strategyId__steps__step_id__analysis_types_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/strategies/{strategyId}/steps/{step_id}/analysis-types/{analysis_type}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Analysis Type
-         * @description Get analysis form metadata for a step.
-         */
-        get: operations["get_analysis_type_api_v1_strategies__strategyId__steps__step_id__analysis_types__analysis_type__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/strategies/{strategyId}/steps/{step_id}/analyses": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Step Analyses
-         * @description List analysis instances for a step.
-         */
-        get: operations["list_step_analyses_api_v1_strategies__strategyId__steps__step_id__analyses_get"];
-        put?: never;
-        /**
-         * Run Step Analysis
-         * @description Run a step analysis and attach it locally.
-         */
-        post: operations["run_step_analysis_api_v1_strategies__strategyId__steps__step_id__analyses_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/strategies/{strategyId}/steps/{step_id}/reports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Run Step Report
-         * @description Run a report and attach it locally.
-         */
-        post: operations["run_step_report_api_v1_strategies__strategyId__steps__step_id__reports_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/experiments/": {
         parameters: {
             query?: never;
@@ -693,7 +398,7 @@ export type paths = {
         };
         /**
          * List Experiments
-         * @description List all experiments, optionally filtered by site.
+         * @description List experiments owned by the current user, optionally filtered by site.
          */
         get: operations["list_experiments_api_v1_experiments__get"];
         put?: never;
@@ -922,11 +627,7 @@ export type paths = {
         put?: never;
         /**
          * Threshold Sweep
-         * @description Sweep a numeric parameter across a range and stream metrics as they complete.
-         *
-         *     Returns an SSE stream with ``sweep_point`` events for each completed point
-         *     and a final ``sweep_complete`` event with all results.  This gives the
-         *     frontend live progress instead of a loading spinner for several minutes.
+         * @description Sweep a parameter across a range and stream metrics as they complete.
          */
         post: operations["threshold_sweep_api_v1_experiments__experiment_id__threshold_sweep_post"];
         delete?: never;
@@ -935,30 +636,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/experiments/{experiment_id}/step-contributions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Step Contributions
-         * @description Analyse per-step contribution to overall result for multi-step experiments.
-         *
-         *     Evaluates controls against each leaf step individually to show how much
-         *     each step contributes to the final strategy result.
-         */
-        post: operations["step_contributions_api_v1_experiments__experiment_id__step_contributions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/experiments/{experiment_id}/report": {
+    "/api/v1/experiments/{experiment_id}/export": {
         parameters: {
             query?: never;
             header?: never;
@@ -969,58 +647,7 @@ export type paths = {
          * Get Experiment Report
          * @description Generate and return a self-contained HTML report for an experiment.
          */
-        get: operations["get_experiment_report_api_v1_experiments__experiment_id__report_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/experiments/create-strategy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Strategy
-         * @description Create a WDK strategy from a step tree definition.
-         *
-         *     Materialises the step tree (creates WDK steps and a strategy) and returns
-         *     the WDK strategy ID so it can be used with ``mode="import"`` experiments.
-         */
-        post: operations["create_strategy_api_v1_experiments_create_strategy_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/experiments/importable-strategies/{strategy_id}/details": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Strategy Details
-         * @description Fetch full strategy step tree for import into the multi-step builder.
-         *
-         *     The WDK ``GET /strategies/{id}`` response includes:
-         *     - ``stepTree``: recursive tree with only ``stepId`` / ``primaryInput`` / ``secondaryInput``
-         *     - ``steps``: a **map** (object keyed by string step ID) of full step data
-         *       including ``searchName``, ``searchConfig.parameters``, ``customName``, etc.
-         *
-         *     This endpoint flattens the steps map into an array and enriches the
-         *     step tree so the frontend can display search names and parameters.
-         */
-        get: operations["get_strategy_details_api_v1_experiments_importable_strategies__strategy_id__details_get"];
+        get: operations["get_experiment_report_api_v1_experiments__experiment_id__export_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1077,26 +704,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/experiments/{experiment_id}/results/sortable-attributes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Sortable Attributes
-         * @description Return only sortable (numeric) attributes, with suggestions for known score columns.
-         */
-        get: operations["get_sortable_attributes_api_v1_experiments__experiment_id__results_sortable_attributes_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/experiments/{experiment_id}/results/records": {
         parameters: {
             query?: never;
@@ -1139,26 +746,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/experiments/{experiment_id}/strategy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Experiment Strategy
-         * @description Get the WDK strategy tree for an experiment.
-         */
-        get: operations["get_experiment_strategy_api_v1_experiments__experiment_id__strategy_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/experiments/{experiment_id}/results/distributions/{attribute_name}": {
         parameters: {
             query?: never;
@@ -1173,49 +760,6 @@ export type paths = {
         get: operations["get_experiment_distribution_api_v1_experiments__experiment_id__results_distributions__attribute_name__get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/experiments/{experiment_id}/analyses/types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Experiment Analysis Types
-         * @description List available WDK step analysis types for an experiment.
-         */
-        get: operations["get_experiment_analysis_types_api_v1_experiments__experiment_id__analyses_types_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/experiments/{experiment_id}/analyses/run": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Run Experiment Analysis
-         * @description Create and run a WDK step analysis on the experiment's step.
-         *
-         *     Uses the shared service for defaults+merge+run, but adds
-         *     experiment-specific enrichment persistence.
-         */
-        post: operations["run_experiment_analysis_api_v1_experiments__experiment_id__analyses_run_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1310,26 +854,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/veupathdb/auth/token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Accept Token
-         * @description Accept a VEuPathDB Authorization token and store it as a cookie.
-         */
-        post: operations["accept_token_api_v1_veupathdb_auth_token_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/veupathdb/auth/logout": {
         parameters: {
             query?: never;
@@ -1383,6 +907,10 @@ export type paths = {
         /**
          * Auth Status
          * @description Return current VEuPathDB auth status.
+         *
+         *     In mock mode (``PATHFINDER_CHAT_PROVIDER=mock``), a valid
+         *     ``pathfinder-auth`` cookie is sufficient — the dev-login endpoint
+         *     doesn't create a VEuPathDB session, so we skip the real WDK call.
          */
         get: operations["auth_status_api_v1_veupathdb_auth_status_get"];
         put?: never;
@@ -1528,6 +1056,46 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gene-sets/reverse-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse Search
+         * @description Rank the user's gene sets by how well they recover the given positive genes.
+         */
+        post: operations["reverse_search_api_v1_gene_sets_reverse_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gene-sets/ensemble": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ensemble Scoring
+         * @description Score genes by frequency across multiple gene sets.
+         */
+        post: operations["ensemble_scoring_api_v1_gene_sets_ensemble_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gene-sets/{gene_set_id}/enrich": {
         parameters: {
             query?: never;
@@ -1588,26 +1156,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/gene-sets/{gene_set_id}/results/record": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Get Gene Set Record Detail
-         * @description Get a single record's full details by primary key.
-         */
-        post: operations["get_gene_set_record_detail_api_v1_gene_sets__gene_set_id__results_record_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/gene-sets/{gene_set_id}/results/distributions/{attribute_name}": {
         parameters: {
             query?: never;
@@ -1628,27 +1176,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/gene-sets/{gene_set_id}/analyses/types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Gene Set Analysis Types
-         * @description List available WDK step analysis types for a gene set.
-         */
-        get: operations["get_gene_set_analysis_types_api_v1_gene_sets__gene_set_id__analyses_types_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/gene-sets/{gene_set_id}/analyses/run": {
+    "/api/v1/gene-sets/{gene_set_id}/results/record": {
         parameters: {
             query?: never;
             header?: never;
@@ -1658,30 +1186,30 @@ export type paths = {
         get?: never;
         put?: never;
         /**
-         * Run Gene Set Analysis
-         * @description Run a WDK step analysis on a gene set.
+         * Get Gene Set Record Detail
+         * @description Get a single record's full details by primary key.
          */
-        post: operations["run_gene_set_analysis_api_v1_gene_sets__gene_set_id__analyses_run_post"];
+        post: operations["get_gene_set_record_detail_api_v1_gene_sets__gene_set_id__results_record_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/gene-sets/{gene_set_id}/strategy": {
+    "/api/v1/gene-sets/confidence": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Gene Set Strategy
-         * @description Get the WDK strategy tree for a gene set.
-         */
-        get: operations["get_gene_set_strategy_api_v1_gene_sets__gene_set_id__strategy_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Gene Confidence
+         * @description Compute per-gene composite confidence scores from classification data.
+         */
+        post: operations["gene_confidence_api_v1_gene_sets_confidence_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1727,13 +1255,11 @@ export type components = {
         };
         /**
          * AuthSuccessResponse
-         * @description Success response, optionally carrying the internal auth token.
+         * @description Success response. Auth token is set via httpOnly cookie only.
          */
         AuthSuccessResponse: {
             /** Success */
             success: boolean;
-            /** Authtoken */
-            authToken?: string | null;
         };
         /**
          * BatchOrganismTargetRequest
@@ -1810,8 +1336,9 @@ export type components = {
             /**
              * Strand
              * @default both
+             * @enum {string}
              */
-            strand: string;
+            strand: "same" | "opposite" | "both";
         };
         /**
          * ControlSetResponse
@@ -2001,6 +1528,8 @@ export type components = {
             sortDirection: "ASC" | "DESC";
             /** Parentexperimentid */
             parentExperimentId?: string | null;
+            /** Targetgeneids */
+            targetGeneIds?: string[] | null;
         };
         /**
          * CreateGeneSetRequest
@@ -2029,8 +1558,19 @@ export type components = {
             recordType?: string | null;
             /** Parameters */
             parameters?: {
-                [key: string]: unknown;
+                [key: string]: string;
             } | null;
+        };
+        /**
+         * CreateStrategyRequest
+         * @description Request to create a strategy.
+         */
+        CreateStrategyRequest: {
+            /** Name */
+            name: string;
+            /** Siteid */
+            siteId: string;
+            plan: components["schemas"]["StrategyPlan-Input"];
         };
         /**
          * CustomEnrichRequest
@@ -2043,19 +1583,29 @@ export type components = {
             geneIds: string[];
         };
         /**
-         * DependentParamsRequest
-         * @description Dependent parameter values request.
+         * CustomEnrichmentResult
+         * @description Return shape of :func:`run_custom_enrichment`.
          */
-        DependentParamsRequest: {
-            /** Parametername */
-            parameterName: string;
-            contextValues?: components["schemas"]["JSONObject"];
+        CustomEnrichmentResult: {
+            /** Genesetname */
+            geneSetName: string;
+            /** Genesetsize */
+            geneSetSize: number;
+            /** Overlapcount */
+            overlapCount: number;
+            /** Overlapgenes */
+            overlapGenes: string[];
+            /** Backgroundsize */
+            backgroundSize: number;
+            /** Tpcount */
+            tpCount: number;
+            /** Foldenrichment */
+            foldEnrichment: number;
+            /** Pvalue */
+            pValue: number;
+            /** Oddsratio */
+            oddsRatio: number;
         };
-        /**
-         * DependentParamsResponse
-         * @description Dependent parameter values response.
-         */
-        DependentParamsResponse: components["schemas"]["JSONArray"];
         /**
          * EnrichmentCompareRequest
          * @description Request to compare enrichment results across experiments.
@@ -2065,6 +1615,125 @@ export type components = {
             experimentIds: string[];
             /** Analysistype */
             analysisType?: string | null;
+        };
+        /**
+         * EnrichmentCompareResult
+         * @description Return shape of :func:`compare_enrichment_across`.
+         */
+        EnrichmentCompareResult: {
+            /** Experimentids */
+            experimentIds: string[];
+            /** Experimentlabels */
+            experimentLabels: {
+                [key: string]: string;
+            };
+            /** Rows */
+            rows: components["schemas"]["EnrichmentRow"][];
+            /** Totalterms */
+            totalTerms: number;
+        };
+        /**
+         * EnrichmentRow
+         * @description Shape of one term row in the enrichment comparison.
+         */
+        EnrichmentRow: {
+            /** Termkey */
+            termKey: string;
+            /** Termname */
+            termName: string;
+            /** Analysistype */
+            analysisType: string;
+            /** Scores */
+            scores: {
+                [key: string]: components["schemas"]["JSONValue"];
+            };
+            /** Maxscore */
+            maxScore: number;
+            /** Experimentcount */
+            experimentCount: number;
+        };
+        /**
+         * EnsembleScore
+         * @description A single gene's ensemble score.
+         */
+        EnsembleScore: {
+            /** Geneid */
+            geneId: string;
+            /** Frequency */
+            frequency: number;
+            /** Count */
+            count: number;
+            /** Total */
+            total: number;
+            /** Inpositives */
+            inPositives: boolean;
+        };
+        /**
+         * EnsembleScoringRequest
+         * @description Compute ensemble frequency scores across multiple gene sets.
+         */
+        EnsembleScoringRequest: {
+            /** Genesetids */
+            geneSetIds: string[];
+            /** Positivecontrols */
+            positiveControls?: string[] | null;
+        };
+        /**
+         * GeneConfidenceRequest
+         * @description Compute per-gene confidence scores from classification data.
+         */
+        GeneConfidenceRequest: {
+            /** Tpids */
+            tpIds: string[];
+            /** Fpids */
+            fpIds: string[];
+            /** Fnids */
+            fnIds: string[];
+            /** Tnids */
+            tnIds: string[];
+            /** Ensemblescores */
+            ensembleScores?: {
+                [key: string]: number;
+            } | null;
+            /** Enrichmentgenecounts */
+            enrichmentGeneCounts?: {
+                [key: string]: number;
+            } | null;
+            /**
+             * Maxenrichmentterms
+             * @default 1
+             */
+            maxEnrichmentTerms: number;
+        };
+        /**
+         * GeneConfidenceScoreResponse
+         * @description Single gene confidence score in the response.
+         */
+        GeneConfidenceScoreResponse: {
+            /** Geneid */
+            geneId: string;
+            /** Compositescore */
+            compositeScore: number;
+            /** Classificationscore */
+            classificationScore: number;
+            /** Ensemblescore */
+            ensembleScore: number;
+            /** Enrichmentscore */
+            enrichmentScore: number;
+        };
+        /**
+         * GeneMembership
+         * @description Shape of one gene membership entry.
+         */
+        GeneMembership: {
+            /** Geneid */
+            geneId: string;
+            /** Foundin */
+            foundIn: number;
+            /** Totalexperiments */
+            totalExperiments: number;
+            /** Experiments */
+            experiments: string[];
         };
         /**
          * GeneResolveRequest
@@ -2180,12 +1849,12 @@ export type components = {
             recordType?: string | null;
             /** Parameters */
             parameters?: {
-                [key: string]: unknown;
+                [key: string]: string;
             } | null;
             /** Parentsetids */
             parentSetIds?: string[];
             /** Operation */
-            operation?: string | null;
+            operation?: ("intersect" | "union" | "minus") | null;
             /** Createdat */
             createdAt: string;
             /**
@@ -2250,6 +1919,18 @@ export type components = {
              */
             timestamp: string;
         };
+        /** ModelListResponse */
+        ModelListResponse: {
+            /** Models */
+            models: components["schemas"]["_ModelItem"][];
+            /** Default */
+            default: string;
+            /**
+             * Defaultreasoningeffort
+             * @enum {string}
+             */
+            defaultReasoningEffort: "none" | "low" | "medium" | "high";
+        };
         /**
          * OpenStrategyRequest
          * @description Request to open a strategy.
@@ -2305,12 +1986,72 @@ export type components = {
             choices?: string[] | null;
         };
         /**
+         * OrganismsResponse
+         * @description Available organisms for a site.
+         */
+        OrganismsResponse: {
+            /** Organisms */
+            organisms: string[];
+        };
+        /**
          * OverlapRequest
          * @description Request to compute pairwise gene set overlap between experiments.
          */
         OverlapRequest: {
             /** Experimentids */
             experimentIds: string[];
+        };
+        /**
+         * OverlapResult
+         * @description Return shape of :func:`compute_gene_set_overlap`.
+         */
+        OverlapResult: {
+            /** Experimentids */
+            experimentIds: string[];
+            /** Experimentlabels */
+            experimentLabels: {
+                [key: string]: string;
+            };
+            /** Pairwise */
+            pairwise: components["schemas"]["PairwiseOverlap"][];
+            /** Perexperiment */
+            perExperiment: components["schemas"]["PerExperimentSummary"][];
+            /** Universalgenes */
+            universalGenes: string[];
+            /** Totaluniquegenes */
+            totalUniqueGenes: number;
+            /** Genemembership */
+            geneMembership: components["schemas"]["GeneMembership"][];
+        };
+        /**
+         * PairwiseOverlap
+         * @description Shape of one pairwise comparison entry.
+         */
+        PairwiseOverlap: {
+            /** Experimenta */
+            experimentA: string;
+            /** Experimentb */
+            experimentB: string;
+            /** Labela */
+            labelA: string;
+            /** Labelb */
+            labelB: string;
+            /** Sizea */
+            sizeA: number;
+            /** Sizeb */
+            sizeB: number;
+            /** Intersection */
+            intersection: number;
+            /** Union */
+            union: number;
+            /** Jaccard */
+            jaccard: number;
+            /** Sharedgenes */
+            sharedGenes: string[];
+            /** Uniquea */
+            uniqueA: string[];
+            /** Uniqueb */
+            uniqueB: string[];
         };
         /**
          * ParamSpecResponse
@@ -2361,6 +2102,30 @@ export type components = {
          */
         ParamSpecsRequest: {
             contextValues?: components["schemas"]["JSONObject"];
+        };
+        /**
+         * PatchExperimentRequest
+         * @description Request body for PATCH /experiments/{experiment_id}.
+         */
+        PatchExperimentRequest: {
+            /** Notes */
+            notes?: string | null;
+        };
+        /**
+         * PerExperimentSummary
+         * @description Shape of one per-experiment summary entry.
+         */
+        PerExperimentSummary: {
+            /** Experimentid */
+            experimentId: string;
+            /** Label */
+            label: string;
+            /** Totalgenes */
+            totalGenes: number;
+            /** Uniquegenes */
+            uniqueGenes: number;
+            /** Sharedgenes */
+            sharedGenes: number;
         };
         /** PlanMetadata */
         PlanMetadata: {
@@ -2447,6 +2212,24 @@ export type components = {
             warnings?: components["schemas"]["JSONArray"] | null;
         };
         /**
+         * PrimaryKeyPart
+         * @description A single part of a composite WDK primary key.
+         */
+        PrimaryKeyPart: {
+            /** Name */
+            name: string;
+            /** Value */
+            value: string;
+        };
+        /**
+         * RecordDetailRequest
+         * @description Request to fetch a single record by primary key.
+         */
+        RecordDetailRequest: {
+            /** Primarykey */
+            primaryKey: components["schemas"]["PrimaryKeyPart"][];
+        };
+        /**
          * RecordTypeResponse
          * @description Record type information.
          */
@@ -2524,13 +2307,38 @@ export type components = {
             location: string;
         };
         /**
-         * RunAnalysisRequest
-         * @description Request to run a WDK step analysis.
+         * ReverseSearchRequest
+         * @description Rank user's gene sets by recall of given positive genes.
          */
-        RunAnalysisRequest: {
-            /** Analysisname */
-            analysisName: string;
-            parameters?: components["schemas"]["JSONObject"];
+        ReverseSearchRequest: {
+            /** Positivegeneids */
+            positiveGeneIds: string[];
+            /** Negativegeneids */
+            negativeGeneIds?: string[] | null;
+            /** Siteid */
+            siteId: string;
+        };
+        /**
+         * ReverseSearchResultItem
+         * @description A single ranked gene set in reverse search results.
+         */
+        ReverseSearchResultItem: {
+            /** Genesetid */
+            geneSetId: string;
+            /** Name */
+            name: string;
+            /** Searchname */
+            searchName?: string | null;
+            /** Recall */
+            recall: number;
+            /** Precision */
+            precision: number;
+            /** F1 */
+            f1: number;
+            /** Resultcount */
+            resultCount: number;
+            /** Overlapcount */
+            overlapCount: number;
         };
         /**
          * RunCrossValidationRequest
@@ -2550,32 +2358,6 @@ export type components = {
         RunEnrichmentRequest: {
             /** Enrichmenttypes */
             enrichmentTypes: ("go_function" | "go_component" | "go_process" | "pathway" | "word")[];
-        };
-        /**
-         * RunGeneSetAnalysisRequest
-         * @description Run a WDK step analysis on a gene set.
-         */
-        RunGeneSetAnalysisRequest: {
-            /** Analysisname */
-            analysisName: string;
-            /** Parameters */
-            parameters?: {
-                [key: string]: unknown;
-            };
-        };
-        /**
-         * SearchDetailsResponse
-         * @description Search details payload (UI-facing).
-         */
-        SearchDetailsResponse: {
-            searchData?: components["schemas"]["JSONObject"] | null;
-            validation?: components["schemas"]["JSONObject"] | null;
-            searchConfig?: components["schemas"]["JSONObject"] | null;
-            parameters?: components["schemas"]["JSONArray"] | null;
-            paramMap?: components["schemas"]["JSONObject"] | null;
-            question?: components["schemas"]["JSONObject"] | null;
-        } & {
-            [key: string]: unknown;
         };
         /**
          * SearchResponse
@@ -2630,8 +2412,11 @@ export type components = {
             setAId: string;
             /** Setbid */
             setBId: string;
-            /** Operation */
-            operation: string;
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "intersect" | "union" | "minus";
             /** Name */
             name: string;
         };
@@ -2654,17 +2439,6 @@ export type components = {
             isPortal: boolean;
         };
         /**
-         * StepAnalysisRequest
-         * @description Request to run a step analysis.
-         */
-        StepAnalysisRequest: {
-            /** Analysistype */
-            analysisType: string;
-            parameters?: components["schemas"]["JSONObject"];
-            /** Customname */
-            customName?: string | null;
-        };
-        /**
          * StepAnalysisResponse
          * @description Analysis configuration attached to a step.
          */
@@ -2674,14 +2448,6 @@ export type components = {
             parameters?: components["schemas"]["JSONObject"];
             /** Customname */
             customName?: string | null;
-        };
-        /**
-         * StepAnalysisRunResponse
-         * @description Result of running a step analysis.
-         */
-        StepAnalysisRunResponse: {
-            analysis: components["schemas"]["StepAnalysisResponse"];
-            wdk?: components["schemas"]["JSONObject"] | null;
         };
         /** StepAnalysisSpec */
         "StepAnalysisSpec-Input": {
@@ -2719,18 +2485,6 @@ export type components = {
             };
         };
         /**
-         * StepFilterRequest
-         * @description Request to set or update a step filter.
-         */
-        StepFilterRequest: {
-            value: components["schemas"]["JSONValue"];
-            /**
-             * Disabled
-             * @default false
-             */
-            disabled: boolean;
-        };
-        /**
          * StepFilterResponse
          * @description Filter attached to a step.
          */
@@ -2756,26 +2510,6 @@ export type components = {
             disabled: boolean;
         };
         /**
-         * StepFiltersResponse
-         * @description Container for step filters.
-         */
-        StepFiltersResponse: {
-            /** Filters */
-            filters: components["schemas"]["StepFilterResponse"][];
-        };
-        /**
-         * StepReportRequest
-         * @description Request to run a step report.
-         */
-        StepReportRequest: {
-            /**
-             * Reportname
-             * @default standard
-             */
-            reportName: string;
-            config?: components["schemas"]["JSONObject"];
-        };
-        /**
          * StepReportResponse
          * @description Report configuration attached to a step.
          */
@@ -2786,14 +2520,6 @@ export type components = {
              */
             reportName: string;
             config?: components["schemas"]["JSONObject"];
-        };
-        /**
-         * StepReportRunResponse
-         * @description Result of running a step report.
-         */
-        StepReportRunResponse: {
-            report: components["schemas"]["StepReportResponse"];
-            wdk?: components["schemas"]["JSONObject"] | null;
         };
         /** StepReportSpec */
         "StepReportSpec-Input": {
@@ -2846,6 +2572,8 @@ export type components = {
             analyses?: components["schemas"]["StepAnalysisResponse"][] | null;
             /** Reports */
             reports?: components["schemas"]["StepReportResponse"][] | null;
+            /** Validationerror */
+            validationError?: string | null;
         };
         /** StrategyPlan */
         "StrategyPlan-Input": {
@@ -3004,11 +2732,6 @@ export type components = {
             /** Values */
             values?: string[] | null;
         };
-        /** TokenPayload */
-        TokenPayload: {
-            /** Token */
-            token: string;
-        };
         /**
          * ToolCallResponse
          * @description Tool call information.
@@ -3048,63 +2771,23 @@ export type components = {
             /** Context */
             ctx?: Record<string, never>;
         };
-        /**
-         * WdkStrategySummaryResponse
-         * @description WDK strategy summary for list views (backend-only).
-         */
-        WdkStrategySummaryResponse: {
-            /** Wdkstrategyid */
-            wdkStrategyId: number;
+        /** _ModelItem */
+        _ModelItem: {
+            /** Id */
+            id: string;
             /** Name */
             name: string;
-            /** Siteid */
-            siteId: string;
-            /** Wdkurl */
-            wdkUrl?: string | null;
-            /** Rootstepid */
-            rootStepId?: number | null;
-            /** Issaved */
-            isSaved?: boolean | null;
             /**
-             * Isinternal
-             * @default false
+             * Provider
+             * @enum {string}
              */
-            isInternal: boolean;
-        };
-        /**
-         * CreateStrategyRequest
-         * @description Request to create a WDK strategy from a step tree.
-         */
-        veupath_chatbot__transport__http__routers__experiments__crud__CreateStrategyRequest: {
-            /** Siteid */
-            siteId: string;
-            /**
-             * Recordtype
-             * @default transcript
-             */
-            recordType: string;
-            stepTree: components["schemas"]["JSONValue"];
-            /**
-             * Name
-             * @default Seed strategy
-             */
-            name: string;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-        };
-        /**
-         * CreateStrategyRequest
-         * @description Request to create a strategy.
-         */
-        veupath_chatbot__transport__http__schemas__strategies__CreateStrategyRequest: {
-            /** Name */
-            name: string;
-            /** Siteid */
-            siteId: string;
-            plan: components["schemas"]["StrategyPlan-Input"];
+            provider: "openai" | "anthropic" | "google";
+            /** Model */
+            model: string;
+            /** Supportsreasoning */
+            supportsReasoning: boolean;
+            /** Enabled */
+            enabled: boolean;
         };
     };
     responses: never;
@@ -3177,37 +2860,6 @@ export interface operations {
             };
         };
     };
-    get_site_api_v1_sites__siteId__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                siteId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SiteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_record_types_api_v1_sites__siteId__record_types_get: {
         parameters: {
             query?: never;
@@ -3272,76 +2924,6 @@ export interface operations {
             };
         };
     };
-    get_search_details_api_v1_sites__siteId__searches__recordType___searchName__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                siteId: string;
-                recordType: string;
-                searchName: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SearchDetailsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_dependent_params_api_v1_sites__siteId__searches__recordType___searchName__dependent_params_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                siteId: string;
-                recordType: string;
-                searchName: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DependentParamsRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DependentParamsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     validate_search_params_api_v1_sites__siteId__searches__recordType___searchName__validate_post: {
         parameters: {
             query?: never;
@@ -3379,39 +2961,6 @@ export interface operations {
             };
         };
     };
-    get_param_specs_api_v1_sites__siteId__searches__recordType___searchName__param_specs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                siteId: string;
-                recordType: string;
-                searchName: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ParamSpecResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_param_specs_with_context_api_v1_sites__siteId__searches__recordType___searchName__param_specs_post: {
         parameters: {
             query?: never;
@@ -3436,6 +2985,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParamSpecResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_organisms_api_v1_sites__siteId__organisms_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganismsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3535,9 +3115,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ModelListResponse"];
                 };
             };
         };
@@ -3615,7 +3193,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["veupath_chatbot__transport__http__schemas__strategies__CreateStrategyRequest"];
+                "application/json": components["schemas"]["CreateStrategyRequest"];
             };
         };
         responses: {
@@ -3833,37 +3411,6 @@ export interface operations {
             };
         };
     };
-    list_wdk_strategies_api_v1_strategies_wdk_get: {
-        parameters: {
-            query?: {
-                siteId?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WdkStrategySummaryResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     sync_all_wdk_strategies_api_v1_strategies_sync_wdk_post: {
         parameters: {
             query: {
@@ -3882,436 +3429,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StrategyResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_wdk_strategy_api_v1_strategies_wdk__wdkStrategyId__delete: {
-        parameters: {
-            query: {
-                siteId: string;
-            };
-            header?: never;
-            path: {
-                wdkStrategyId: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_wdk_strategy_api_v1_strategies_wdk__wdkStrategyId__import_post: {
-        parameters: {
-            query: {
-                siteId: string;
-            };
-            header?: never;
-            path: {
-                wdkStrategyId: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StrategyResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sync_strategy_from_wdk_api_v1_strategies__strategyId__sync_wdk_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StrategyResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_step_api_v1_strategies__strategyId__steps__step_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-                step_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StepResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_step_filters_api_v1_strategies__strategyId__steps__step_id__filters_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-                step_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StepFilterResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_available_filters_api_v1_strategies__strategyId__steps__step_id__filters_available_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-                step_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONArray"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_step_filter_api_v1_strategies__strategyId__steps__step_id__filters__filter_name__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-                step_id: string;
-                filter_name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StepFilterRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StepFiltersResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_step_filter_api_v1_strategies__strategyId__steps__step_id__filters__filter_name__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-                step_id: string;
-                filter_name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StepFiltersResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_analysis_types_api_v1_strategies__strategyId__steps__step_id__analysis_types_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-                step_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONArray"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_analysis_type_api_v1_strategies__strategyId__steps__step_id__analysis_types__analysis_type__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-                step_id: string;
-                analysis_type: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_step_analyses_api_v1_strategies__strategyId__steps__step_id__analyses_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-                step_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONArray"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_step_analysis_api_v1_strategies__strategyId__steps__step_id__analyses_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-                step_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StepAnalysisRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StepAnalysisRunResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_step_report_api_v1_strategies__strategyId__steps__step_id__reports_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                strategyId: string;
-                step_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StepReportRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StepReportRunResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4500,7 +3617,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JSONObject"];
+                    "application/json": components["schemas"]["OverlapResult"];
                 };
             };
             /** @description Validation Error */
@@ -4533,7 +3650,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JSONObject"];
+                    "application/json": components["schemas"]["EnrichmentCompareResult"];
                 };
             };
             /** @description Validation Error */
@@ -4671,7 +3788,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JSONObject"];
+                    "application/json": components["schemas"]["CustomEnrichmentResult"];
                 };
             };
             /** @description Validation Error */
@@ -4751,44 +3868,7 @@ export interface operations {
             };
         };
     };
-    step_contributions_api_v1_experiments__experiment_id__step_contributions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                experiment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_experiment_report_api_v1_experiments__experiment_id__report_get: {
+    get_experiment_report_api_v1_experiments__experiment_id__export_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4806,72 +3886,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_strategy_api_v1_experiments_create_strategy_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["veupath_chatbot__transport__http__routers__experiments__crud__CreateStrategyRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_strategy_details_api_v1_experiments_importable_strategies__strategy_id__details_get: {
-        parameters: {
-            query: {
-                siteId: string;
-            };
-            header?: never;
-            path: {
-                strategy_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
                 };
             };
             /** @description Validation Error */
@@ -4956,9 +3970,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["PatchExperimentRequest"];
             };
         };
         responses: {
@@ -5013,44 +4025,13 @@ export interface operations {
             };
         };
     };
-    get_sortable_attributes_api_v1_experiments__experiment_id__results_sortable_attributes_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                experiment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_experiment_records_api_v1_experiments__experiment_id__results_records_get: {
         parameters: {
             query?: {
                 offset?: number;
                 limit?: number;
                 sort?: string | null;
-                dir?: string;
+                dir?: "ASC" | "DESC";
                 attributes?: string | null;
             };
             header?: never;
@@ -5092,42 +4073,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["RecordDetailRequest"];
             };
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_experiment_strategy_api_v1_experiments__experiment_id__strategy_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                experiment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -5160,72 +4108,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_experiment_analysis_types_api_v1_experiments__experiment_id__analyses_types_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                experiment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_experiment_analysis_api_v1_experiments__experiment_id__analyses_run_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                experiment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RunAnalysisRequest"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -5419,39 +4301,6 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["LoginPayload"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthSuccessResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    accept_token_api_v1_veupathdb_auth_token_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["TokenPayload"] | null;
             };
         };
         responses: {
@@ -5795,6 +4644,72 @@ export interface operations {
             };
         };
     };
+    reverse_search_api_v1_gene_sets_reverse_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReverseSearchResultItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ensemble_scoring_api_v1_gene_sets_ensemble_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnsembleScoringRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnsembleScore"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     enrich_gene_set_api_v1_gene_sets__gene_set_id__enrich_post: {
         parameters: {
             query?: never;
@@ -5867,7 +4782,7 @@ export interface operations {
                 offset?: number;
                 limit?: number;
                 sort?: string | null;
-                dir?: string;
+                dir?: "ASC" | "DESC";
                 attributes?: string | null;
                 filterAttribute?: string | null;
                 filterValue?: string | null;
@@ -5879,43 +4794,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_gene_set_record_detail_api_v1_gene_sets__gene_set_id__results_record_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                gene_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -5969,38 +4847,7 @@ export interface operations {
             };
         };
     };
-    get_gene_set_analysis_types_api_v1_gene_sets__gene_set_id__analyses_types_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                gene_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONObject"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_gene_set_analysis_api_v1_gene_sets__gene_set_id__analyses_run_post: {
+    get_gene_set_record_detail_api_v1_gene_sets__gene_set_id__results_record_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6011,7 +4858,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RunGeneSetAnalysisRequest"];
+                "application/json": components["schemas"]["RecordDetailRequest"];
             };
         };
         responses: {
@@ -6035,16 +4882,18 @@ export interface operations {
             };
         };
     };
-    get_gene_set_strategy_api_v1_gene_sets__gene_set_id__strategy_get: {
+    gene_confidence_api_v1_gene_sets_confidence_post: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                gene_set_id: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneConfidenceRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -6052,7 +4901,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JSONObject"];
+                    "application/json": components["schemas"]["GeneConfidenceScoreResponse"][];
                 };
             };
             /** @description Validation Error */

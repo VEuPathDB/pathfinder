@@ -54,33 +54,6 @@ paths:
                   $ref: '#/components/schemas/SiteResponse'
                 type: array
                 title: Response List Sites Api V1 Sites Get
-  /api/v1/sites/{siteId}:
-    get:
-      tags:
-      - sites
-      summary: Get Site
-      description: Get a single site by ID.
-      operationId: get_site_api_v1_sites__siteId__get
-      parameters:
-      - name: siteId
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Siteid
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SiteResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/sites/{siteId}/record-types:
     get:
       tags:
@@ -149,90 +122,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/sites/{siteId}/searches/{recordType}/{searchName}:
-    get:
-      tags:
-      - sites
-      summary: Get Search Details
-      description: Get detailed search configuration with parameters.
-      operationId: get_search_details_api_v1_sites__siteId__searches__recordType___searchName__get
-      parameters:
-      - name: siteId
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Siteid
-      - name: recordType
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Recordtype
-      - name: searchName
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Searchname
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SearchDetailsResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/sites/{siteId}/searches/{recordType}/{searchName}/dependent-params:
-    post:
-      tags:
-      - sites
-      summary: Get Dependent Params
-      description: Get dependent parameter vocabulary values.
-      operationId: get_dependent_params_api_v1_sites__siteId__searches__recordType___searchName__dependent_params_post
-      parameters:
-      - name: siteId
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Siteid
-      - name: recordType
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Recordtype
-      - name: searchName
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Searchname
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DependentParamsRequest'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DependentParamsResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/sites/{siteId}/searches/{recordType}/{searchName}/validate:
     post:
       tags:
@@ -279,47 +168,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/sites/{siteId}/searches/{recordType}/{searchName}/param-specs:
-    get:
-      tags:
-      - sites
-      summary: Get Param Specs
-      description: Return normalized parameter specs for UI consumption.
-      operationId: get_param_specs_api_v1_sites__siteId__searches__recordType___searchName__param_specs_get
-      parameters:
-      - name: siteId
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Siteid
-      - name: recordType
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Recordtype
-      - name: searchName
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Searchname
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ParamSpecResponse'
-                title: Response Get Param Specs Api V1 Sites  Siteid  Searches  Recordtype   Searchname  Param Specs Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
     post:
       tags:
       - sites
@@ -362,6 +210,33 @@ paths:
                   $ref: '#/components/schemas/ParamSpecResponse'
                 title: Response Get Param Specs With Context Api V1 Sites  Siteid  Searches  Recordtype   Searchname  Param
                   Specs Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sites/{siteId}/organisms:
+    get:
+      tags:
+      - sites
+      summary: List Organisms
+      description: Return all available organism names for a site via site-search.
+      operationId: list_organisms_api_v1_sites__siteId__organisms_get
+      parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Siteid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganismsResponse'
         '422':
           description: Validation Error
           content:
@@ -475,9 +350,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                type: object
-                title: Response List Models Api V1 Models Get
+                $ref: '#/components/schemas/ModelListResponse'
   /api/v1/chat:
     post:
       tags:
@@ -555,7 +428,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/veupath_chatbot__transport__http__schemas__strategies__CreateStrategyRequest'
+              $ref: '#/components/schemas/CreateStrategyRequest'
       responses:
         '201':
           description: Successful Response
@@ -746,40 +619,6 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - APIKeyCookie: []
-  /api/v1/strategies/wdk:
-    get:
-      tags:
-      - strategies
-      summary: List Wdk Strategies
-      description: List strategies from VEuPathDB WDK.
-      operationId: list_wdk_strategies_api_v1_strategies_wdk_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: siteId
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Siteid
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/WdkStrategySummaryResponse'
-                title: Response List Wdk Strategies Api V1 Strategies Wdk Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/strategies/sync-wdk:
     post:
       tags:
@@ -806,504 +645,6 @@ paths:
                 items:
                   $ref: '#/components/schemas/StrategyResponse'
                 title: Response Sync All Wdk Strategies Api V1 Strategies Sync Wdk Post
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/wdk/{wdkStrategyId}:
-    delete:
-      tags:
-      - strategies
-      summary: Delete Wdk Strategy
-      description: Delete a strategy from VEuPathDB WDK.
-      operationId: delete_wdk_strategy_api_v1_strategies_wdk__wdkStrategyId__delete
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: wdkStrategyId
-        in: path
-        required: true
-        schema:
-          type: integer
-          title: Wdkstrategyid
-      - name: siteId
-        in: query
-        required: true
-        schema:
-          type: string
-          title: Siteid
-      responses:
-        '204':
-          description: Successful Response
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/wdk/{wdkStrategyId}/import:
-    post:
-      tags:
-      - strategies
-      summary: Import Wdk Strategy
-      description: 'Import a WDK strategy as a local snapshot (CQRS only).
-
-
-        Upserts: if a stream already exists for this WDK strategy ID,
-
-        it is updated rather than creating a duplicate.'
-      operationId: import_wdk_strategy_api_v1_strategies_wdk__wdkStrategyId__import_post
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: wdkStrategyId
-        in: path
-        required: true
-        schema:
-          type: integer
-          title: Wdkstrategyid
-      - name: siteId
-        in: query
-        required: true
-        schema:
-          type: string
-          title: Siteid
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StrategyResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/{strategyId}/sync-wdk:
-    post:
-      tags:
-      - strategies
-      summary: Sync Strategy From Wdk
-      description: Sync local stream projection from VEuPathDB WDK.
-      operationId: sync_strategy_from_wdk_api_v1_strategies__strategyId__sync_wdk_post
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StrategyResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/{strategyId}/steps/{step_id}:
-    get:
-      tags:
-      - steps
-      summary: Get Step
-      description: Get a step from a strategy.
-      operationId: get_step_api_v1_strategies__strategyId__steps__step_id__get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      - name: step_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Step Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StepResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/{strategyId}/steps/{step_id}/filters:
-    get:
-      tags:
-      - steps
-      summary: List Step Filters
-      description: List filters attached to a step.
-      operationId: list_step_filters_api_v1_strategies__strategyId__steps__step_id__filters_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      - name: step_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Step Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StepFilterResponse'
-                title: Response List Step Filters Api V1 Strategies  Strategyid  Steps  Step Id  Filters Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/{strategyId}/steps/{step_id}/filters/available:
-    get:
-      tags:
-      - steps
-      summary: List Available Filters
-      description: List available filters for a step (WDK-backed).
-      operationId: list_available_filters_api_v1_strategies__strategyId__steps__step_id__filters_available_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      - name: step_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Step Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONArray'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/{strategyId}/steps/{step_id}/filters/{filter_name}:
-    put:
-      tags:
-      - steps
-      summary: Set Step Filter
-      description: Add or update a filter for a step.
-      operationId: set_step_filter_api_v1_strategies__strategyId__steps__step_id__filters__filter_name__put
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      - name: step_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Step Id
-      - name: filter_name
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Filter Name
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StepFilterRequest'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StepFiltersResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    delete:
-      tags:
-      - steps
-      summary: Delete Step Filter
-      description: Remove a filter from a step.
-      operationId: delete_step_filter_api_v1_strategies__strategyId__steps__step_id__filters__filter_name__delete
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      - name: step_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Step Id
-      - name: filter_name
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Filter Name
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StepFiltersResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/{strategyId}/steps/{step_id}/analysis-types:
-    get:
-      tags:
-      - steps
-      summary: List Analysis Types
-      description: List available analysis types for a step.
-      operationId: list_analysis_types_api_v1_strategies__strategyId__steps__step_id__analysis_types_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      - name: step_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Step Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONArray'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/{strategyId}/steps/{step_id}/analysis-types/{analysis_type}:
-    get:
-      tags:
-      - steps
-      summary: Get Analysis Type
-      description: Get analysis form metadata for a step.
-      operationId: get_analysis_type_api_v1_strategies__strategyId__steps__step_id__analysis_types__analysis_type__get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      - name: step_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Step Id
-      - name: analysis_type
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Analysis Type
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/{strategyId}/steps/{step_id}/analyses:
-    get:
-      tags:
-      - steps
-      summary: List Step Analyses
-      description: List analysis instances for a step.
-      operationId: list_step_analyses_api_v1_strategies__strategyId__steps__step_id__analyses_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      - name: step_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Step Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONArray'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-    post:
-      tags:
-      - steps
-      summary: Run Step Analysis
-      description: Run a step analysis and attach it locally.
-      operationId: run_step_analysis_api_v1_strategies__strategyId__steps__step_id__analyses_post
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      - name: step_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Step Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StepAnalysisRequest'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StepAnalysisRunResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/strategies/{strategyId}/steps/{step_id}/reports:
-    post:
-      tags:
-      - steps
-      summary: Run Step Report
-      description: Run a report and attach it locally.
-      operationId: run_step_report_api_v1_strategies__strategyId__steps__step_id__reports_post
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Strategyid
-      - name: step_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Step Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StepReportRequest'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StepReportRunResponse'
         '422':
           description: Validation Error
           content:
@@ -1345,7 +686,7 @@ paths:
       tags:
       - experiments
       summary: List Experiments
-      description: List all experiments, optionally filtered by site.
+      description: List experiments owned by the current user, optionally filtered by site.
       operationId: list_experiments_api_v1_experiments__get
       security:
       - APIKeyCookie: []
@@ -1471,7 +812,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JSONObject'
+                $ref: '#/components/schemas/OverlapResult'
         '422':
           description: Validation Error
           content:
@@ -1499,7 +840,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JSONObject'
+                $ref: '#/components/schemas/EnrichmentCompareResult'
         '422':
           description: Validation Error
           content:
@@ -1642,7 +983,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JSONObject'
+                $ref: '#/components/schemas/CustomEnrichmentResult'
         '422':
           description: Validation Error
           content:
@@ -1683,14 +1024,7 @@ paths:
       tags:
       - experiments
       summary: Threshold Sweep
-      description: 'Sweep a numeric parameter across a range and stream metrics as they complete.
-
-
-        Returns an SSE stream with ``sweep_point`` events for each completed point
-
-        and a final ``sweep_complete`` event with all results.  This gives the
-
-        frontend live progress instead of a loading spinner for several minutes.'
+      description: Sweep a parameter across a range and stream metrics as they complete.
       operationId: threshold_sweep_api_v1_experiments__experiment_id__threshold_sweep_post
       security:
       - APIKeyCookie: []
@@ -1719,55 +1053,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/experiments/{experiment_id}/step-contributions:
-    post:
-      tags:
-      - experiments
-      summary: Step Contributions
-      description: 'Analyse per-step contribution to overall result for multi-step experiments.
-
-
-        Evaluates controls against each leaf step individually to show how much
-
-        each step contributes to the final strategy result.'
-      operationId: step_contributions_api_v1_experiments__experiment_id__step_contributions_post
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: experiment_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Experiment Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-              title: Body
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/experiments/{experiment_id}/report:
+  /api/v1/experiments/{experiment_id}/export:
     get:
       tags:
       - experiments
       summary: Get Experiment Report
       description: Generate and return a self-contained HTML report for an experiment.
-      operationId: get_experiment_report_api_v1_experiments__experiment_id__report_get
+      operationId: get_experiment_report_api_v1_experiments__experiment_id__export_get
       security:
       - APIKeyCookie: []
       parameters:
@@ -1783,78 +1075,6 @@ paths:
           content:
             application/json:
               schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/experiments/create-strategy:
-    post:
-      tags:
-      - experiments
-      summary: Create Strategy
-      description: 'Create a WDK strategy from a step tree definition.
-
-
-        Materialises the step tree (creates WDK steps and a strategy) and returns
-
-        the WDK strategy ID so it can be used with ``mode="import"`` experiments.'
-      operationId: create_strategy_api_v1_experiments_create_strategy_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/veupath_chatbot__transport__http__routers__experiments__crud__CreateStrategyRequest'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - APIKeyCookie: []
-  /api/v1/experiments/importable-strategies/{strategy_id}/details:
-    get:
-      tags:
-      - experiments
-      summary: Get Strategy Details
-      description: "Fetch full strategy step tree for import into the multi-step builder.\n\nThe WDK ``GET /strategies/{id}``\
-        \ response includes:\n- ``stepTree``: recursive tree with only ``stepId`` / ``primaryInput`` / ``secondaryInput``\n\
-        - ``steps``: a **map** (object keyed by string step ID) of full step data\n  including ``searchName``, ``searchConfig.parameters``,\
-        \ ``customName``, etc.\n\nThis endpoint flattens the steps map into an array and enriches the\nstep tree so the frontend\
-        \ can display search names and parameters."
-      operationId: get_strategy_details_api_v1_experiments_importable_strategies__strategy_id__details_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: strategy_id
-        in: path
-        required: true
-        schema:
-          type: integer
-          title: Strategy Id
-      - name: siteId
-        in: query
-        required: true
-        schema:
-          type: string
-          title: Siteid
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
         '422':
           description: Validation Error
           content:
@@ -1910,9 +1130,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
-              title: Request Body
+              $ref: '#/components/schemas/PatchExperimentRequest'
       responses:
         '200':
           description: Successful Response
@@ -1979,35 +1197,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/experiments/{experiment_id}/results/sortable-attributes:
-    get:
-      tags:
-      - experiments
-      summary: Get Sortable Attributes
-      description: Return only sortable (numeric) attributes, with suggestions for known score columns.
-      operationId: get_sortable_attributes_api_v1_experiments__experiment_id__results_sortable_attributes_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: experiment_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Experiment Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/experiments/{experiment_id}/results/records:
     get:
       tags:
@@ -2032,6 +1221,7 @@ paths:
         required: false
         schema:
           type: integer
+          minimum: 0
           default: 0
           title: Offset
       - name: limit
@@ -2039,6 +1229,8 @@ paths:
         required: false
         schema:
           type: integer
+          maximum: 500
+          minimum: 1
           default: 50
           title: Limit
       - name: sort
@@ -2053,6 +1245,9 @@ paths:
         in: query
         required: false
         schema:
+          enum:
+          - ASC
+          - DESC
           type: string
           default: ASC
           title: Dir
@@ -2098,38 +1293,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
-              title: Request Body
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/experiments/{experiment_id}/strategy:
-    get:
-      tags:
-      - experiments
-      summary: Get Experiment Strategy
-      description: Get the WDK strategy tree for an experiment.
-      operationId: get_experiment_strategy_api_v1_experiments__experiment_id__strategy_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: experiment_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Experiment Id
+              $ref: '#/components/schemas/RecordDetailRequest'
       responses:
         '200':
           description: Successful Response
@@ -2165,75 +1329,6 @@ paths:
         schema:
           type: string
           title: Experiment Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/experiments/{experiment_id}/analyses/types:
-    get:
-      tags:
-      - experiments
-      summary: Get Experiment Analysis Types
-      description: List available WDK step analysis types for an experiment.
-      operationId: get_experiment_analysis_types_api_v1_experiments__experiment_id__analyses_types_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: experiment_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Experiment Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/experiments/{experiment_id}/analyses/run:
-    post:
-      tags:
-      - experiments
-      summary: Run Experiment Analysis
-      description: 'Create and run a WDK step analysis on the experiment''s step.
-
-
-        Uses the shared service for defaults+merge+run, but adds
-
-        experiment-specific enrichment persistence.'
-      operationId: run_experiment_analysis_api_v1_experiments__experiment_id__analyses_run_post
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: experiment_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Experiment Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RunAnalysisRequest'
       responses:
         '200':
           description: Successful Response
@@ -2441,34 +1536,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/veupathdb/auth/token:
-    post:
-      tags:
-      - veupathdb-auth
-      summary: Accept Token
-      description: Accept a VEuPathDB Authorization token and store it as a cookie.
-      operationId: accept_token_api_v1_veupathdb_auth_token_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              anyOf:
-              - $ref: '#/components/schemas/TokenPayload'
-              - type: 'null'
-              title: Payload
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthSuccessResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/veupathdb/auth/logout:
     post:
       tags:
@@ -2507,7 +1574,14 @@ paths:
       tags:
       - veupathdb-auth
       summary: Auth Status
-      description: Return current VEuPathDB auth status.
+      description: 'Return current VEuPathDB auth status.
+
+
+        In mock mode (``PATHFINDER_CHAT_PROVIDER=mock``), a valid
+
+        ``pathfinder-auth`` cookie is sufficient — the dev-login endpoint
+
+        doesn''t create a VEuPathDB session, so we skip the real WDK call.'
       operationId: auth_status_api_v1_veupathdb_auth_status_get
       responses:
         '200':
@@ -2790,6 +1864,68 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - APIKeyCookie: []
+  /api/v1/gene-sets/reverse-search:
+    post:
+      tags:
+      - gene-sets
+      summary: Reverse Search
+      description: Rank the user's gene sets by how well they recover the given positive genes.
+      operationId: reverse_search_api_v1_gene_sets_reverse_search_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReverseSearchRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ReverseSearchResultItem'
+                type: array
+                title: Response Reverse Search Api V1 Gene Sets Reverse Search Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - APIKeyCookie: []
+  /api/v1/gene-sets/ensemble:
+    post:
+      tags:
+      - gene-sets
+      summary: Ensemble Scoring
+      description: Score genes by frequency across multiple gene sets.
+      operationId: ensemble_scoring_api_v1_gene_sets_ensemble_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnsembleScoringRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/EnsembleScore'
+                type: array
+                title: Response Ensemble Scoring Api V1 Gene Sets Ensemble Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - APIKeyCookie: []
   /api/v1/gene-sets/{gene_set_id}/enrich:
     post:
       tags:
@@ -2878,6 +2014,7 @@ paths:
         required: false
         schema:
           type: integer
+          minimum: 0
           default: 0
           title: Offset
       - name: limit
@@ -2885,6 +2022,8 @@ paths:
         required: false
         schema:
           type: integer
+          maximum: 500
+          minimum: 1
           default: 50
           title: Limit
       - name: sort
@@ -2899,6 +2038,9 @@ paths:
         in: query
         required: false
         schema:
+          enum:
+          - ASC
+          - DESC
           type: string
           default: ASC
           title: Dir
@@ -2926,43 +2068,6 @@ paths:
           - type: string
           - type: 'null'
           title: Filtervalue
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/gene-sets/{gene_set_id}/results/record:
-    post:
-      tags:
-      - gene-sets
-      summary: Get Gene Set Record Detail
-      description: Get a single record's full details by primary key.
-      operationId: get_gene_set_record_detail_api_v1_gene_sets__gene_set_id__results_record_post
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: gene_set_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Gene Set Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-              title: Request Body
       responses:
         '200':
           description: Successful Response
@@ -3011,42 +2116,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/gene-sets/{gene_set_id}/analyses/types:
-    get:
-      tags:
-      - gene-sets
-      summary: Get Gene Set Analysis Types
-      description: List available WDK step analysis types for a gene set.
-      operationId: get_gene_set_analysis_types_api_v1_gene_sets__gene_set_id__analyses_types_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: gene_set_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Gene Set Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JSONObject'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/gene-sets/{gene_set_id}/analyses/run:
+  /api/v1/gene-sets/{gene_set_id}/results/record:
     post:
       tags:
       - gene-sets
-      summary: Run Gene Set Analysis
-      description: Run a WDK step analysis on a gene set.
-      operationId: run_gene_set_analysis_api_v1_gene_sets__gene_set_id__analyses_run_post
+      summary: Get Gene Set Record Detail
+      description: Get a single record's full details by primary key.
+      operationId: get_gene_set_record_detail_api_v1_gene_sets__gene_set_id__results_record_post
       security:
       - APIKeyCookie: []
       parameters:
@@ -3061,7 +2137,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RunGeneSetAnalysisRequest'
+              $ref: '#/components/schemas/RecordDetailRequest'
       responses:
         '200':
           description: Successful Response
@@ -3075,29 +2151,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/gene-sets/{gene_set_id}/strategy:
-    get:
+  /api/v1/gene-sets/confidence:
+    post:
       tags:
       - gene-sets
-      summary: Get Gene Set Strategy
-      description: Get the WDK strategy tree for a gene set.
-      operationId: get_gene_set_strategy_api_v1_gene_sets__gene_set_id__strategy_get
-      security:
-      - APIKeyCookie: []
-      parameters:
-      - name: gene_set_id
-        in: path
+      summary: Gene Confidence
+      description: Compute per-gene composite confidence scores from classification data.
+      operationId: gene_confidence_api_v1_gene_sets_confidence_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneConfidenceRequest'
         required: true
-        schema:
-          type: string
-          title: Gene Set Id
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JSONObject'
+                items:
+                  $ref: '#/components/schemas/GeneConfidenceScoreResponse'
+                type: array
+                title: Response Gene Confidence Api V1 Gene Sets Confidence Post
         '422':
           description: Validation Error
           content:
@@ -3167,16 +2243,11 @@ components:
         success:
           type: boolean
           title: Success
-        authToken:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Authtoken
       type: object
       required:
       - success
       title: AuthSuccessResponse
-      description: Success response, optionally carrying the internal auth token.
+      description: Success response. Auth token is set via httpOnly cookie only.
     BatchOrganismTargetRequest:
       properties:
         organism:
@@ -3317,6 +2388,10 @@ components:
           title: Downstream
         strand:
           type: string
+          enum:
+          - same
+          - opposite
+          - both
           title: Strand
           default: both
       type: object
@@ -3657,6 +2732,13 @@ components:
           - type: string
           - type: 'null'
           title: Parentexperimentid
+        targetGeneIds:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Targetgeneids
       type: object
       required:
       - siteId
@@ -3675,6 +2757,7 @@ components:
         name:
           type: string
           maxLength: 200
+          minLength: 1
           title: Name
         siteId:
           type: string
@@ -3716,7 +2799,8 @@ components:
           title: Recordtype
         parameters:
           anyOf:
-          - additionalProperties: true
+          - additionalProperties:
+              type: string
             type: object
           - type: 'null'
           title: Parameters
@@ -3727,6 +2811,25 @@ components:
       - geneIds
       title: CreateGeneSetRequest
       description: Create a gene set from IDs, strategy, or upload.
+    CreateStrategyRequest:
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Name
+        siteId:
+          type: string
+          title: Siteid
+        plan:
+          $ref: '#/components/schemas/StrategyPlan-Input'
+      type: object
+      required:
+      - name
+      - siteId
+      - plan
+      title: CreateStrategyRequest
+      description: Request to create a strategy.
     CustomEnrichRequest:
       properties:
         geneSetName:
@@ -3745,22 +2848,50 @@ components:
       - geneIds
       title: CustomEnrichRequest
       description: Request to run a custom gene-set enrichment test.
-    DependentParamsRequest:
+    CustomEnrichmentResult:
       properties:
-        parameterName:
+        geneSetName:
           type: string
-          title: Parametername
-        contextValues:
-          $ref: '#/components/schemas/JSONObject'
+          title: Genesetname
+        geneSetSize:
+          type: integer
+          title: Genesetsize
+        overlapCount:
+          type: integer
+          title: Overlapcount
+        overlapGenes:
+          items:
+            type: string
+          type: array
+          title: Overlapgenes
+        backgroundSize:
+          type: integer
+          title: Backgroundsize
+        tpCount:
+          type: integer
+          title: Tpcount
+        foldEnrichment:
+          type: number
+          title: Foldenrichment
+        pValue:
+          type: number
+          title: Pvalue
+        oddsRatio:
+          type: number
+          title: Oddsratio
       type: object
       required:
-      - parameterName
-      title: DependentParamsRequest
-      description: Dependent parameter values request.
-    DependentParamsResponse:
-      $ref: '#/components/schemas/JSONArray'
-      title: DependentParamsResponse
-      description: Dependent parameter values response.
+      - geneSetName
+      - geneSetSize
+      - overlapCount
+      - overlapGenes
+      - backgroundSize
+      - tpCount
+      - foldEnrichment
+      - pValue
+      - oddsRatio
+      title: CustomEnrichmentResult
+      description: Return shape of :func:`run_custom_enrichment`.
     EnrichmentCompareRequest:
       properties:
         experimentIds:
@@ -3779,6 +2910,211 @@ components:
       - experimentIds
       title: EnrichmentCompareRequest
       description: Request to compare enrichment results across experiments.
+    EnrichmentCompareResult:
+      properties:
+        experimentIds:
+          items:
+            type: string
+          type: array
+          title: Experimentids
+        experimentLabels:
+          additionalProperties:
+            type: string
+          type: object
+          title: Experimentlabels
+        rows:
+          items:
+            $ref: '#/components/schemas/EnrichmentRow'
+          type: array
+          title: Rows
+        totalTerms:
+          type: integer
+          title: Totalterms
+      type: object
+      required:
+      - experimentIds
+      - experimentLabels
+      - rows
+      - totalTerms
+      title: EnrichmentCompareResult
+      description: Return shape of :func:`compare_enrichment_across`.
+    EnrichmentRow:
+      properties:
+        termKey:
+          type: string
+          title: Termkey
+        termName:
+          type: string
+          title: Termname
+        analysisType:
+          type: string
+          title: Analysistype
+        scores:
+          additionalProperties:
+            $ref: '#/components/schemas/JSONValue'
+          type: object
+          title: Scores
+        maxScore:
+          type: number
+          title: Maxscore
+        experimentCount:
+          type: integer
+          title: Experimentcount
+      type: object
+      required:
+      - termKey
+      - termName
+      - analysisType
+      - scores
+      - maxScore
+      - experimentCount
+      title: EnrichmentRow
+      description: Shape of one term row in the enrichment comparison.
+    EnsembleScore:
+      properties:
+        geneId:
+          type: string
+          title: Geneid
+        frequency:
+          type: number
+          title: Frequency
+        count:
+          type: integer
+          title: Count
+        total:
+          type: integer
+          title: Total
+        inPositives:
+          type: boolean
+          title: Inpositives
+      type: object
+      required:
+      - geneId
+      - frequency
+      - count
+      - total
+      - inPositives
+      title: EnsembleScore
+      description: A single gene's ensemble score.
+    EnsembleScoringRequest:
+      properties:
+        geneSetIds:
+          items:
+            type: string
+          type: array
+          minItems: 2
+          title: Genesetids
+        positiveControls:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Positivecontrols
+      type: object
+      required:
+      - geneSetIds
+      title: EnsembleScoringRequest
+      description: Compute ensemble frequency scores across multiple gene sets.
+    GeneConfidenceRequest:
+      properties:
+        tpIds:
+          items:
+            type: string
+          type: array
+          title: Tpids
+        fpIds:
+          items:
+            type: string
+          type: array
+          title: Fpids
+        fnIds:
+          items:
+            type: string
+          type: array
+          title: Fnids
+        tnIds:
+          items:
+            type: string
+          type: array
+          title: Tnids
+        ensembleScores:
+          anyOf:
+          - additionalProperties:
+              type: number
+            type: object
+          - type: 'null'
+          title: Ensemblescores
+        enrichmentGeneCounts:
+          anyOf:
+          - additionalProperties:
+              type: integer
+            type: object
+          - type: 'null'
+          title: Enrichmentgenecounts
+        maxEnrichmentTerms:
+          type: integer
+          minimum: 1.0
+          title: Maxenrichmentterms
+          default: 1
+      type: object
+      required:
+      - tpIds
+      - fpIds
+      - fnIds
+      - tnIds
+      title: GeneConfidenceRequest
+      description: Compute per-gene confidence scores from classification data.
+    GeneConfidenceScoreResponse:
+      properties:
+        geneId:
+          type: string
+          title: Geneid
+        compositeScore:
+          type: number
+          title: Compositescore
+        classificationScore:
+          type: number
+          title: Classificationscore
+        ensembleScore:
+          type: number
+          title: Ensemblescore
+        enrichmentScore:
+          type: number
+          title: Enrichmentscore
+      type: object
+      required:
+      - geneId
+      - compositeScore
+      - classificationScore
+      - ensembleScore
+      - enrichmentScore
+      title: GeneConfidenceScoreResponse
+      description: Single gene confidence score in the response.
+    GeneMembership:
+      properties:
+        geneId:
+          type: string
+          title: Geneid
+        foundIn:
+          type: integer
+          title: Foundin
+        totalExperiments:
+          type: integer
+          title: Totalexperiments
+        experiments:
+          items:
+            type: string
+          type: array
+          title: Experiments
+      type: object
+      required:
+      - geneId
+      - foundIn
+      - totalExperiments
+      - experiments
+      title: GeneMembership
+      description: Shape of one gene membership entry.
     GeneResolveRequest:
       properties:
         geneIds:
@@ -3939,7 +3275,8 @@ components:
           title: Recordtype
         parameters:
           anyOf:
-          - additionalProperties: true
+          - additionalProperties:
+              type: string
             type: object
           - type: 'null'
           title: Parameters
@@ -3951,6 +3288,10 @@ components:
         operation:
           anyOf:
           - type: string
+            enum:
+            - intersect
+            - union
+            - minus
           - type: 'null'
           title: Operation
         createdAt:
@@ -4069,6 +3410,30 @@ components:
       - timestamp
       title: MessageResponse
       description: Chat message.
+    ModelListResponse:
+      properties:
+        models:
+          items:
+            $ref: '#/components/schemas/_ModelItem'
+          type: array
+          title: Models
+        default:
+          type: string
+          title: Default
+        defaultReasoningEffort:
+          type: string
+          enum:
+          - none
+          - low
+          - medium
+          - high
+          title: Defaultreasoningeffort
+      type: object
+      required:
+      - models
+      - default
+      - defaultReasoningEffort
+      title: ModelListResponse
     OpenStrategyRequest:
       properties:
         strategyId:
@@ -4156,6 +3521,18 @@ components:
       - type
       title: OptimizationSpecRequest
       description: Describes a single parameter to optimise.
+    OrganismsResponse:
+      properties:
+        organisms:
+          items:
+            type: string
+          type: array
+          title: Organisms
+      type: object
+      required:
+      - organisms
+      title: OrganismsResponse
+      description: Available organisms for a site.
     OverlapRequest:
       properties:
         experimentIds:
@@ -4169,6 +3546,112 @@ components:
       - experimentIds
       title: OverlapRequest
       description: Request to compute pairwise gene set overlap between experiments.
+    OverlapResult:
+      properties:
+        experimentIds:
+          items:
+            type: string
+          type: array
+          title: Experimentids
+        experimentLabels:
+          additionalProperties:
+            type: string
+          type: object
+          title: Experimentlabels
+        pairwise:
+          items:
+            $ref: '#/components/schemas/PairwiseOverlap'
+          type: array
+          title: Pairwise
+        perExperiment:
+          items:
+            $ref: '#/components/schemas/PerExperimentSummary'
+          type: array
+          title: Perexperiment
+        universalGenes:
+          items:
+            type: string
+          type: array
+          title: Universalgenes
+        totalUniqueGenes:
+          type: integer
+          title: Totaluniquegenes
+        geneMembership:
+          items:
+            $ref: '#/components/schemas/GeneMembership'
+          type: array
+          title: Genemembership
+      type: object
+      required:
+      - experimentIds
+      - experimentLabels
+      - pairwise
+      - perExperiment
+      - universalGenes
+      - totalUniqueGenes
+      - geneMembership
+      title: OverlapResult
+      description: Return shape of :func:`compute_gene_set_overlap`.
+    PairwiseOverlap:
+      properties:
+        experimentA:
+          type: string
+          title: Experimenta
+        experimentB:
+          type: string
+          title: Experimentb
+        labelA:
+          type: string
+          title: Labela
+        labelB:
+          type: string
+          title: Labelb
+        sizeA:
+          type: integer
+          title: Sizea
+        sizeB:
+          type: integer
+          title: Sizeb
+        intersection:
+          type: integer
+          title: Intersection
+        union:
+          type: integer
+          title: Union
+        jaccard:
+          type: number
+          title: Jaccard
+        sharedGenes:
+          items:
+            type: string
+          type: array
+          title: Sharedgenes
+        uniqueA:
+          items:
+            type: string
+          type: array
+          title: Uniquea
+        uniqueB:
+          items:
+            type: string
+          type: array
+          title: Uniqueb
+      type: object
+      required:
+      - experimentA
+      - experimentB
+      - labelA
+      - labelB
+      - sizeA
+      - sizeB
+      - intersection
+      - union
+      - jaccard
+      - sharedGenes
+      - uniqueA
+      - uniqueB
+      title: PairwiseOverlap
+      description: Shape of one pairwise comparison entry.
     ParamSpecResponse:
       properties:
         name:
@@ -4250,6 +3733,43 @@ components:
       type: object
       title: ParamSpecsRequest
       description: Parameter specs request (optionally contextual).
+    PatchExperimentRequest:
+      properties:
+        notes:
+          anyOf:
+          - type: string
+            maxLength: 5000
+          - type: 'null'
+          title: Notes
+      type: object
+      title: PatchExperimentRequest
+      description: Request body for PATCH /experiments/{experiment_id}.
+    PerExperimentSummary:
+      properties:
+        experimentId:
+          type: string
+          title: Experimentid
+        label:
+          type: string
+          title: Label
+        totalGenes:
+          type: integer
+          title: Totalgenes
+        uniqueGenes:
+          type: integer
+          title: Uniquegenes
+        sharedGenes:
+          type: integer
+          title: Sharedgenes
+      type: object
+      required:
+      - experimentId
+      - label
+      - totalGenes
+      - uniqueGenes
+      - sharedGenes
+      title: PerExperimentSummary
+      description: Shape of one per-experiment summary entry.
     PlanMetadata:
       properties:
         name:
@@ -4438,6 +3958,33 @@ components:
       required:
       - plan
       title: PlanNormalizeResponse
+    PrimaryKeyPart:
+      properties:
+        name:
+          type: string
+          title: Name
+        value:
+          type: string
+          title: Value
+      type: object
+      required:
+      - name
+      - value
+      title: PrimaryKeyPart
+      description: A single part of a composite WDK primary key.
+    RecordDetailRequest:
+      properties:
+        primaryKey:
+          items:
+            $ref: '#/components/schemas/PrimaryKeyPart'
+          type: array
+          minItems: 1
+          title: Primarykey
+      type: object
+      required:
+      - primaryKey
+      title: RecordDetailRequest
+      description: Request to fetch a single record by primary key.
     RecordTypeResponse:
       properties:
         name:
@@ -4518,19 +4065,69 @@ components:
       - geneId
       title: ResolvedGeneResponse
       description: A resolved gene record.
-    RunAnalysisRequest:
+    ReverseSearchRequest:
       properties:
-        analysisName:
+        positiveGeneIds:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Positivegeneids
+        negativeGeneIds:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Negativegeneids
+        siteId:
           type: string
-          minLength: 1
-          title: Analysisname
-        parameters:
-          $ref: '#/components/schemas/JSONObject'
+          title: Siteid
       type: object
       required:
-      - analysisName
-      title: RunAnalysisRequest
-      description: Request to run a WDK step analysis.
+      - positiveGeneIds
+      - siteId
+      title: ReverseSearchRequest
+      description: Rank user's gene sets by recall of given positive genes.
+    ReverseSearchResultItem:
+      properties:
+        geneSetId:
+          type: string
+          title: Genesetid
+        name:
+          type: string
+          title: Name
+        searchName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Searchname
+        recall:
+          type: number
+          title: Recall
+        precision:
+          type: number
+          title: Precision
+        f1:
+          type: number
+          title: F1
+        resultCount:
+          type: integer
+          title: Resultcount
+        overlapCount:
+          type: integer
+          title: Overlapcount
+      type: object
+      required:
+      - geneSetId
+      - name
+      - recall
+      - precision
+      - f1
+      - resultCount
+      - overlapCount
+      title: ReverseSearchResultItem
+      description: A single ranked gene set in reverse search results.
     RunCrossValidationRequest:
       properties:
         kFolds:
@@ -4560,50 +4157,6 @@ components:
       - enrichmentTypes
       title: RunEnrichmentRequest
       description: Request to run enrichment on an existing experiment.
-    RunGeneSetAnalysisRequest:
-      properties:
-        analysisName:
-          type: string
-          title: Analysisname
-        parameters:
-          additionalProperties: true
-          type: object
-          title: Parameters
-      type: object
-      required:
-      - analysisName
-      title: RunGeneSetAnalysisRequest
-      description: Run a WDK step analysis on a gene set.
-    SearchDetailsResponse:
-      properties:
-        searchData:
-          anyOf:
-          - $ref: '#/components/schemas/JSONObject'
-          - type: 'null'
-        validation:
-          anyOf:
-          - $ref: '#/components/schemas/JSONObject'
-          - type: 'null'
-        searchConfig:
-          anyOf:
-          - $ref: '#/components/schemas/JSONObject'
-          - type: 'null'
-        parameters:
-          anyOf:
-          - $ref: '#/components/schemas/JSONArray'
-          - type: 'null'
-        paramMap:
-          anyOf:
-          - $ref: '#/components/schemas/JSONObject'
-          - type: 'null'
-        question:
-          anyOf:
-          - $ref: '#/components/schemas/JSONObject'
-          - type: 'null'
-      additionalProperties: true
-      type: object
-      title: SearchDetailsResponse
-      description: Search details payload (UI-facing).
     SearchResponse:
       properties:
         name:
@@ -4682,10 +4235,15 @@ components:
           title: Setbid
         operation:
           type: string
+          enum:
+          - intersect
+          - union
+          - minus
           title: Operation
         name:
           type: string
           maxLength: 200
+          minLength: 1
           title: Name
       type: object
       required:
@@ -4725,23 +4283,6 @@ components:
       - isPortal
       title: SiteResponse
       description: VEuPathDB site information.
-    StepAnalysisRequest:
-      properties:
-        analysisType:
-          type: string
-          title: Analysistype
-        parameters:
-          $ref: '#/components/schemas/JSONObject'
-        customName:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Customname
-      type: object
-      required:
-      - analysisType
-      title: StepAnalysisRequest
-      description: Request to run a step analysis.
     StepAnalysisResponse:
       properties:
         analysisType:
@@ -4759,19 +4300,6 @@ components:
       - analysisType
       title: StepAnalysisResponse
       description: Analysis configuration attached to a step.
-    StepAnalysisRunResponse:
-      properties:
-        analysis:
-          $ref: '#/components/schemas/StepAnalysisResponse'
-        wdk:
-          anyOf:
-          - $ref: '#/components/schemas/JSONObject'
-          - type: 'null'
-      type: object
-      required:
-      - analysis
-      title: StepAnalysisRunResponse
-      description: Result of running a step analysis.
     StepAnalysisSpec-Input:
       properties:
         analysisType:
@@ -4831,19 +4359,6 @@ components:
       - counts
       title: StepCountsResponse
       description: Step counts keyed by local step ID.
-    StepFilterRequest:
-      properties:
-        value:
-          $ref: '#/components/schemas/JSONValue'
-        disabled:
-          type: boolean
-          title: Disabled
-          default: false
-      type: object
-      required:
-      - value
-      title: StepFilterRequest
-      description: Request to set or update a step filter.
     StepFilterResponse:
       properties:
         name:
@@ -4877,29 +4392,6 @@ components:
       - name
       - value
       title: StepFilterSpec
-    StepFiltersResponse:
-      properties:
-        filters:
-          items:
-            $ref: '#/components/schemas/StepFilterResponse'
-          type: array
-          title: Filters
-      type: object
-      required:
-      - filters
-      title: StepFiltersResponse
-      description: Container for step filters.
-    StepReportRequest:
-      properties:
-        reportName:
-          type: string
-          title: Reportname
-          default: standard
-        config:
-          $ref: '#/components/schemas/JSONObject'
-      type: object
-      title: StepReportRequest
-      description: Request to run a step report.
     StepReportResponse:
       properties:
         reportName:
@@ -4911,19 +4403,6 @@ components:
       type: object
       title: StepReportResponse
       description: Report configuration attached to a step.
-    StepReportRunResponse:
-      properties:
-        report:
-          $ref: '#/components/schemas/StepReportResponse'
-        wdk:
-          anyOf:
-          - $ref: '#/components/schemas/JSONObject'
-          - type: 'null'
-      type: object
-      required:
-      - report
-      title: StepReportRunResponse
-      description: Result of running a step report.
     StepReportSpec-Input:
       properties:
         reportName:
@@ -5021,6 +4500,11 @@ components:
             type: array
           - type: 'null'
           title: Reports
+        validationError:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Validationerror
       type: object
       required:
       - id
@@ -5294,15 +4778,6 @@ components:
       - parameterName
       title: ThresholdSweepRequest
       description: Request to sweep a parameter across a range (numeric) or set of values (categorical).
-    TokenPayload:
-      properties:
-        token:
-          type: string
-          title: Token
-      type: object
-      required:
-      - token
-      title: TokenPayload
     ToolCallResponse:
       properties:
         id:
@@ -5377,89 +4852,39 @@ components:
       - msg
       - type
       title: ValidationError
-    WdkStrategySummaryResponse:
+    _ModelItem:
       properties:
-        wdkStrategyId:
-          type: integer
-          title: Wdkstrategyid
+        id:
+          type: string
+          title: Id
         name:
           type: string
           title: Name
-        siteId:
+        provider:
           type: string
-          title: Siteid
-        wdkUrl:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Wdkurl
-        rootStepId:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Rootstepid
-        isSaved:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: Issaved
-        isInternal:
+          enum:
+          - openai
+          - anthropic
+          - google
+          title: Provider
+        model:
+          type: string
+          title: Model
+        supportsReasoning:
           type: boolean
-          title: Isinternal
-          default: false
+          title: Supportsreasoning
+        enabled:
+          type: boolean
+          title: Enabled
       type: object
       required:
-      - wdkStrategyId
+      - id
       - name
-      - siteId
-      title: WdkStrategySummaryResponse
-      description: WDK strategy summary for list views (backend-only).
-    veupath_chatbot__transport__http__routers__experiments__crud__CreateStrategyRequest:
-      properties:
-        siteId:
-          type: string
-          title: Siteid
-        recordType:
-          type: string
-          title: Recordtype
-          default: transcript
-        stepTree:
-          $ref: '#/components/schemas/JSONValue'
-        name:
-          type: string
-          maxLength: 200
-          title: Name
-          default: Seed strategy
-        description:
-          type: string
-          maxLength: 2000
-          title: Description
-          default: ''
-      type: object
-      required:
-      - siteId
-      - stepTree
-      title: CreateStrategyRequest
-      description: Request to create a WDK strategy from a step tree.
-    veupath_chatbot__transport__http__schemas__strategies__CreateStrategyRequest:
-      properties:
-        name:
-          type: string
-          maxLength: 255
-          minLength: 1
-          title: Name
-        siteId:
-          type: string
-          title: Siteid
-        plan:
-          $ref: '#/components/schemas/StrategyPlan-Input'
-      type: object
-      required:
-      - name
-      - siteId
-      - plan
-      title: CreateStrategyRequest
-      description: Request to create a strategy.
+      - provider
+      - model
+      - supportsReasoning
+      - enabled
+      title: _ModelItem
   securitySchemes:
     APIKeyCookie:
       type: apiKey
