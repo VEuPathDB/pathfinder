@@ -94,5 +94,8 @@ class StrategyStepOps(StrategyToolsHelpers):
         if result.error is not None:
             return result.error
 
+        if result.step is None:
+            return self._graph_not_found(graph_id)
+
         response = self._serialize_step(graph, result.step)
         return self._with_full_graph(graph, response)

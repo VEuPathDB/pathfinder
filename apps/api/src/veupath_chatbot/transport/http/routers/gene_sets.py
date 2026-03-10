@@ -4,7 +4,7 @@ Thin transport layer: parse HTTP request, call service, return HTTP response.
 All business logic lives in ``services.gene_sets.operations``.
 """
 
-from typing import Literal, cast
+from typing import Literal, cast, get_args
 
 from fastapi import APIRouter, Query, Request
 
@@ -41,6 +41,7 @@ from veupath_chatbot.transport.http.schemas.gene_sets import (
     GeneSetResponse,
     ReverseSearchRequest,
     ReverseSearchResultItem,
+    SetOperation,
     SetOperationRequest,
 )
 from veupath_chatbot.transport.http.schemas.steps import RecordDetailRequest
@@ -59,6 +60,10 @@ def _svc() -> GeneSetService:
 
 
 def _to_response(gs: GeneSet) -> GeneSetResponse:
+    valid_ops = get_args(SetOperation)
+    operation: SetOperation | None = (
+        cast(SetOperation, gs.operation) if gs.operation in valid_ops else None
+    )
     return GeneSetResponse(
         id=gs.id,
         siteId=gs.site_id,
@@ -72,7 +77,7 @@ def _to_response(gs: GeneSet) -> GeneSetResponse:
         recordType=gs.record_type,
         parameters=gs.parameters,
         parentSetIds=gs.parent_set_ids,
-        operation=gs.operation,
+        operation=operation,
         createdAt=gs.created_at.isoformat(),
         stepCount=gs.step_count,
     )
@@ -316,13 +321,13 @@ async def get_gene_set_records(
         records = answer.get("records", [])
         if not isinstance(records, list):
             records = []
-        filtered = [
-            r
-            for r in records
-            if isinstance(r, dict)
-            and isinstance(r.get("attributes"), dict)
-            and r["attributes"].get(filter_attribute) == filter_value
-        ]
+        filtered: list[JSONValue] = []
+        for r in records:
+            if not isinstance(r, dict):
+                continue
+            attrs = r.get("attributes")
+            if isinstance(attrs, dict) and attrs.get(filter_attribute) == filter_value:
+                filtered.append(r)
         page = filtered[offset : offset + limit]
         return {
             "records": cast(JSONValue, page),
@@ -331,8 +336,8 @@ async def get_gene_set_records(
                 "displayTotalCount": len(filtered),
                 "responseCount": len(page),
                 "pagination": {"offset": offset, "numRecords": limit},
-                "attributes": attr_list or [],
-                "tables": [],
+                "attributes": cast(JSONValue, attr_list or []),
+                "tables": cast(JSONValue, []),
             },
         }
 

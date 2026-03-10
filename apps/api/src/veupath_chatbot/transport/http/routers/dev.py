@@ -16,15 +16,19 @@ def _is_mock_provider() -> bool:
 
 
 @router.post("/login")
-async def dev_login(user_repo: UserRepo) -> JSONResponse:
+async def dev_login(user_repo: UserRepo, user_id: str | None = None) -> JSONResponse:
     """Create a test user and return a valid auth token.
 
     Only available when ``PATHFINDER_CHAT_PROVIDER=mock`` (e2e / local dev).
+
+    Pass ``?user_id=worker-0`` to create isolated users per Playwright
+    worker so parallel tests don't share data.
     """
     if not _is_mock_provider():
         raise ForbiddenError(title="Only available in mock mode")
 
-    user = await user_repo.get_or_create_by_external_id("e2e@test.local")
+    external_id = f"e2e-{user_id}@test.local" if user_id else "e2e@test.local"
+    user = await user_repo.get_or_create_by_external_id(external_id)
     auth_token = create_user_token(user.id)
 
     resp = JSONResponse({"authToken": auth_token, "userId": str(user.id)})

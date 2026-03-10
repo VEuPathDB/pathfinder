@@ -4,8 +4,6 @@ Provides initialization, parameter normalization, and session management
 that all mixin classes depend on.
 """
 
-from typing import cast
-
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 from veupath_chatbot.integrations.veupathdb.param_utils import normalize_param_value
 from veupath_chatbot.integrations.veupathdb.strategy_api.helpers import (
@@ -94,4 +92,4 @@ class StrategyAPIBase:
             f"/users/{self.user_id}/steps/{step_id}/reports/standard",
             json={"reportConfig": report_config},
         )
-        return cast(JSONObject, result) if isinstance(result, dict) else {}
+        return result if isinstance(result, dict) else {}

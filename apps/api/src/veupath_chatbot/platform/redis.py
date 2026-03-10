@@ -1,5 +1,7 @@
 """Redis connection management for event sourcing."""
 
+from collections.abc import Awaitable
+
 from redis.asyncio import Redis
 
 from veupath_chatbot.platform.config import get_settings
@@ -18,7 +20,9 @@ async def init_redis() -> Redis:
         settings.redis_url,
         decode_responses=False,
     )
-    await _redis.ping()
+    result = _redis.ping()
+    if isinstance(result, Awaitable):
+        await result
     logger.info("Redis connected", url=settings.redis_url)
     return _redis
 

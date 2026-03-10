@@ -160,7 +160,7 @@ class QdrantStore:
                     break
             else:
                 # Only create PointStruct if vector is valid
-                payload: dict[str, object] = {}
+                payload: JSONObject = {}
                 if isinstance(payload_value, dict):
                     payload = {str(k): v for k, v in payload_value.items()}
                 q_points.append(
@@ -195,9 +195,9 @@ class QdrantStore:
         p = res[0]
         # PathFinder uses simple dense vectors (OpenAI embeddings).
         # p.vector is either None or list[float].
-        vector: list[float] | None = None
+        vector: JSONValue = None
         if isinstance(p.vector, list):
-            vector = [float(v) for v in p.vector]
+            vector = [float(v) for v in p.vector if isinstance(v, (int, float))]
         return {
             "id": str(p.id),
             "payload": p.payload or {},

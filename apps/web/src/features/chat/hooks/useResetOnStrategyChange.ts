@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Message, Strategy } from "@pathfinder/shared";
 import type { StreamingSession } from "@/features/chat/streaming/StreamingSession";
+import { useSessionStore } from "@/state/useSessionStore";
 
 export function useResetOnStrategyChange(args: {
   strategyId: string | null;
@@ -28,10 +29,12 @@ export function useResetOnStrategyChange(args: {
     // Only act when the strategy actually changes — not on isStreaming toggles.
     if (!strategyId || !previousStrategyId || previousStrategyId === strategyId) return;
 
-    console.log("[ResetOnStrategyChange] RESETTING messages", {
-      from: previousStrategyId,
-      to: strategyId,
-    });
+    // Don't reset while actively streaming — the strategy change was caused
+    // by our own stream creating a new conversation (auto-create → send race).
+    // Sidebar navigation stops streaming BEFORE setting the new strategyId,
+    // so intentional user switches will still reset correctly.
+    if (useSessionStore.getState().chatIsStreaming) return;
+
     if (stopStreaming) stopStreaming();
     setIsStreaming(false);
     resetThinking();

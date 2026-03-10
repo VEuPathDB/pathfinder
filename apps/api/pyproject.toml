@@ -88,7 +88,7 @@ mypy_path = "stubs"
 warn_return_any = true
 warn_unused_ignores = true
 disable_error_code = ["import-untyped", "untyped-decorator"]
-exclude = ["scripts/", "docs/"]
+exclude = ["scripts/", "docs/", "src/veupath_chatbot/tests/"]
 
 [[tool.mypy.overrides]]
 module = "veupath_chatbot.tests.*"

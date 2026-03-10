@@ -36,7 +36,6 @@ def as_json_object(value: JSONValue) -> JSONObject:
     """
     if not isinstance(value, dict):
         raise TypeError(f"Expected dict, got {type(value)}")
-    # After isinstance check, value is known to be dict[str, JSONValue]
     return value
 
 
@@ -49,5 +48,4 @@ def as_json_array(value: JSONValue) -> JSONArray:
     """
     if not isinstance(value, list):
         raise TypeError(f"Expected list, got {type(value)}")
-    # After isinstance check, value is known to be list[JSONValue]
     return value

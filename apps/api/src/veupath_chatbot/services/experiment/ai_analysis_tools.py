@@ -10,7 +10,7 @@ so that the services layer never needs a static import from
 is injected at startup.
 """
 
-from typing import Annotated, cast
+from typing import Annotated, Any, cast
 
 from kani import AIParam, ChatMessage, Kani, ai_function
 from kani.engines.base import BaseEngine
@@ -290,7 +290,10 @@ class ExperimentAnalysisAgent(RefinementToolsMixin, _AnalysisToolsMixin, Kani):
         # If the experiment agent base was configured, delegate to its
         # __init__ (which sets up catalog tools, research tools, etc.).
         if _experiment_agent_cls is not None and _experiment_agent_cls is not Kani:
-            _experiment_agent_cls.__init__(
+            # Dynamic dispatch: the actual class (ExperimentAssistantAgent)
+            # accepts site_id, but the static type is type[Kani].
+            init_fn = cast(Any, _experiment_agent_cls.__init__)
+            init_fn(
                 self,
                 engine=engine,
                 site_id=site_id,

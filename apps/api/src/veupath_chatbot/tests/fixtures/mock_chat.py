@@ -12,9 +12,41 @@ from uuid import uuid4
 
 from veupath_chatbot.platform.types import JSONObject
 
+# Real WDK organism values per VEuPathDB site (verified against live APIs).
+_SITE_ORGANISMS: dict[str, str] = {
+    "plasmodb": "Plasmodium falciparum 3D7",
+    "toxodb": "Toxoplasma gondii ME49",
+    "tritrypdb": "Leishmania major strain Friedlin",
+    "cryptodb": "Cryptosporidium parvum Iowa II",
+    "fungidb": "Aspergillus fumigatus Af293",
+}
+
+
+def _build_real_plan(site_id: str) -> JSONObject:
+    """Build a planning artifact plan with *real* WDK search names.
+
+    Uses ``GenesByTaxon`` which is available on every VEuPathDB site.
+    The organism parameter matches the site so the strategy can be
+    built against the real WDK API.
+    """
+    organism = _SITE_ORGANISMS.get(site_id, _SITE_ORGANISMS["plasmodb"])
+    return {
+        "recordType": "gene",
+        "root": {
+            "id": "step_1",
+            "searchName": "GenesByTaxon",
+            "displayName": f"All {organism} genes",
+            "parameters": {"organism": f'["{organism}"]'},
+        },
+        "metadata": {"name": f"{organism} gene search"},
+    }
+
 
 async def mock_stream_chat(
-    *, message: str, strategy_id: str | None = None
+    *,
+    message: str,
+    strategy_id: str | None = None,
+    site_id: str | None = None,
 ) -> AsyncIterator[JSONObject]:
     """Deterministic, offline-friendly stream for tests/E2E runs.
 
@@ -32,6 +64,8 @@ async def mock_stream_chat(
         yield {"type": "assistant_delta", "data": {"messageId": message_id, "delta": d}}
 
     msg_lower = message.lower()
+    effective_site = site_id or "plasmodb"
+
     if "artifact graph" in msg_lower:
         now = datetime.now(UTC).isoformat()
         yield {
@@ -43,28 +77,14 @@ async def mock_stream_chat(
                     "summaryMarkdown": "A deterministic multi-step artifact for E2E graph interaction tests.",
                     "assumptions": [],
                     "parameters": {},
-                    "proposedStrategyPlan": {
-                        "recordType": "gene",
-                        "root": {
-                            "id": "mock_transform_1",
-                            "searchName": "mock_transform",
-                            "displayName": "Mock transform step",
-                            "parameters": {},
-                            "primaryInput": {
-                                "id": "mock_search_1",
-                                "searchName": "mock_search",
-                                "displayName": "Mock search step",
-                                "parameters": {},
-                            },
-                        },
-                        "metadata": {"name": "Mock graph plan"},
-                    },
+                    "proposedStrategyPlan": _build_real_plan(effective_site),
                     "createdAt": now,
                 }
             },
         }
     elif "delegation draft" in msg_lower:
         now = datetime.now(UTC).isoformat()
+        organism = _SITE_ORGANISMS.get(effective_site, _SITE_ORGANISMS["plasmodb"])
         yield {
             "type": "planning_artifact",
             "data": {
@@ -81,7 +101,7 @@ async def mock_stream_chat(
                                     "id": "task_search",
                                     "type": "search",
                                     "searchName": "GenesByTaxon",
-                                    "context": "Find genes in P. falciparum",
+                                    "context": f"Find genes in {organism}",
                                 },
                                 {
                                     "id": "task_transform",
@@ -105,6 +125,7 @@ async def mock_stream_chat(
             },
         }
     elif "delegate_strategy_subtasks" in msg_lower or "delegation" in msg_lower:
+        organism = _SITE_ORGANISMS.get(effective_site, _SITE_ORGANISMS["plasmodb"])
         yield {
             "type": "subkani_task_start",
             "data": {"task": "delegate:build-strategy"},
@@ -138,11 +159,11 @@ async def mock_stream_chat(
                 "graphId": gid,
                 "step": {
                     "graphId": gid,
-                    "stepId": "mock_search_1",
+                    "stepId": "step_1",
                     "kind": "search",
-                    "displayName": "Delegated search step",
-                    "searchName": "mock_search",
-                    "parameters": {"q": "gametocyte", "min": 10},
+                    "displayName": f"All {organism} genes",
+                    "searchName": "GenesByTaxon",
+                    "parameters": {"organism": f'["{organism}"]'},
                     "recordType": "gene",
                     "graphName": "Delegation-built strategy",
                     "description": "A deterministic delegated strategy for E2E.",
@@ -155,12 +176,12 @@ async def mock_stream_chat(
                 "graphId": gid,
                 "step": {
                     "graphId": gid,
-                    "stepId": "mock_transform_1",
+                    "stepId": "step_2",
                     "kind": "transform",
-                    "displayName": "Delegated transform step",
-                    "searchName": "mock_transform",
-                    "primaryInputStepId": "mock_search_1",
-                    "parameters": {"insertBetween": True, "species": "P. falciparum"},
+                    "displayName": "Ortholog transform",
+                    "searchName": "GenesByOrthologPattern",
+                    "primaryInputStepId": "step_1",
+                    "parameters": {},
                     "recordType": "gene",
                 },
             },
@@ -171,12 +192,12 @@ async def mock_stream_chat(
                 "graphId": gid,
                 "step": {
                     "graphId": gid,
-                    "stepId": "mock_combine_1",
+                    "stepId": "step_3",
                     "kind": "combine",
-                    "displayName": "Delegated combine step",
+                    "displayName": "Combined results",
                     "operator": "UNION",
-                    "primaryInputStepId": "mock_transform_1",
-                    "secondaryInputStepId": "mock_search_1",
+                    "primaryInputStepId": "step_2",
+                    "secondaryInputStepId": "step_1",
                     "parameters": {},
                     "recordType": "gene",
                 },

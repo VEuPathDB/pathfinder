@@ -1,10 +1,28 @@
 """Models endpoint — exposes available LLM models and their status."""
 
+from typing import TypedDict
+
 from fastapi import APIRouter
 
 from veupath_chatbot.ai.models.catalog import MODEL_CATALOG
 from veupath_chatbot.platform.config import get_settings
-from veupath_chatbot.platform.types import ModelProvider
+from veupath_chatbot.platform.types import ModelProvider, ReasoningEffort
+
+
+class _ModelItem(TypedDict):
+    id: str
+    name: str
+    provider: ModelProvider
+    model: str
+    supportsReasoning: bool
+    enabled: bool
+
+
+class ModelListResponse(TypedDict):
+    models: list[_ModelItem]
+    default: str
+    defaultReasoningEffort: ReasoningEffort
+
 
 router = APIRouter(prefix="/api/v1", tags=["models"])
 
@@ -25,22 +43,22 @@ def _provider_enabled(provider: ModelProvider) -> bool:
 
 
 @router.get("/models")
-async def list_models() -> dict[str, object]:
+async def list_models() -> ModelListResponse:
     """Return available models grouped by provider.
 
     Models whose provider has no API key are returned with ``enabled: false``
     so the frontend can render them as disabled in the picker.
     """
     settings = get_settings()
-    models = [
-        {
-            "id": m.id,
-            "name": m.name,
-            "provider": m.provider,
-            "model": m.model,
-            "supportsReasoning": m.supports_reasoning,
-            "enabled": _provider_enabled(m.provider),
-        }
+    models: list[_ModelItem] = [
+        _ModelItem(
+            id=m.id,
+            name=m.name,
+            provider=m.provider,
+            model=m.model,
+            supportsReasoning=m.supports_reasoning,
+            enabled=_provider_enabled(m.provider),
+        )
         for m in MODEL_CATALOG
     ]
     return {

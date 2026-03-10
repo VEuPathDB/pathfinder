@@ -72,17 +72,17 @@ class WebSearchService:
                     r["snippet"] = cast(JSONValue, summary)
 
         citations: list[JSONObject] = []
-        for r in results:
-            if not isinstance(r, dict):
+        for item in results:
+            if not isinstance(item, dict):
                 continue
-            title_raw = r.get("title")
-            url_raw = r.get("url")
+            title_raw = item.get("title")
+            url_raw = item.get("url")
             title = (
                 title_raw
                 if isinstance(title_raw, str)
                 else (url_raw if isinstance(url_raw, str) else "Web result")
             )
-            snippet_raw = r.get("summary") or r.get("snippet")
+            snippet_raw = item.get("summary") or item.get("snippet")
             snippet = snippet_raw if isinstance(snippet_raw, str) else None
             citations.append(
                 make_citation(

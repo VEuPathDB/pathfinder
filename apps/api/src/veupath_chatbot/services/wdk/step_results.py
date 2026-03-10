@@ -4,9 +4,11 @@ Used by both experiment and gene set endpoints to avoid duplicating
 attribute listing, record browsing, distribution, and analysis logic.
 """
 
+from typing import cast
+
 from veupath_chatbot.integrations.veupathdb.strategy_api.api import StrategyAPI
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.wdk.helpers import (
     build_attribute_list,
     extract_detail_attributes,
@@ -39,8 +41,9 @@ class StepResultsService:
         """Get available attributes for the record type."""
         info = await self._api.get_record_type_info(self._record_type)
         attrs_raw = info.get("attributes") or info.get("attributesMap") or {}
+        attr_list = cast(JSONValue, build_attribute_list(attrs_raw))
         return {
-            "attributes": build_attribute_list(attrs_raw),
+            "attributes": attr_list,
             "recordType": self._record_type,
         }
 
@@ -84,7 +87,7 @@ class StepResultsService:
     async def run_analysis_raw(
         self,
         analysis_name: str,
-        parameters: dict[str, object],
+        parameters: JSONObject,
     ) -> tuple[JSONObject, JSONObject]:
         """Run a WDK step analysis with merged defaults.
 
@@ -111,7 +114,7 @@ class StepResultsService:
     async def run_analysis(
         self,
         analysis_name: str,
-        parameters: dict[str, object],
+        parameters: JSONObject,
     ) -> JSONObject:
         """Run a WDK step analysis, auto-parsing enrichment results."""
         from veupath_chatbot.services.experiment.enrichment import (
@@ -177,5 +180,5 @@ class StepResultsService:
             primary_key=pk_parts,
             attributes=detail_attrs or None,
         )
-        record["attributeNames"] = display_names
+        record["attributeNames"] = cast(JSONValue, display_names)
         return record

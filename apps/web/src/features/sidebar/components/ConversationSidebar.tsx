@@ -41,6 +41,7 @@ export function ConversationSidebar({ siteId, onToast }: ConversationSidebarProp
     reportError,
     refreshStrategies: data.refreshStrategies,
     setStrategyItems: data.setStrategyItems,
+    setNewConversationInFlight: data.setNewConversationInFlight,
   });
 
   return (

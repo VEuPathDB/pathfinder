@@ -6,10 +6,7 @@ This is a transport-layer adapter: it converts the HTTP-specific
 it depends on transport schemas.
 """
 
-from typing import cast
-
 from veupath_chatbot.services.experiment.types import (
-    ControlValueFormat,
     ExperimentConfig,
     OperatorKnob,
     OptimizationSpec,
@@ -46,7 +43,7 @@ def config_from_request(req: CreateExperimentRequest) -> ExperimentConfig:
         negative_controls=req.negative_controls,
         controls_search_name=req.controls_search_name,
         controls_param_name=req.controls_param_name,
-        controls_value_format=cast(ControlValueFormat, req.controls_value_format),
+        controls_value_format=req.controls_value_format,
         enable_cross_validation=req.enable_cross_validation,
         k_folds=req.k_folds,
         enrichment_types=list(req.enrichment_types),

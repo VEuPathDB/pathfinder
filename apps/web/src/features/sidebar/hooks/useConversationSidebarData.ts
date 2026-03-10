@@ -44,6 +44,12 @@ export interface ConversationSidebarData {
   /** Exposed for the actions hook to perform optimistic strategy-list updates. */
   strategyItems: Strategy[];
   setStrategyItems: Dispatch<SetStateAction<Strategy[]>>;
+  /**
+   * Signal that a new conversation is being created (async POST in flight).
+   * While true, `ensureActiveConversation` will not auto-pick a strategy,
+   * preventing it from overriding the user's explicit "New Chat" action.
+   */
+  setNewConversationInFlight: (inFlight: boolean) => void;
 }
 
 export function useConversationSidebarData({
@@ -73,6 +79,9 @@ export function useConversationSidebarData({
   const hasFetched = useRef(false);
   // Guard against concurrent auto-create calls.
   const autoCreateInFlight = useRef(false);
+  // Guard: when the user explicitly clicks "New Chat", suppress auto-pick
+  // until the new conversation POST completes.
+  const newConversationInFlight = useRef(false);
 
   // Clear stale items immediately on site change + unblock fetch guard.
   useEffect(() => {
@@ -123,6 +132,9 @@ export function useConversationSidebarData({
   // layer validates it (404 → clear). This prevents race conditions during
   // rapid refresh where the sidebar list isn't populated yet.
   const ensureActiveConversation = useCallback(async () => {
+    // Don't auto-pick while the user is explicitly creating a new conversation.
+    if (newConversationInFlight.current) return;
+
     const action = resolveActiveConversation({
       strategyId,
       hasAuth: veupathdbSignedIn,
@@ -145,7 +157,8 @@ export function useConversationSidebarData({
         try {
           const res = await openStrategy({ siteId });
           const now = new Date().toISOString();
-          setStrategyItems([
+          setStrategyItems((prev) => [
+            ...prev,
             {
               id: res.strategyId,
               name: DEFAULT_STREAM_NAME,
@@ -159,7 +172,12 @@ export function useConversationSidebarData({
               isSaved: false,
             },
           ]);
-          setStrategyId(res.strategyId);
+          // Only set if no other flow (e.g. chat send) grabbed strategyId
+          // while the async openStrategy was in-flight.
+          const currentId = useSessionStore.getState().strategyId;
+          if (!currentId) {
+            setStrategyId(res.strategyId);
+          }
         } catch (err) {
           console.warn("[ensureActiveConversation] Failed to auto-create:", err);
         } finally {
@@ -231,6 +249,10 @@ export function useConversationSidebarData({
     return conversations.filter((c) => c.title.toLowerCase().includes(q));
   }, [conversations, query]);
 
+  const setNewConversationInFlight = useCallback((inFlight: boolean) => {
+    newConversationInFlight.current = inFlight;
+  }, []);
+
   return {
     filtered,
     hasConversations: conversations.length > 0,
@@ -242,5 +264,6 @@ export function useConversationSidebarData({
     handleManualRefresh,
     strategyItems,
     setStrategyItems,
+    setNewConversationInFlight,
   };
 }

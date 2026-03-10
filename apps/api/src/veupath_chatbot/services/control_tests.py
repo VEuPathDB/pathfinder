@@ -4,7 +4,7 @@ These helpers run *temporary* WDK steps/strategies to evaluate whether known
 positive controls are returned and known negative controls are excluded.
 """
 
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from veupath_chatbot.domain.strategy.ast import StepTreeNode
 from veupath_chatbot.domain.strategy.ops import DEFAULT_COMBINE_OPERATOR
@@ -314,9 +314,10 @@ async def run_positive_negative_controls(
 
         pos_count, found_ids, has_ids = _extract_intersection_data(pos_payload)
         missing = [x for x in pos if x not in found_ids] if has_ids else []
+        missing_sample = cast(JSONValue, missing[:50])
         result["positive"] = {
             **pos_payload,
-            "missingIdsSample": missing[:50],
+            "missingIdsSample": missing_sample,
             "recall": pos_count / len(pos) if pos else None,
         }
 
@@ -332,9 +333,10 @@ async def run_positive_negative_controls(
             target["resultCount"] = neg_payload.get("targetResultCount")
 
         neg_count, hit_ids, _ = _extract_intersection_data(neg_payload)
+        unexpected_sample = cast(JSONValue, list(hit_ids)[:50] if hit_ids else [])
         result["negative"] = {
             **neg_payload,
-            "unexpectedHitsSample": list(hit_ids)[:50] if hit_ids else [],
+            "unexpectedHitsSample": unexpected_sample,
             "falsePositiveRate": neg_count / len(neg) if neg else None,
         }
 

@@ -82,9 +82,11 @@ def from_json[T](data: dict[str, Any], cls: type[T]) -> T:
     Nested dataclasses, lists, dicts, and tuples are coerced using
     type-hint introspection.  Missing keys fall back to field defaults.
     """
-    hints = _cached_type_hints(cls)
+    # Bind to plain ``type`` so the cached helpers see a Hashable arg.
+    concrete: type = cls
+    hints = _cached_type_hints(concrete)
     kwargs: dict[str, Any] = {}
-    for f in _cached_fields(cls):
+    for f in _cached_fields(concrete):
         camel = _snake_to_camel(f.name)
         raw = data.get(camel, dataclasses.MISSING)
         if raw is dataclasses.MISSING:

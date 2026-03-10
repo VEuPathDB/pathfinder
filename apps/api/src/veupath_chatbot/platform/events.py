@@ -334,9 +334,13 @@ async def read_stream_messages(redis: Redis, stream_id: str) -> list[JSONObject]
                 if turn_reasoning:
                     msg["reasoning"] = turn_reasoning
                 if turn_subkani_calls:
+                    calls: JSONObject = {
+                        k: list(v) for k, v in turn_subkani_calls.items()
+                    }
+                    status: JSONObject = dict(turn_subkani_status)
                     msg["subKaniActivity"] = {
-                        "calls": dict(turn_subkani_calls),
-                        "status": dict(turn_subkani_status),
+                        "calls": calls,
+                        "status": status,
                     }
                 # Also preserve any fields that may be directly on the event data.
                 for key in ("citations", "planningArtifacts", "toolCalls", "reasoning"):

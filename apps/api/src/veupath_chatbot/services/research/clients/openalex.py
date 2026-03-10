@@ -46,13 +46,14 @@ class OpenAlexClient(StandardClient):
         )
         doi = item.get("doi")
         doi = str(doi).replace("https://doi.org/", "") if isinstance(doi, str) else None
-        url_item = item.get("id") if isinstance(item.get("id"), str) else None
+        id_val = item.get("id")
+        url_item: str | None = id_val if isinstance(id_val, str) else None
 
         journal: str | None = None
         hv = item.get("host_venue")
         if isinstance(hv, dict):
-            journal = hv.get("display_name")
-        journal = str(journal).strip() if journal else None
+            jname = hv.get("display_name")
+            journal = str(jname).strip() if isinstance(jname, str) else None
 
         authors: list[str] | None = None
         auths = item.get("authorships")

@@ -46,7 +46,8 @@ class EuropePmcClient(StandardClient):
             return None
         item = raw
 
-        title = (item.get("title") or "").strip()
+        title_raw = item.get("title")
+        title = title_raw.strip() if isinstance(title_raw, str) else ""
 
         year_i: int | None
         try:
@@ -63,8 +64,10 @@ class EuropePmcClient(StandardClient):
         except Exception:
             year_i = None
 
-        doi = item.get("doi") if isinstance(item.get("doi"), str) else None
-        pmid = item.get("pmid") if isinstance(item.get("pmid"), str) else None
+        doi_val = item.get("doi")
+        doi: str | None = doi_val if isinstance(doi_val, str) else None
+        pmid_val = item.get("pmid")
+        pmid: str | None = pmid_val if isinstance(pmid_val, str) else None
         author_str = item.get("authorString")
         authors = (
             [a.strip() for a in author_str.split(",") if a.strip()]

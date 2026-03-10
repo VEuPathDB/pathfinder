@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
 const isCI = Boolean(process.env.CI);
 
@@ -11,44 +11,64 @@ const isCI = Boolean(process.env.CI);
  *
  *      docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
  *
- * 2. Run the tests (Playwright auto-starts a Next.js dev server on port 3001):
+ * 2. Run the tests:
  *
  *      npm run test:e2e
  *
  * ## CI
  *
  * The GitHub Actions workflow starts both servers and sets PLAYWRIGHT_BASE_URL.
+ *
+ * ## Worker isolation
+ *
+ * Each Playwright worker authenticates as a unique user via
+ * `/dev/login?user_id=worker-{N}`. This means parallel workers never
+ * share gene sets, strategies, or conversations — `clearAllGeneSets`
+ * only affects the calling worker's user.
  */
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 60_000,
-  expect: { timeout: 10_000 },
-  retries: isCI ? 2 : 0,
+  timeout: isCI ? 120_000 : 60_000,
+  expect: { timeout: 15_000 },
+  retries: isCI ? 2 : 3,
   forbidOnly: isCI,
   fullyParallel: true,
+  workers: 2,
+
+  reporter: isCI
+    ? [["github"], ["html", { open: "never" }]]
+    : [["list"], ["html", { open: "on-failure" }]],
+
   use: {
-    baseURL: isCI
-      ? process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000"
-      : "http://localhost:3001",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000",
     trace: isCI ? "on-first-retry" : "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
+    ...devices["Desktop Chrome"],
   },
-  reporter: isCI ? [["github"], ["html", { open: "never" }]] : "list",
 
-  // Locally, start a Next.js dev server on port 3001 (avoids collision with
-  // the Docker web container on 3000). The Docker API on port 8000 must already
-  // be running with PATHFINDER_CHAT_PROVIDER=mock.
-  ...(!isCI && {
-    webServer: {
-      command: "npm run dev -- -p 3001",
-      port: 3001,
-      timeout: 30_000,
-      reuseExistingServer: true,
-      env: {
-        ...process.env,
-        NEXT_PUBLIC_API_URL: "http://localhost:8000",
-      },
+  projects: [
+    {
+      name: "feature",
+      testDir: "./e2e/feature",
     },
-  }),
+    {
+      name: "cross-feature",
+      testDir: "./e2e/cross-feature",
+    },
+    {
+      name: "journey",
+      testDir: "./e2e/journey",
+      timeout: 180_000,
+      // Journey tests run enrichment against live VEuPathDB WDK APIs.
+      // WDK rate-limits concurrent analysis requests, so serialize these.
+      fullyParallel: false,
+    },
+  ],
+
+  // Both local and CI: the Docker web container on port 3000 serves the
+  // production build (no HMR).  The Docker API on port 8000 must be running
+  // with PATHFINDER_CHAT_PROVIDER=mock.
+  //
+  // Start services:  docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build api web
 });

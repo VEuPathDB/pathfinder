@@ -1,14 +1,36 @@
 """Cross-experiment enrichment comparison."""
 
-from veupath_chatbot.platform.types import JSONObject, JSONValue
+from typing import TypedDict
+
+from veupath_chatbot.platform.types import JSONValue
 from veupath_chatbot.services.experiment.types import Experiment
+
+
+class EnrichmentRow(TypedDict):
+    """Shape of one term row in the enrichment comparison."""
+
+    termKey: str
+    termName: str
+    analysisType: str
+    scores: dict[str, JSONValue]
+    maxScore: float
+    experimentCount: int
+
+
+class EnrichmentCompareResult(TypedDict):
+    """Return shape of :func:`compare_enrichment_across`."""
+
+    experimentIds: list[str]
+    experimentLabels: dict[str, str]
+    rows: list[EnrichmentRow]
+    totalTerms: int
 
 
 def compare_enrichment_across(
     experiments: list[Experiment],
     experiment_ids: list[str],
     analysis_type: str | None = None,
-) -> JSONObject:
+) -> EnrichmentCompareResult:
     """Compare enrichment results across experiments.
 
     Builds a term-by-experiment matrix of fold-enrichment scores.
@@ -35,7 +57,7 @@ def compare_enrichment_across(
                 term_scores[key][exp.id] = term.fold_enrichment
 
     # Build rows sorted by max score descending
-    rows: list[JSONObject] = []
+    rows: list[EnrichmentRow] = []
     for key in sorted(
         term_scores,
         key=lambda k: max(term_scores[k].values()) if term_scores[k] else 0.0,

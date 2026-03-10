@@ -8,6 +8,15 @@ from dataclasses import dataclass
 
 from veupath_chatbot.platform.types import ModelProvider, ReasoningEffort
 
+__all__ = [
+    "MODEL_CATALOG",
+    "ModelEntry",
+    "ModelProvider",
+    "ReasoningEffort",
+    "build_reasoning_hyperparams",
+    "get_model_entry",
+]
+
 # OpenAI reasoning models (gpt-5*, o1, o3, o4) use the flat
 # ``reasoning_effort`` param accepted by ``chat.completions.create()``.
 _OPENAI_EFFORT_MAP: dict[ReasoningEffort, dict[str, object]] = {

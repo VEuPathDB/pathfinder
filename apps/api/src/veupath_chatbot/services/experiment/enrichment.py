@@ -313,6 +313,25 @@ def _extract_param_specs(form_meta: JSONValue) -> list[JSONObject]:
     return [p for p in params_raw if isinstance(p, dict)]
 
 
+def _extract_vocab_values(form_meta: JSONValue, param_name: str) -> list[str]:
+    """Extract the allowed vocabulary values for a parameter from form metadata.
+
+    WDK vocabulary params include a ``vocabulary`` field — a list of
+    ``[value, display, null]`` triples.  Returns the list of ``value``
+    strings (first element of each triple).
+
+    Returns an empty list if the parameter is not found or has no vocabulary.
+    """
+    for p in _extract_param_specs(form_meta):
+        if p.get("name") != param_name:
+            continue
+        vocab = p.get("vocabulary")
+        if not isinstance(vocab, list):
+            return []
+        return [str(entry[0]) for entry in vocab if isinstance(entry, list) and entry]
+    return []
+
+
 def _build_param_type_map(form_meta: JSONValue) -> dict[str, str]:
     """Build a ``{param_name: wdk_type}`` map from form metadata.
 
@@ -431,6 +450,7 @@ async def _execute_analysis(
 
     # Fetch form metadata so we use correct parameter names and defaults.
     analysis_params: JSONObject = {}
+    form_meta: JSONValue = None
     try:
         form_meta = await api.get_analysis_type(step_id, wdk_analysis_type)
         analysis_params = _extract_default_params(form_meta)
@@ -447,13 +467,29 @@ async def _execute_analysis(
             error=str(exc),
         )
 
-    # For GO enrichment, set the ontology parameter.
-    # WDK GoEnrichmentPlugin uses ``goAssociationsOntologies``
-    # (a single-pick-vocabulary param — must be a JSON array).
+    # For GO enrichment, set the ontology parameter — but only if the
+    # requested ontology is actually available on this site.  Different
+    # VEuPathDB sites support different GO ontologies (e.g. ToxoDB lacks
+    # "Biological Process").
     if analysis_type in _GO_ONTOLOGY_MAP:
-        analysis_params["goAssociationsOntologies"] = json.dumps(
-            [_GO_ONTOLOGY_MAP[analysis_type]]
-        )
+        requested_ontology = _GO_ONTOLOGY_MAP[analysis_type]
+        available = _extract_vocab_values(form_meta, "goAssociationsOntologies")
+
+        if available and requested_ontology not in available:
+            logger.info(
+                "GO ontology not available on this site, skipping",
+                analysis_type=analysis_type,
+                requested=requested_ontology,
+                available=available,
+            )
+            return EnrichmentResult(
+                analysis_type=analysis_type,
+                terms=[],
+                total_genes_analyzed=0,
+                background_size=0,
+            )
+
+        analysis_params["goAssociationsOntologies"] = json.dumps([requested_ontology])
 
     logger.info(
         "Running enrichment analysis",

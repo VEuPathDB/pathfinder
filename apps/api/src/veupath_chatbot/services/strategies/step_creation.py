@@ -392,11 +392,19 @@ async def create_step(
         return StepCreationResult(step=None, step_id=None, error=error)
 
     # Validate root status for input steps.
-    if primary_input is not None and primary_input_step_id not in graph.roots:
+    if (
+        primary_input is not None
+        and primary_input_step_id is not None
+        and primary_input_step_id not in graph.roots
+    ):
         root_error = _validate_root_status(graph, primary_input_step_id, "primary")
         if root_error is not None:
             return StepCreationResult(step=None, step_id=None, error=root_error)
-    if secondary_input is not None and secondary_input_step_id not in graph.roots:
+    if (
+        secondary_input is not None
+        and secondary_input_step_id is not None
+        and secondary_input_step_id not in graph.roots
+    ):
         root_error = _validate_root_status(graph, secondary_input_step_id, "secondary")
         if root_error is not None:
             return StepCreationResult(step=None, step_id=None, error=root_error)

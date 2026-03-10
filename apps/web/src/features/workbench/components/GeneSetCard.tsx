@@ -30,16 +30,16 @@ export function GeneSetCard({
   onActivate,
   onToggleSelect,
 }: GeneSetCardProps) {
-  const config = SOURCE_CONFIG[geneSet.source];
-  const Icon = config.icon;
+  const { icon: Icon } = SOURCE_CONFIG[geneSet.source];
 
-  // Compute overlap percentage with the active set (skip if this IS the active set)
+  // Compute overlap percentage with the active set
   const overlapPct = useMemo(() => {
-    if (isActive || activeGeneIds.length === 0 || geneSet.geneIds.length === 0)
-      return null;
+    const ids = geneSet.geneIds ?? [];
+    if (activeGeneIds.length === 0 || ids.length === 0) return null;
+    if (isActive) return 100;
     const activeSet = new Set(activeGeneIds);
-    const overlap = geneSet.geneIds.filter((id) => activeSet.has(id)).length;
-    return Math.round((overlap / geneSet.geneIds.length) * 100);
+    const overlap = ids.filter((id) => activeSet.has(id)).length;
+    return Math.round((overlap / ids.length) * 100);
   }, [isActive, activeGeneIds, geneSet.geneIds]);
 
   // Provenance for derived sets
@@ -52,10 +52,8 @@ export function GeneSetCard({
   return (
     <div
       className={cn(
-        "group relative flex items-start gap-2 rounded-lg border-l-[3px] px-3 py-2 transition-all duration-150",
-        isActive
-          ? `${config.accentClass} bg-muted/80`
-          : "border-l-transparent hover:bg-muted/40",
+        "group relative flex items-start gap-2 rounded-lg px-3 py-2 transition-all duration-150",
+        isActive ? "bg-muted" : "hover:bg-muted/40",
         isSelected && !isActive && "bg-muted/30",
       )}
     >
@@ -93,9 +91,11 @@ export function GeneSetCard({
           </span>
         </div>
 
-        {/* Row 2: overlap bar (only when not active and there's an active set) */}
+        {/* Row 2: overlap bar */}
         {overlapPct !== null && (
-          <div className="mt-1.5 flex items-center gap-2">
+          <div
+            className={cn("mt-1.5 flex items-center gap-2", isActive && "opacity-40")}
+          >
             <div className="h-1 flex-1 overflow-hidden rounded-full bg-border">
               <div
                 className="h-full rounded-full bg-primary/50 transition-all duration-300"
@@ -108,7 +108,9 @@ export function GeneSetCard({
                   {overlapPct}%
                 </span>
               </TooltipTrigger>
-              <TooltipContent side="right">Overlap with active set</TooltipContent>
+              <TooltipContent side="right">
+                {isActive ? "Active set" : "Overlap with active set"}
+              </TooltipContent>
             </Tooltip>
           </div>
         )}

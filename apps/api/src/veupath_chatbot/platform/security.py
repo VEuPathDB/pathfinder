@@ -7,6 +7,7 @@ from uuid import UUID
 import jwt
 from fastapi import Depends, Request
 from fastapi.security import APIKeyCookie
+from jwt.types import Options
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -15,7 +16,7 @@ from veupath_chatbot.platform.context import user_id_ctx
 from veupath_chatbot.platform.errors import UnauthorizedError
 
 _JWT_ALGORITHM = "HS256"
-_JWT_DECODE_OPTIONS = {"require": ["exp", "sub"]}
+_JWT_DECODE_OPTIONS: Options = {"require": ["exp", "sub"]}
 
 # Cookie-based auth is the public contract. We still accept an Authorization header
 # as a non-documented fallback (parsed from request.headers) to avoid breaking

@@ -1,7 +1,7 @@
 """Main entry point: run_step_analysis coordinates all four analysis phases."""
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypedDict
 
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
@@ -29,6 +29,18 @@ from veupath_chatbot.services.experiment.types import (
 )
 
 logger = get_logger(__name__)
+
+
+class _SharedPhaseKwargs(TypedDict):
+    site_id: str
+    record_type: str
+    tree: JSONObject
+    controls_search_name: str
+    controls_param_name: str
+    controls_value_format: ControlValueFormat
+    positive_controls: list[str]
+    negative_controls: list[str]
+    progress_callback: ProgressCallback | None
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +167,7 @@ async def run_step_analysis(
     )
 
     # Shared kwargs passed to every phase function.
-    shared_kwargs: JSONObject = {
+    shared_kwargs: _SharedPhaseKwargs = {
         "site_id": site_id,
         "record_type": record_type,
         "tree": tree,
@@ -168,7 +180,9 @@ async def run_step_analysis(
     }
 
     # Phase descriptors: (phase_key, progress_message, async_fn, extra_kwargs)
-    phase_descriptors: list[tuple[str, str, Callable[..., Any], JSONObject]] = [
+    phase_descriptors: list[
+        tuple[str, str, Callable[..., Any], dict[str, JSONObject]]
+    ] = [
         ("step_evaluation", "Starting per-step evaluation...", evaluate_steps, {}),
         ("operator_comparison", "Comparing operators...", compare_operators, {}),
         (

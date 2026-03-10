@@ -1,6 +1,7 @@
 """Operations endpoints: subscribe via Redis Streams, discover active operations."""
 
 import json
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
@@ -77,7 +78,7 @@ async def subscribe(
     is_experiment = op.type in _EXPERIMENT_OP_TYPES
     stream_key = f"op:{operation_id}" if is_experiment else f"stream:{op.stream_id}"
 
-    async def _stream():
+    async def _stream() -> AsyncGenerator[str]:
         redis = get_redis()
         # Start position: after last_event_id, or from the beginning.
         cursor = last_event_id if last_event_id else "0-0"

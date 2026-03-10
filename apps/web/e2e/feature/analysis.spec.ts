@@ -1,0 +1,122 @@
+import { test, expect } from "../fixtures/test";
+
+async function addAndActivateGeneSet(
+  page: import("@playwright/test").Page,
+  workbenchSidebarPage: import("../pages/workbench-sidebar.page").WorkbenchSidebarPage,
+  name: string,
+  geneIds: string[],
+) {
+  await workbenchSidebarPage.openAddModal();
+  await page.getByLabel(/name/i).fill(name);
+  await page.getByLabel(/gene ids/i).fill(geneIds.join("\n"));
+  await page.getByRole("button", { name: /add gene set/i }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 10_000 });
+  await workbenchSidebarPage.activateSet(name);
+}
+
+test.describe("Analysis Panels", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/workbench");
+    await expect(page.getByRole("heading", { name: /gene sets/i })).toBeVisible();
+  });
+
+  test("enrichment runs and returns real WDK results", async ({
+    page,
+    seedData,
+    workbenchSidebarPage,
+    workbenchMainPage,
+    apiClient,
+  }) => {
+    const genes = seedData.plasmoGenes;
+    await addAndActivateGeneSet(page, workbenchSidebarPage, "Enrichment Test", genes);
+
+    // UI: Active set header shows correct count
+    await workbenchMainPage.expectActiveSetHeader("Enrichment Test", genes.length);
+
+    // UI: Run enrichment via click
+    await workbenchMainPage.runEnrichmentAndVerifyResults();
+
+    // UI: Results contain real data with numbers
+    await workbenchMainPage.expectEnrichmentResultsWithData();
+
+    // UI: Enrichment type tabs visible (GO:BP, GO:MF, etc.)
+    await workbenchMainPage.expectEnrichmentTypeTabs();
+
+    // API: Verify gene set exists with correct data
+    const resp = await apiClient.get("/api/v1/gene-sets?siteId=plasmodb");
+    expect(resp.ok()).toBeTruthy();
+    const sets = await resp.json();
+    const testSet = sets.find((gs: { name: string }) => gs.name === "Enrichment Test");
+    expect(testSet).toBeDefined();
+    expect(testSet.geneCount).toBe(genes.length);
+  });
+
+  test("strategy-only panels show disabled reason for paste sets", async ({
+    page,
+    seedData,
+    workbenchSidebarPage,
+    workbenchMainPage,
+  }) => {
+    await addAndActivateGeneSet(
+      page,
+      workbenchSidebarPage,
+      "Paste Set",
+      seedData.plasmoGenes,
+    );
+
+    // UI: Active set header shows count
+    await workbenchMainPage.expectActiveSetHeader(
+      "Paste Set",
+      seedData.plasmoGenes.length,
+    );
+
+    // UI: Results Table and Distribution Explorer require strategy-backed sets
+    await expect(
+      page
+        .getByRole("button", { expanded: false })
+        .filter({ hasText: /results table/i })
+        .filter({ hasText: /requires.*strategy/i }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("button", { expanded: false })
+        .filter({ hasText: /distribution explorer/i })
+        .filter({ hasText: /requires.*strategy/i }),
+    ).toBeVisible();
+  });
+
+  test("all 13 analysis panels are listed", async ({
+    page,
+    seedData,
+    workbenchSidebarPage,
+    workbenchMainPage,
+  }) => {
+    await addAndActivateGeneSet(
+      page,
+      workbenchSidebarPage,
+      "Panel Check",
+      seedData.plasmoGenes.slice(0, 3),
+    );
+
+    const panelTitles = [
+      "Results Table",
+      "Enrichment Analysis",
+      "Distribution Explorer",
+      "Evaluate Strategy",
+      "Step Contribution",
+      "Gene Confidence",
+      "Ensemble Scoring",
+      "Reverse Search",
+      "Batch Evaluation",
+      "Benchmark",
+      "Custom Enrichment",
+      "AI Interpretation",
+      "Parameter Sweep",
+    ];
+
+    // UI: All 13 panels visible
+    for (const title of panelTitles) {
+      await workbenchMainPage.expectPanelVisible(title);
+    }
+  });
+});

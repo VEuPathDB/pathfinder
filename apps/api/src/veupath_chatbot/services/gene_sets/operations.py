@@ -5,11 +5,14 @@ All domain operations on gene sets live here. The transport layer
 set operations, enrichment, and step-results access.
 """
 
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID, uuid4
 
 from veupath_chatbot.domain.strategy.tree import count_dict_nodes
-from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
+from veupath_chatbot.integrations.veupathdb.factory import (
+    get_strategy_api,
+    get_wdk_client,
+)
 from veupath_chatbot.integrations.veupathdb.strategy_api.api import StrategyAPI
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
@@ -39,6 +42,34 @@ def count_steps_in_tree(node: object) -> int:
 # ---------------------------------------------------------------------------
 # WDK helpers (async, take an API instance)
 # ---------------------------------------------------------------------------
+
+
+async def _build_enrichment_params_from_gene_ids(
+    site_id: str,
+    gene_ids: list[str],
+) -> tuple[str, JSONObject, str]:
+    """Create a WDK dataset from gene IDs and return enrichment parameters.
+
+    Returns ``(search_name, parameters, record_type)`` suitable for passing
+    to ``EnrichmentService.run_batch()``.  Uses the ``GeneByLocusTag`` search
+    (transcript record type) with a temporary WDK dataset.
+    """
+    client = get_wdk_client(site_id)
+    dataset_resp = await client.post(
+        "/users/current/datasets",
+        json=cast(
+            JSONObject, {"sourceType": "idList", "sourceContent": {"ids": gene_ids}}
+        ),
+    )
+    if not isinstance(dataset_resp, dict) or "id" not in dataset_resp:
+        raise ValueError("Failed to create WDK dataset for gene ID enrichment")
+
+    dataset_id = dataset_resp["id"]
+    return (
+        "GeneByLocusTag",
+        {"ds_gene_ids": str(dataset_id)},
+        "transcript",
+    )
 
 
 async def resolve_root_step_id(api: StrategyAPI, *, strategy_id: int) -> int | None:
@@ -264,14 +295,30 @@ class GeneSetService:
         """Run enrichment analysis on a gene set."""
         gs = await self.get_for_user(user_id, gene_set_id)
 
+        step_id = gs.wdk_step_id
+        search_name = gs.search_name
+        record_type = gs.record_type or "gene"
+        enrichment_params: JSONObject | None = (
+            cast(JSONObject, gs.parameters) if gs.parameters else None
+        )
+
+        # Paste gene sets have gene IDs but no WDK step or search.
+        # Create a temporary WDK dataset so enrichment can run via GeneByLocusTag.
+        if step_id is None and not search_name and gs.gene_ids:
+            (
+                search_name,
+                enrichment_params,
+                record_type,
+            ) = await _build_enrichment_params_from_gene_ids(gs.site_id, gs.gene_ids)
+
         svc = EnrichmentService()
         results, errors = await svc.run_batch(
             site_id=gs.site_id,
             analysis_types=enrichment_types,
-            step_id=gs.wdk_step_id,
-            search_name=gs.search_name,
-            record_type=gs.record_type or "gene",
-            parameters=gs.parameters,
+            step_id=step_id,
+            search_name=search_name,
+            record_type=record_type,
+            parameters=enrichment_params,
         )
 
         if not results and errors:

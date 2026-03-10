@@ -10,7 +10,7 @@ import { performSetOperation, createGeneSet } from "../api/geneSets";
 import { useSessionStore } from "@/state/useSessionStore";
 import { GeneSetCard } from "./GeneSetCard";
 import { GeneSetFilter } from "./GeneSetFilter";
-import { VennDiagram } from "./VennDiagram";
+import { SetVenn } from "@/lib/components/SetVenn";
 import { ComposeBar } from "./ComposeBar";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { AddGeneSetModal } from "./AddGeneSetModal";
@@ -49,7 +49,7 @@ export function WorkbenchSidebar({ onCollapse }: WorkbenchSidebarProps) {
   }, [geneSets, filter]);
 
   const showFilter = geneSets.length >= 5;
-  const showVenn = selectedSets.length === 2;
+  const showVenn = selectedSets.length >= 2 && selectedSets.length <= 5;
   const showCompose = selectedSets.length === 2;
 
   // -- Handlers ---------------------------------------------------------------
@@ -160,13 +160,17 @@ export function WorkbenchSidebar({ onCollapse }: WorkbenchSidebarProps) {
           )}
         </ScrollArea>
 
-        {/* Zone 2: Live Venn (when 2 selected) */}
+        {/* Zone 2: Live Venn (when 2-5 selected) */}
         {showVenn && (
           <div className="border-t border-border px-3 py-3">
-            <VennDiagram
-              setA={{ name: selectedSets[0].name, geneIds: selectedSets[0].geneIds }}
-              setB={{ name: selectedSets[1].name, geneIds: selectedSets[1].geneIds }}
+            <SetVenn
+              sets={selectedSets.map((s) => ({
+                key: s.name,
+                geneIds: s.geneIds ?? [],
+              }))}
               onRegionClick={handleVennRegionClick}
+              height={selectedSets.length > 3 ? 280 : 200}
+              width={240}
             />
           </div>
         )}

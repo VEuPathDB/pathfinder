@@ -53,13 +53,15 @@ def _make_progress_callback(
     operation_id: str,
 ) -> ProgressCallback:
     """Build a progress callback that emits events to a Redis stream."""
-    return lambda evt: _emit_to_redis(
-        operation_id,
-        evt.get("type", "experiment_progress")
-        if isinstance(evt, dict)
-        else "experiment_progress",
-        evt.get("data", evt) if isinstance(evt, dict) else evt,
-    )
+
+    async def _cb(evt: JSONObject) -> None:
+        raw_type = evt.get("type", "experiment_progress")
+        event_type = raw_type if isinstance(raw_type, str) else "experiment_progress"
+        raw_data = evt.get("data")
+        event_data = raw_data if isinstance(raw_data, dict) else evt
+        await _emit_to_redis(operation_id, event_type, event_data)
+
+    return _cb
 
 
 async def _finalize_operation(operation_id: str, *, failed: bool) -> None:

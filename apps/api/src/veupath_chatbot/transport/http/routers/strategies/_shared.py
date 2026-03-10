@@ -1,7 +1,6 @@
 """Shared helpers for strategies routers."""
 
 from datetime import UTC, datetime
-from typing import cast
 
 from veupath_chatbot.domain.strategy.ast import from_dict as parse_plan
 from veupath_chatbot.persistence.models import StreamProjection
@@ -36,7 +35,7 @@ def _compute_wdk_url(site_id: str, wdk_strategy_id: int | None) -> str | None:
 
 def build_step_response(step: JSONObject) -> StepResponse:
     """Build a StepResponse from a step dict."""
-    return StepResponse.model_validate(cast(dict[str, object], step))
+    return StepResponse.model_validate(step)
 
 
 def derive_steps_from_plan(plan: JSONObject) -> list[StepResponse]:

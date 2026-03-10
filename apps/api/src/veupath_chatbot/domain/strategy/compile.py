@@ -17,7 +17,7 @@ from veupath_chatbot.domain.strategy.ast import (
 from veupath_chatbot.domain.strategy.ops import CombineOp, get_wdk_operator
 from veupath_chatbot.platform.errors import InternalError, ValidationError
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.platform.types import JSONObject, JSONValue
 
 # Callback type: given a search name, returns the owning record type (or None).
 # Mirrors WDK's WdkModel.getQuestionByName() — a global lookup across all
@@ -55,7 +55,8 @@ class StrategyCompilerAPI(Protocol):
     :class:`StrategyAPI` from the integrations layer is one such object.
     """
 
-    client: _CompilerClient
+    @property
+    def client(self) -> _CompilerClient: ...
 
     async def create_step(
         self,
@@ -94,8 +95,8 @@ class StepDecoratorAPI(Protocol):
     """I/O boundary for post-compilation step decorations (filters, analyses, reports)."""
 
     async def set_step_filter(
-        self, step_id: int, filter_name: str, value: object, disabled: bool = False
-    ) -> object: ...
+        self, step_id: int, filter_name: str, value: JSONValue, disabled: bool = False
+    ) -> JSONValue: ...
 
     async def run_step_analysis(
         self,
@@ -107,7 +108,7 @@ class StepDecoratorAPI(Protocol):
 
     async def run_step_report(
         self, step_id: int, report_name: str, config: JSONObject | None = None
-    ) -> object: ...
+    ) -> JSONValue: ...
 
 
 logger = get_logger(__name__)

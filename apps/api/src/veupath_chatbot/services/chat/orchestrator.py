@@ -14,8 +14,10 @@ from collections.abc import AsyncIterator, Callable
 from uuid import UUID, uuid4
 
 from kani import ChatMessage, ChatRole, Kani
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from veupath_chatbot.persistence.models import Stream
+from veupath_chatbot.persistence.models import Stream, StreamProjection
 from veupath_chatbot.persistence.repositories import StreamRepository, UserRepository
 from veupath_chatbot.persistence.session import async_session_factory
 from veupath_chatbot.platform.events import emit, read_stream_messages
@@ -191,7 +193,7 @@ async def _build_agent_context(
     model_override: str | None,
     reasoning_effort: ReasoningEffort | None,
     mentions: list[dict[str, str]] | None,
-    projection: object,
+    projection: StreamProjection,
     stream_repo: StreamRepository | None = None,
 ) -> tuple[Kani, str]:
     """Build the agent and resolve the effective model.
@@ -209,7 +211,7 @@ async def _build_agent_context(
 
     # Build rich context from @-mentions.
     mentioned_context: str | None = None
-    if mentions:
+    if mentions and stream_repo is not None:
         from veupath_chatbot.services.chat.mention_context import (
             build_mention_context,
         )
@@ -252,12 +254,12 @@ async def _build_agent_context(
 
 async def _run_stream_loop(
     *,
-    redis: object,
-    session: object,
+    redis: Redis,
+    session: AsyncSession,
     stream_id_str: str,
     operation_id: str,
     site_id: str,
-    projection: object,
+    projection: StreamProjection,
     stream_iter: AsyncIterator[JSONObject],
     stream_repo: StreamRepository,
 ) -> None:
@@ -324,8 +326,8 @@ async def _run_stream_loop(
 
 async def _handle_cancellation(
     *,
-    redis: object,
-    session: object,
+    redis: Redis,
+    session: AsyncSession,
     stream_id_str: str,
     operation_id: str,
     stream_repo: StreamRepository,
@@ -347,8 +349,8 @@ async def _handle_cancellation(
 async def _handle_error(
     *,
     error: Exception,
-    redis: object,
-    session: object,
+    redis: Redis,
+    session: AsyncSession,
     stream_id_str: str,
     operation_id: str,
     stream_repo: StreamRepository,
@@ -431,7 +433,9 @@ async def _chat_producer(
             )
 
         stream_iter = (
-            _mock_stream_fn(message=model_message, strategy_id=stream_id_str)
+            _mock_stream_fn(
+                message=model_message, strategy_id=stream_id_str, site_id=site_id
+            )
             if _mock_stream_fn is not None
             else stream_chat(agent, model_message)
         )

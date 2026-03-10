@@ -39,11 +39,14 @@ class CrossrefClient(StandardClient):
         item = raw
 
         title_list = item.get("title")
-        title = (
-            title_list[0].strip() if isinstance(title_list, list) and title_list else ""
+        first_title = (
+            title_list[0] if isinstance(title_list, list) and title_list else None
         )
-        doi = item.get("DOI") if isinstance(item.get("DOI"), str) else None
-        url_item = item.get("URL") if isinstance(item.get("URL"), str) else None
+        title = first_title.strip() if isinstance(first_title, str) else ""
+        doi_raw = item.get("DOI")
+        doi: str | None = doi_raw if isinstance(doi_raw, str) else None
+        url_raw = item.get("URL")
+        url_item: str | None = url_raw if isinstance(url_raw, str) else None
 
         year_i: int | None = None
         published = item.get("published-print") or item.get("published-online") or {}
@@ -55,7 +58,8 @@ class CrossrefClient(StandardClient):
             and parts[0]
         ):
             try:
-                year_i = int(parts[0][0])
+                raw_year = parts[0][0]
+                year_i = int(raw_year) if isinstance(raw_year, (int, str)) else None
             except Exception:
                 year_i = None
 

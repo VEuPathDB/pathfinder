@@ -163,22 +163,63 @@ class LiteratureSearchService:
         Only creates coroutines for sources that will actually be dispatched,
         avoiding unawaited-coroutine warnings when a single source is selected.
         """
-        common = {"limit": limit, "abstract_max_chars": abstract_max_chars}
-        abstract_kw = {**common, "include_abstract": include_abstract}
 
         def _make(name: str) -> tuple[str, collections.abc.Awaitable[JSONObject]]:
             if name == "europepmc":
-                return (name, self._europepmc.search(query, **common))
+                return (
+                    name,
+                    self._europepmc.search(
+                        query,
+                        limit=limit,
+                        abstract_max_chars=abstract_max_chars,
+                    ),
+                )
             if name == "crossref":
-                return (name, self._crossref.search(query, **common))
+                return (
+                    name,
+                    self._crossref.search(
+                        query,
+                        limit=limit,
+                        abstract_max_chars=abstract_max_chars,
+                    ),
+                )
             if name == "openalex":
-                return (name, self._openalex.search(query, **common))
+                return (
+                    name,
+                    self._openalex.search(
+                        query,
+                        limit=limit,
+                        abstract_max_chars=abstract_max_chars,
+                    ),
+                )
             if name == "semanticscholar":
-                return (name, self._semanticscholar.search(query, **common))
+                return (
+                    name,
+                    self._semanticscholar.search(
+                        query,
+                        limit=limit,
+                        abstract_max_chars=abstract_max_chars,
+                    ),
+                )
             if name == "pubmed":
-                return (name, self._pubmed.search(query, **abstract_kw))
+                return (
+                    name,
+                    self._pubmed.search(
+                        query,
+                        limit=limit,
+                        include_abstract=include_abstract,
+                        abstract_max_chars=abstract_max_chars,
+                    ),
+                )
             if name == "arxiv":
-                return (name, self._arxiv.search(query, **common))
+                return (
+                    name,
+                    self._arxiv.search(
+                        query,
+                        limit=limit,
+                        abstract_max_chars=abstract_max_chars,
+                    ),
+                )
             if name == "biorxiv":
                 return (
                     name,
@@ -186,7 +227,9 @@ class LiteratureSearchService:
                         query,
                         site="biorxiv.org",
                         source="biorxiv",
-                        **abstract_kw,
+                        limit=limit,
+                        include_abstract=include_abstract,
+                        abstract_max_chars=abstract_max_chars,
                     ),
                 )
             # medrxiv
@@ -196,7 +239,9 @@ class LiteratureSearchService:
                     query,
                     site="medrxiv.org",
                     source="medrxiv",
-                    **abstract_kw,
+                    limit=limit,
+                    include_abstract=include_abstract,
+                    abstract_max_chars=abstract_max_chars,
                 ),
             )
 

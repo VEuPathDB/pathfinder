@@ -6,13 +6,14 @@ and persists every mutation to PostgreSQL so gene sets survive API restarts.
 
 from datetime import UTC, datetime
 from functools import cache
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
 
 from veupath_chatbot.persistence.models import GeneSetRow
 from veupath_chatbot.platform.store import WriteThruStore
-from veupath_chatbot.services.gene_sets.types import GeneSet
+from veupath_chatbot.services.gene_sets.types import GeneSet, GeneSetSource
 
 # ---------------------------------------------------------------------------
 # Row conversion helpers
@@ -40,20 +41,30 @@ def _row_from_gene_set(gs: GeneSet) -> dict[str, object]:
 
 
 def _gene_set_from_row(row: GeneSetRow) -> GeneSet:
+    # DB JSON columns return JSONValue; narrow to the concrete types GeneSet expects.
+    gene_ids = [str(x) for x in row.gene_ids] if row.gene_ids else []
+    parent_set_ids = [str(x) for x in row.parent_set_ids] if row.parent_set_ids else []
+    parameters = (
+        {str(k): str(v) for k, v in row.parameters.items()} if row.parameters else None
+    )
+    valid_sources: set[str] = {"strategy", "paste", "upload", "derived", "saved"}
+    source: GeneSetSource = (
+        cast(GeneSetSource, row.source) if row.source in valid_sources else "paste"
+    )
     return GeneSet(
         id=row.id,
         user_id=UUID(row.user_id) if row.user_id else None,
         site_id=row.site_id,
         name=row.name,
-        gene_ids=row.gene_ids or [],
-        source=row.source,
+        gene_ids=gene_ids,
+        source=source,
         created_at=row.created_at or datetime.now(UTC),
         wdk_strategy_id=row.wdk_strategy_id,
         wdk_step_id=row.wdk_step_id,
         search_name=row.search_name,
         record_type=row.record_type,
-        parameters=row.parameters,
-        parent_set_ids=row.parent_set_ids or [],
+        parameters=parameters,
+        parent_set_ids=parent_set_ids,
         operation=row.operation,
         step_count=row.step_count or 1,
     )

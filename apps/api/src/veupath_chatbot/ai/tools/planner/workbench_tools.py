@@ -1,6 +1,6 @@
 """AI tools for workbench gene set operations."""
 
-from typing import Annotated
+from typing import Annotated, cast, get_args
 from uuid import UUID, uuid4
 
 from kani import AIParam, ai_function
@@ -8,7 +8,7 @@ from kani import AIParam, ai_function
 from veupath_chatbot.platform.errors import ErrorCode
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.tool_errors import tool_error
-from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.platform.types import JSONObject, JSONValue
 from veupath_chatbot.services.experiment.types import EnrichmentAnalysisType
 from veupath_chatbot.services.gene_sets.store import get_gene_set_store
 from veupath_chatbot.services.gene_sets.types import GeneSet, GeneSetSource
@@ -149,22 +149,30 @@ class WorkbenchToolsMixin:
         if gs is None:
             return {"error": f"Gene set '{gene_set_id}' not found."}
 
-        types: list[EnrichmentAnalysisType] = enrichment_types or [
-            "go_function",
-            "go_process",
-            "go_component",
-            "pathway",
-            "word",
-        ]
+        _valid_types = get_args(EnrichmentAnalysisType)
+        types: list[EnrichmentAnalysisType] = (
+            [
+                cast(EnrichmentAnalysisType, t)
+                for t in enrichment_types
+                if t in _valid_types
+            ]
+            if enrichment_types
+            else ["go_function", "go_process", "go_component", "pathway", "word"]
+        )
 
         svc = EnrichmentService()
+        params: JSONObject | None = (
+            {k: cast(JSONValue, v) for k, v in gs.parameters.items()}
+            if gs.parameters is not None
+            else None
+        )
         results, errors = await svc.run_batch(
             site_id=gs.site_id,
             analysis_types=types,
             step_id=gs.wdk_step_id,
             search_name=gs.search_name,
             record_type=gs.record_type or "gene",
-            parameters=gs.parameters,
+            parameters=params,
         )
 
         serialized = [to_json(r) for r in results]
@@ -184,7 +192,7 @@ class WorkbenchToolsMixin:
             ),
         }
         if errors:
-            summary["errors"] = errors
+            summary["errors"] = cast(JSONValue, errors)
 
         return summary
 

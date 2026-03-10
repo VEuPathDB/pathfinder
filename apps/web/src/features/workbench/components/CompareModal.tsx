@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Modal } from "@/lib/components/Modal";
+import { SetVenn } from "@/lib/components/SetVenn";
 import type { GeneSet } from "../store";
 
 interface CompareModalProps {
@@ -56,6 +57,18 @@ export function CompareModal({ open, onClose, setA, setB }: CompareModalProps) {
               </p>
             </div>
           ))}
+        </div>
+
+        {/* Proportional Venn diagram */}
+        <div className="flex justify-center py-2">
+          <SetVenn
+            sets={[
+              { key: setA.name, geneIds: setA.geneIds ?? [] },
+              { key: setB.name, geneIds: setB.geneIds ?? [] },
+            ]}
+            height={200}
+            width={320}
+          />
         </div>
 
         {/* Three-column gene list */}

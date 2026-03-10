@@ -4,7 +4,10 @@ from fastapi import APIRouter
 
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
-from veupath_chatbot.services.experiment.custom_enrichment import run_custom_enrichment
+from veupath_chatbot.services.experiment.custom_enrichment import (
+    CustomEnrichmentResult,
+    run_custom_enrichment,
+)
 from veupath_chatbot.services.experiment.enrichment import upsert_enrichment_result
 from veupath_chatbot.services.experiment.store import get_experiment_store
 from veupath_chatbot.transport.http.deps import CurrentUser, ExperimentDep
@@ -56,6 +59,6 @@ async def custom_enrichment(
     exp: ExperimentDep,
     request: CustomEnrichRequest,
     user_id: CurrentUser,
-) -> JSONObject:
+) -> CustomEnrichmentResult:
     """Test enrichment of a custom gene set against the experiment results."""
     return run_custom_enrichment(exp, request.gene_ids, request.gene_set_name)

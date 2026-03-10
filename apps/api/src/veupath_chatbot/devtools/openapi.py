@@ -7,6 +7,7 @@ import argparse
 from pathlib import Path
 
 import yaml
+from veupath_chatbot.platform.types import JSONObject
 
 
 def _repo_root() -> Path:
@@ -14,7 +15,7 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[5]
 
 
-def _spec_with_stable_overrides() -> dict[str, object]:
+def _spec_with_stable_overrides() -> JSONObject:
     # Import from the app factory so we include all routers/middleware consistently.
     from veupath_chatbot.main import create_app
 

@@ -11,6 +11,7 @@ from veupath_chatbot.services.experiment.enrichment import (
     _GO_ONTOLOGY_MAP,
     _extract_analysis_rows,
     _extract_default_params,
+    _extract_vocab_values,
     _parse_enrichment_terms,
     _parse_result_genes_html,
     encode_vocab_params,
@@ -225,6 +226,81 @@ class TestExtractDefaultParams:
         assert _extract_default_params(None) == {}
         assert _extract_default_params([]) == {}
         assert _extract_default_params("string") == {}
+
+
+class TestExtractVocabValues:
+    """_extract_vocab_values extracts allowed values from WDK param vocabulary."""
+
+    def test_extracts_ontology_values_from_go_form(self) -> None:
+        """Real WDK GO enrichment form has vocabulary triples: [value, display, null]."""
+        form = {
+            "searchData": {
+                "parameters": [
+                    {
+                        "name": "goAssociationsOntologies",
+                        "type": "single-pick-vocabulary",
+                        "vocabulary": [
+                            ["Cellular Component", "Cellular Component", None],
+                            ["Molecular Function", "Molecular Function", None],
+                        ],
+                    },
+                ]
+            }
+        }
+        values = _extract_vocab_values(form, "goAssociationsOntologies")
+        assert values == ["Cellular Component", "Molecular Function"]
+
+    def test_extracts_all_three_ontologies(self) -> None:
+        """PlasmoDB has all 3 GO ontologies available."""
+        form = {
+            "searchData": {
+                "parameters": [
+                    {
+                        "name": "goAssociationsOntologies",
+                        "type": "single-pick-vocabulary",
+                        "vocabulary": [
+                            ["Biological Process", "Biological Process", None],
+                            ["Cellular Component", "Cellular Component", None],
+                            ["Molecular Function", "Molecular Function", None],
+                        ],
+                    },
+                ]
+            }
+        }
+        values = _extract_vocab_values(form, "goAssociationsOntologies")
+        assert "Biological Process" in values
+        assert "Cellular Component" in values
+        assert "Molecular Function" in values
+
+    def test_returns_empty_for_missing_param(self) -> None:
+        form = {"searchData": {"parameters": [{"name": "other", "vocabulary": []}]}}
+        assert _extract_vocab_values(form, "goAssociationsOntologies") == []
+
+    def test_returns_empty_for_no_vocabulary(self) -> None:
+        form = {"searchData": {"parameters": [{"name": "goAssociationsOntologies"}]}}
+        assert _extract_vocab_values(form, "goAssociationsOntologies") == []
+
+    def test_returns_empty_for_none_input(self) -> None:
+        assert _extract_vocab_values(None, "anything") == []
+
+    def test_returns_empty_for_empty_dict(self) -> None:
+        assert _extract_vocab_values({}, "anything") == []
+
+    def test_handles_form_without_search_data_wrapper(self) -> None:
+        """Form metadata may or may not have the searchData wrapper."""
+        form = {
+            "parameters": [
+                {
+                    "name": "organism",
+                    "type": "single-pick-vocabulary",
+                    "vocabulary": [
+                        ["Plasmodium falciparum 3D7", "P. falciparum 3D7", None],
+                    ],
+                },
+            ]
+        }
+        values = _extract_vocab_values(form, "organism")
+        assert values == ["Plasmodium falciparum 3D7"]
 
 
 class TestParseEnrichmentTerms:

@@ -8,7 +8,7 @@ formatting.
 from dataclasses import dataclass
 from typing import Protocol
 
-from veupath_chatbot.domain.strategy.ast import PlanStepNode, StrategyAST
+from veupath_chatbot.domain.strategy.ast import PlanStepNode, StepTreeNode, StrategyAST
 from veupath_chatbot.domain.strategy.compile import (
     CompilationResult,
     StepDecoratorAPI,
@@ -42,7 +42,7 @@ class StrategyBuildAPI(StrategyCompilerAPI, StepDecoratorAPI, Protocol):
 
     async def create_strategy(
         self,
-        step_tree: object,
+        step_tree: StepTreeNode,
         name: str,
         description: str | None = None,
     ) -> JSONObject: ...
@@ -50,7 +50,7 @@ class StrategyBuildAPI(StrategyCompilerAPI, StepDecoratorAPI, Protocol):
     async def update_strategy(
         self,
         strategy_id: int,
-        step_tree: object | None = None,
+        step_tree: StepTreeNode | None = None,
         name: str | None = None,
     ) -> JSONObject: ...
 

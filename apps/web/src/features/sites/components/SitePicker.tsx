@@ -163,15 +163,10 @@ export function SitePicker({
             <select
               value={value}
               onChange={(e) => {
-                const nextId = e.target.value;
-                const nextSite = sites.find((site) => site.id === nextId);
-                if (nextSite) {
-                  setSelectedSiteInfo(
-                    nextSite.id,
-                    nextSite.displayName || nextSite.name,
-                  );
-                }
-                onChange(nextId);
+                // Only notify the parent — let it decide whether to accept.
+                // The useEffect watching `selectedSite` will sync the display
+                // name once the parent actually updates the value prop.
+                onChange(e.target.value);
               }}
               disabled={loading}
               data-testid="site-select"

@@ -2,11 +2,14 @@
 
 from fastapi import APIRouter
 
-from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.experiment.enrichment_compare import (
+    EnrichmentCompareResult,
     compare_enrichment_across,
 )
-from veupath_chatbot.services.experiment.overlap import compute_gene_set_overlap
+from veupath_chatbot.services.experiment.overlap import (
+    OverlapResult,
+    compute_gene_set_overlap,
+)
 from veupath_chatbot.transport.http.deps import (
     CurrentUser,
     get_experiments_owned_by_user,
@@ -20,7 +23,7 @@ router = APIRouter()
 
 
 @router.post("/overlap")
-async def compute_overlap(body: OverlapRequest, user_id: CurrentUser) -> JSONObject:
+async def compute_overlap(body: OverlapRequest, user_id: CurrentUser) -> OverlapResult:
     """Compute pairwise gene set overlap between experiments."""
     experiments = await get_experiments_owned_by_user(body.experiment_ids, str(user_id))
     return compute_gene_set_overlap(experiments, body.experiment_ids)
@@ -29,7 +32,7 @@ async def compute_overlap(body: OverlapRequest, user_id: CurrentUser) -> JSONObj
 @router.post("/enrichment-compare")
 async def compare_enrichment(
     body: EnrichmentCompareRequest, user_id: CurrentUser
-) -> JSONObject:
+) -> EnrichmentCompareResult:
     """Compare enrichment results across experiments."""
     experiments = await get_experiments_owned_by_user(body.experiment_ids, str(user_id))
     return compare_enrichment_across(

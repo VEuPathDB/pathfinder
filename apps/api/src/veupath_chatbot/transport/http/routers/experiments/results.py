@@ -84,9 +84,14 @@ async def get_experiment_records(
         attributes=attr_list,
     )
 
-    records = answer.get("records", [])
+    raw_records = answer.get("records", [])
+    record_list: list[JSONObject] = (
+        [r for r in raw_records if isinstance(r, dict)]
+        if isinstance(raw_records, list)
+        else []
+    )
     classified = classify_records(
-        records if isinstance(records, list) else [],
+        record_list,
         tp_ids={g.id for g in exp.true_positive_genes},
         fp_ids={g.id for g in exp.false_positive_genes},
         fn_ids={g.id for g in exp.false_negative_genes},

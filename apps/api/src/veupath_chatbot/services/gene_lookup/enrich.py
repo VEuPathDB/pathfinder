@@ -22,7 +22,7 @@ _ENRICHMENT_FIELDS: list[tuple[str, Callable[[str], str]]] = [
 ]
 
 
-def _merge_meta(merged: dict[str, object], meta: JSONObject) -> None:
+def _merge_meta(merged: JSONObject, meta: JSONObject) -> None:
     """Fill empty fields in *merged* from *meta*, applying transforms."""
     for field, transform in _ENRICHMENT_FIELDS:
         if not merged.get(field) and meta.get(field):

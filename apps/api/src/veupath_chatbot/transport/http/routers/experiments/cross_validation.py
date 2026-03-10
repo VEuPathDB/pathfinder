@@ -1,5 +1,7 @@
 """Cross-validation endpoint for experiments."""
 
+from typing import cast
+
 from fastapi import APIRouter
 
 from veupath_chatbot.platform.errors import WDKError
@@ -36,7 +38,9 @@ async def run_cv(
             controls_value_format=exp.config.controls_value_format,
             positive_controls=exp.config.positive_controls,
             negative_controls=exp.config.negative_controls,
-            tree=exp.config.step_tree if exp.config.is_tree_mode else None,
+            tree=(
+                exp.config.step_tree if isinstance(exp.config.step_tree, dict) else None
+            ),
             search_name=exp.config.search_name if not exp.config.is_tree_mode else None,
             parameters=exp.config.parameters if not exp.config.is_tree_mode else None,
             k=request.k_folds,
@@ -55,4 +59,4 @@ async def run_cv(
 
     exp.cross_validation = cv
     get_experiment_store().save(exp)
-    return to_json(cv)
+    return cast(JSONObject, to_json(cv))

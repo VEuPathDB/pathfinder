@@ -21,7 +21,7 @@ from .executor import PathfinderAgent
 
 def _create_openai_engine(
     *, model: str, temperature: float, top_p: float, hyperparams: JSONObject
-) -> OpenAIEngine:
+) -> BaseEngine:
     settings = get_settings()
     # Some OpenAI models only support default sampling params (temperature=1, top_p=1).
     # To avoid hard failures, we omit temperature/top_p entirely for those models.
@@ -30,14 +30,11 @@ def _create_openai_engine(
     if not sampling_restricted:
         kwargs["temperature"] = temperature
         kwargs["top_p"] = top_p
-    return cast(
-        BaseEngine,
-        OpenAIEngine(
-            api_key=settings.openai_api_key,
-            model=model,
-            **kwargs,
-            **(hyperparams or {}),
-        ),
+    return OpenAIEngine(
+        api_key=settings.openai_api_key,
+        model=model,
+        **kwargs,
+        **(hyperparams or {}),
     )
 
 
@@ -48,15 +45,12 @@ def _create_anthropic_engine(
     # Lazy import so the API can still boot in minimal installs.
     from kani.engines.anthropic import AnthropicEngine
 
-    return cast(
-        BaseEngine,
-        AnthropicEngine(
-            api_key=settings.anthropic_api_key,
-            model=model,
-            temperature=temperature,
-            top_p=top_p,
-            **(hyperparams or {}),
-        ),
+    return AnthropicEngine(
+        api_key=settings.anthropic_api_key,
+        model=model,
+        temperature=temperature,
+        top_p=top_p,
+        **(hyperparams or {}),
     )
 
 
@@ -67,15 +61,12 @@ def _create_google_engine(
     # Lazy import so the API can still boot in minimal installs.
     from kani.engines.google import GoogleAIEngine
 
-    return cast(
-        BaseEngine,
-        GoogleAIEngine(
-            api_key=settings.gemini_api_key,
-            model=model,
-            temperature=temperature,
-            top_p=top_p,
-            **(hyperparams or {}),
-        ),
+    return GoogleAIEngine(
+        api_key=settings.gemini_api_key,
+        model=model,
+        temperature=temperature,
+        top_p=top_p,
+        **(hyperparams or {}),
     )
 
 
@@ -194,14 +185,11 @@ def create_engine(
     factory = _ENGINE_FACTORIES.get(provider)
     if factory is None:
         raise ValueError(f"Unknown provider: {provider!r}")
-    return cast(
-        BaseEngine,
-        factory(
-            model=model,
-            temperature=temperature,
-            top_p=top_p,
-            hyperparams=hyperparams,
-        ),
+    return factory(
+        model=model,
+        temperature=temperature,
+        top_p=top_p,
+        hyperparams=hyperparams,
     )
 
 

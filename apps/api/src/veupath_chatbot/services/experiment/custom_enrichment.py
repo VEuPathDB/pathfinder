@@ -1,17 +1,31 @@
 """Custom gene set enrichment analysis against experiment results."""
 
 import math
+from typing import TypedDict
 
-from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.experiment.stats import hypergeometric_log_sf
 from veupath_chatbot.services.experiment.types import Experiment
+
+
+class CustomEnrichmentResult(TypedDict):
+    """Return shape of :func:`run_custom_enrichment`."""
+
+    geneSetName: str
+    geneSetSize: int
+    overlapCount: int
+    overlapGenes: list[str]
+    backgroundSize: int
+    tpCount: int
+    foldEnrichment: float
+    pValue: float
+    oddsRatio: float
 
 
 def run_custom_enrichment(
     exp: Experiment,
     gene_ids: list[str],
     gene_set_name: str,
-) -> JSONObject:
+) -> CustomEnrichmentResult:
     """Test enrichment of a custom gene set against the experiment results.
 
     Computes overlap, fold enrichment, p-value (hypergeometric), and odds ratio.

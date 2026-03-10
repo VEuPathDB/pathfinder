@@ -42,8 +42,10 @@ class SemanticScholarClient(StandardClient):
         item = raw
 
         title = str(item.get("title") or "").strip()
-        year = item.get("year") if isinstance(item.get("year"), int) else None
-        url_item = item.get("url") if isinstance(item.get("url"), str) else None
+        year_raw = item.get("year")
+        year: int | None = year_raw if isinstance(year_raw, int) else None
+        url_val = item.get("url")
+        url_item: str | None = url_val if isinstance(url_val, str) else None
 
         authors: list[str] | None = None
         raw_authors = item.get("authors")
@@ -54,10 +56,10 @@ class SemanticScholarClient(StandardClient):
                 if isinstance(a, dict) and a.get("name")
             ]
 
-        abstract = (
-            item.get("abstract") if isinstance(item.get("abstract"), str) else None
+        abstract_raw = item.get("abstract")
+        abstract = truncate_text(
+            abstract_raw if isinstance(abstract_raw, str) else None, abstract_max_chars
         )
-        abstract = truncate_text(abstract, abstract_max_chars)
 
         journal: str | None = None
         j = item.get("journal")
@@ -68,10 +70,12 @@ class SemanticScholarClient(StandardClient):
         doi: str | None = None
         pmid: str | None = None
         if isinstance(ext, dict):
-            if isinstance(ext.get("DOI"), str):
-                doi = ext.get("DOI")
-            if isinstance(ext.get("PubMed"), str):
-                pmid = ext.get("PubMed")
+            doi_val = ext.get("DOI")
+            if isinstance(doi_val, str):
+                doi = doi_val
+            pmid_val = ext.get("PubMed")
+            if isinstance(pmid_val, str):
+                pmid = pmid_val
 
         result_url = url_item or (f"https://doi.org/{doi}" if doi else None)
 

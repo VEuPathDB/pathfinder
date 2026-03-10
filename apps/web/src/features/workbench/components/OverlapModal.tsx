@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Modal } from "@/lib/components/Modal";
+import { SetVenn } from "@/lib/components/SetVenn";
 import type { GeneSet } from "../store";
 
 interface OverlapModalProps {
@@ -20,9 +21,16 @@ interface PairwiseResult {
 }
 
 export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
+  const [clickedRegion, setClickedRegion] = useState<{
+    label: string;
+    geneIds: string[];
+  } | null>(null);
+
   const unresolvedSets = sets.filter(
     (s) => (s.geneIds ?? []).length === 0 && s.wdkStepId != null,
   );
+
+  const resolvedSets = sets.filter((s) => (s.geneIds ?? []).length > 0);
 
   const analysis = useMemo(() => {
     // Pairwise comparisons
@@ -93,6 +101,56 @@ export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
             <p className="text-[11px] text-muted-foreground">In All Sets</p>
           </div>
         </div>
+
+        {/* Multi-set Venn/Euler diagram */}
+        {resolvedSets.length >= 2 && resolvedSets.length <= 5 && (
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground mb-2">
+              Set Relationships
+            </h4>
+            <div className="flex justify-center rounded-md border border-border bg-background p-3">
+              <SetVenn
+                sets={resolvedSets.map((s) => ({
+                  key: s.name,
+                  geneIds: s.geneIds ?? [],
+                }))}
+                height={resolvedSets.length > 3 ? 320 : 260}
+                width={420}
+                onRegionClick={(geneIds, label) => setClickedRegion({ label, geneIds })}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Clicked region gene list */}
+        {clickedRegion && clickedRegion.geneIds.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-semibold text-muted-foreground">
+                {clickedRegion.label} ({clickedRegion.geneIds.length} genes)
+              </h4>
+              <button
+                type="button"
+                onClick={() => setClickedRegion(null)}
+                className="text-[10px] text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="max-h-32 overflow-y-auto rounded-md border border-border bg-background p-2">
+              <div className="flex flex-wrap gap-1">
+                {clickedRegion.geneIds.map((id) => (
+                  <span
+                    key={id}
+                    className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]"
+                  >
+                    {id}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Per-set summary */}
         <div>

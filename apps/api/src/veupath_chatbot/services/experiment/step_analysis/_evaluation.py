@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from veupath_chatbot.domain.strategy.ast import StepTreeNode
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.types import JSONObject
+from veupath_chatbot.platform.types import JSONArray, JSONObject
 from veupath_chatbot.services.control_helpers import delete_temp_strategy
 from veupath_chatbot.services.control_tests import (
     _extract_intersection_data,
@@ -125,11 +125,13 @@ async def run_controls_against_tree(
                 if isinstance(answer, dict):
                     intersection_ids = extract_record_ids(answer.get("records"))
 
+            ids_list: JSONArray = list(intersection_ids)
+            ids_sample: JSONArray = list(intersection_ids[:50])
             return {
                 "controlsCount": len(control_ids),
                 "intersectionCount": intersection_total,
-                "intersectionIds": list(intersection_ids),
-                "intersectionIdsSample": list(intersection_ids[:50]),
+                "intersectionIds": ids_list,
+                "intersectionIdsSample": ids_sample,
                 "targetStepId": root_tree.step_id,
                 "targetResultCount": target_total,
             }
@@ -140,6 +142,7 @@ async def run_controls_against_tree(
         pos_payload = await _eval_control_set(pos, "positive")
         pos_count, found_ids, has_ids = _extract_intersection_data(pos_payload)
         missing = [x for x in pos if x not in found_ids] if has_ids else []
+        missing_sample: JSONArray = list(missing[:50])
 
         result["target"] = {
             "searchName": "__tree__",
@@ -147,7 +150,7 @@ async def run_controls_against_tree(
         }
         result["positive"] = {
             **pos_payload,
-            "missingIdsSample": list(missing[:50]),
+            "missingIdsSample": missing_sample,
             "recall": pos_count / len(pos) if pos else None,
         }
 
@@ -163,9 +166,11 @@ async def run_controls_against_tree(
                 "searchName": "__tree__",
                 "resultCount": neg_payload.get("targetResultCount"),
             }
+        unexpected_hits = sorted(hit_ids)[:50] if hit_ids else []
+        unexpected_sample: JSONArray = list(unexpected_hits)
         result["negative"] = {
             **neg_payload,
-            "unexpectedHitsSample": list(hit_ids)[:50] if hit_ids else [],
+            "unexpectedHitsSample": unexpected_sample,
             "falsePositiveRate": neg_count / len(neg) if neg else None,
         }
 

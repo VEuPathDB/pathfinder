@@ -1,13 +1,62 @@
 """Gene set overlap analysis across experiments."""
 
-from veupath_chatbot.platform.types import JSONObject
+from typing import TypedDict
+
 from veupath_chatbot.services.experiment.types import Experiment
+
+
+class PairwiseOverlap(TypedDict):
+    """Shape of one pairwise comparison entry."""
+
+    experimentA: str
+    experimentB: str
+    labelA: str
+    labelB: str
+    sizeA: int
+    sizeB: int
+    intersection: int
+    union: int
+    jaccard: float
+    sharedGenes: list[str]
+    uniqueA: list[str]
+    uniqueB: list[str]
+
+
+class PerExperimentSummary(TypedDict):
+    """Shape of one per-experiment summary entry."""
+
+    experimentId: str
+    label: str
+    totalGenes: int
+    uniqueGenes: int
+    sharedGenes: int
+
+
+class GeneMembership(TypedDict):
+    """Shape of one gene membership entry."""
+
+    geneId: str
+    foundIn: int
+    totalExperiments: int
+    experiments: list[str]
+
+
+class OverlapResult(TypedDict):
+    """Return shape of :func:`compute_gene_set_overlap`."""
+
+    experimentIds: list[str]
+    experimentLabels: dict[str, str]
+    pairwise: list[PairwiseOverlap]
+    perExperiment: list[PerExperimentSummary]
+    universalGenes: list[str]
+    totalUniqueGenes: int
+    geneMembership: list[GeneMembership]
 
 
 def compute_gene_set_overlap(
     experiments: list[Experiment],
     experiment_ids: list[str],
-) -> JSONObject:
+) -> OverlapResult:
     """Compute pairwise gene set overlap between experiments.
 
     For each experiment the result gene set is the union of TP and FP genes.
@@ -22,7 +71,7 @@ def compute_gene_set_overlap(
         labels[exp.id] = exp.config.name or exp.id
 
     # Pairwise comparisons
-    pairwise: list[JSONObject] = []
+    pairwise: list[PairwiseOverlap] = []
     for i in range(len(experiment_ids)):
         for j in range(i + 1, len(experiment_ids)):
             a_id, b_id = experiment_ids[i], experiment_ids[j]
@@ -65,7 +114,7 @@ def compute_gene_set_overlap(
         if len(exps) == len(experiment_ids)
     }
 
-    per_experiment: list[JSONObject] = []
+    per_experiment: list[PerExperimentSummary] = []
     for exp in experiments:
         gs = gene_sets[exp.id]
         shared_count = sum(1 for gid in gs if len(gene_to_experiments[gid]) > 1)
@@ -79,7 +128,7 @@ def compute_gene_set_overlap(
             }
         )
 
-    gene_membership: list[JSONObject] = [
+    gene_membership: list[GeneMembership] = [
         {
             "geneId": gid,
             "foundIn": len(exps),

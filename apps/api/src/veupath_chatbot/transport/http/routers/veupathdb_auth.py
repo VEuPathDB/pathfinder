@@ -5,6 +5,8 @@ Pathfinder user (via ``User.external_id = email``) and returns a
 ``pathfinder-auth`` token so the frontend has a stable identity across sessions.
 """
 
+from typing import TypedDict
+
 import httpx
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
@@ -104,10 +106,10 @@ def _build_success_response(
     Auth tokens are ONLY set via httpOnly cookies — never exposed in the
     response body — to prevent XSS-based token exfiltration.
     """
-    body: dict[str, object] = {"success": True}
+    body = {"success": True}
 
     settings = get_settings()
-    secure_cookie = not settings.is_development
+    secure_cookie = settings.api_env != "development"
 
     resp = JSONResponse(body)
     resp.set_cookie(
@@ -220,7 +222,7 @@ async def refresh_internal_auth(
         raise UnauthorizedError(detail="VEuPathDB session expired or invalid")
 
     settings = get_settings()
-    secure_cookie = not settings.is_development
+    secure_cookie = settings.api_env != "development"
 
     resp = JSONResponse({"success": True})
     resp.set_cookie(
@@ -234,9 +236,33 @@ async def refresh_internal_auth(
     return resp
 
 
+class _AuthStatusDict(TypedDict):
+    signedIn: bool
+    name: str | None
+    email: str | None
+
+
 @router.get("/status", response_model=AuthStatusResponse)
-async def auth_status() -> dict[str, object]:
-    """Return current VEuPathDB auth status."""
+async def auth_status(request: Request) -> _AuthStatusDict:
+    """Return current VEuPathDB auth status.
+
+    In mock mode (``PATHFINDER_CHAT_PROVIDER=mock``), a valid
+    ``pathfinder-auth`` cookie is sufficient — the dev-login endpoint
+    doesn't create a VEuPathDB session, so we skip the real WDK call.
+    """
+    settings = get_settings()
+    if settings.chat_provider.strip().lower() == "mock":
+        from veupath_chatbot.platform.security import get_optional_user
+
+        cookie_token = request.cookies.get("pathfinder-auth")
+        user_id = await get_optional_user(request, cookie_token)
+        if user_id is not None:
+            return {
+                "signedIn": True,
+                "name": "E2E Test User",
+                "email": "e2e@test.local",
+            }
+
     site = get_site("veupathdb")
     client = get_wdk_client(site.id)
     try:
@@ -244,7 +270,7 @@ async def auth_status() -> dict[str, object]:
     except Exception:
         return {"signedIn": False, "name": None, "email": None}
 
-    from veupath_chatbot.platform.types import as_json_object
+    from veupath_chatbot.platform.types import JSONObject, as_json_object
 
     if not isinstance(user, dict):
         return {"signedIn": False, "name": None, "email": None}
@@ -254,7 +280,7 @@ async def auth_status() -> dict[str, object]:
     email_value = user_obj.get("email")
     email: str | None = str(email_value) if isinstance(email_value, str) else None
     properties_value = user_obj.get("properties")
-    properties: dict[str, object] = {}
+    properties: JSONObject = {}
     if isinstance(properties_value, dict):
         properties = {str(k): v for k, v in properties_value.items()}
     first_value = properties.get("firstName")

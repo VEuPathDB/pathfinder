@@ -31,6 +31,11 @@ module.exports = defineConfig([
           plugins: { "@typescript-eslint": tsPlugin },
           rules: { "@typescript-eslint/no-explicit-any": "off" },
         },
+        // Playwright fixtures use a callback named "use", not React hooks.
+        {
+          files: ["e2e/**/*.ts"],
+          rules: { "react-hooks/rules-of-hooks": "off" },
+        },
         {
           files: ["**/*.cjs", "next.config.js"],
           plugins: { "@typescript-eslint": tsPlugin },

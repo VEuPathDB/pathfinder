@@ -186,7 +186,7 @@ def build_attribute_list(attrs_raw: object) -> list[JSONObject]:
 
 def _build_single_attribute(
     name: str,
-    meta: dict[str, object],
+    meta: JSONObject,
     *,
     name_fallback: str,
 ) -> JSONObject:
@@ -223,7 +223,7 @@ def extract_detail_attributes(
 
     :returns: ``(attribute_names, display_name_map)``
     """
-    items: list[tuple[str, dict[str, object]]] = []
+    items: list[tuple[str, JSONObject]] = []
     if isinstance(attrs_raw, dict):
         for name, meta in attrs_raw.items():
             if isinstance(meta, dict):
@@ -254,7 +254,7 @@ def extract_detail_attributes(
 
 def merge_analysis_params(
     form_meta: JSONValue,
-    user_params: dict[str, object],
+    user_params: JSONObject,
 ) -> JSONObject:
     """Merge WDK form defaults with user-supplied parameters.
 

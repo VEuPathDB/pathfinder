@@ -12,6 +12,7 @@ import json
 from collections.abc import AsyncIterator, Callable
 from functools import lru_cache
 from pathlib import Path
+from typing import Any, cast
 
 from kani import ChatMessage, ChatRole, Kani
 from kani.engines.base import BaseEngine
@@ -253,7 +254,9 @@ async def run_assistant(
             chat_history=chat_history,
         )
     else:
-        agent = _experiment_agent_cls(
+        # Dynamic dispatch: the actual class (ExperimentAssistantAgent)
+        # accepts site_id, but the static type is type[Kani].
+        agent = cast(Any, _experiment_agent_cls)(
             engine=engine,
             site_id=site_id,
             system_prompt=system_prompt,

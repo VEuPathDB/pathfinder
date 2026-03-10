@@ -53,10 +53,14 @@ async def re_evaluate(exp: Experiment) -> JSONObject:
             run_controls_against_tree,
         )
 
+        step_tree = exp.config.step_tree
+        if not isinstance(step_tree, dict):
+            raise ValueError("step_tree must be a dict in tree mode")
+
         result = await run_controls_against_tree(
             site_id=exp.config.site_id,
             record_type=exp.config.record_type,
-            tree=exp.config.step_tree,
+            tree=step_tree,
             controls_search_name=exp.config.controls_search_name,
             controls_param_name=exp.config.controls_param_name,
             controls_value_format=exp.config.controls_value_format,
@@ -283,7 +287,16 @@ async def generate_sweep_events(
         order = {v: i for i, v in enumerate(sweep_values)}
         all_points.sort(key=lambda p: order.get(str(p.get("value", "")), 0))
     else:
-        all_points.sort(key=lambda p: float(p.get("value", 0)))
+
+        def _numeric_value(p: JSONObject) -> float:
+            v = p.get("value", 0)
+            if isinstance(v, (int, float)):
+                return float(v)
+            if isinstance(v, str):
+                return float(v)
+            return 0.0
+
+        all_points.sort(key=_numeric_value)
 
     final_data = json_mod.dumps(
         {

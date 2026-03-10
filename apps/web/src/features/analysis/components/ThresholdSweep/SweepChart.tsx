@@ -1,19 +1,17 @@
 import { Loader2 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from "recharts";
 import type { ThresholdSweepPoint } from "@/lib/api/analysis";
 import { CHART_COLORS } from "@/lib/utils/chartTheme";
 import { fmtNum, truncateLabel } from "./types";
-
-const W = 600;
-const H = 260;
-const PAD = { top: 20, right: 20, bottom: 40, left: 50 };
-const plotW = W - PAD.left - PAD.right;
-const plotH = H - PAD.top - PAD.bottom;
-
-const Y_TICKS = [0, 0.25, 0.5, 0.75, 1.0];
-
-function y(v: number) {
-  return PAD.top + plotH - v * plotH;
-}
 
 export function SweepChart({
   points,
@@ -28,246 +26,17 @@ export function SweepChart({
   formatValue: (v: number | string) => string;
   isStreaming: boolean;
 }) {
-  if (sweepType === "categorical") {
-    return (
-      <CategoricalChart
-        points={points}
-        parameter={parameter}
-        formatValue={formatValue}
-        isStreaming={isStreaming}
-      />
-    );
-  }
+  const chartData = points.map((p) => ({
+    label:
+      sweepType === "categorical"
+        ? truncateLabel(formatValue(p.value), 12)
+        : fmtNum(Number(p.value)),
+    value: p.value,
+    sensitivity: p.metrics?.sensitivity ?? 0,
+    specificity: p.metrics?.specificity ?? 0,
+    f1: p.metrics?.f1Score ?? 0,
+  }));
 
-  return (
-    <NumericChart points={points} parameter={parameter} isStreaming={isStreaming} />
-  );
-}
-
-function CategoricalChart({
-  points,
-  parameter,
-  formatValue,
-  isStreaming,
-}: {
-  points: ThresholdSweepPoint[];
-  parameter: string;
-  formatValue: (v: number | string) => string;
-  isStreaming: boolean;
-}) {
-  const spacing = points.length > 1 ? plotW / (points.length - 1) : plotW / 2;
-  const xCat = (i: number) => PAD.left + (points.length > 1 ? i * spacing : plotW / 2);
-
-  const makeLineCat = (getter: (p: ThresholdSweepPoint) => number) =>
-    points
-      .map(
-        (p, i) =>
-          `${i === 0 ? "M" : "L"}${xCat(i).toFixed(1)},${y(getter(p)).toFixed(1)}`,
-      )
-      .join(" ");
-
-  const sensLine = makeLineCat((p) => p.metrics?.sensitivity ?? 0);
-  const specLine = makeLineCat((p) => p.metrics?.specificity ?? 0);
-  const f1Line = makeLineCat((p) => p.metrics?.f1Score ?? 0);
-
-  return (
-    <ChartWrapper parameter={parameter} isStreaming={isStreaming}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: H }}>
-        <YGrid />
-        {points.map((p, i) => (
-          <text
-            key={String(p.value)}
-            x={xCat(i)}
-            y={H - PAD.bottom + 16}
-            textAnchor="middle"
-            className="fill-muted-foreground"
-            style={{ fontSize: 8 }}
-          >
-            {truncateLabel(formatValue(p.value), 12)}
-          </text>
-        ))}
-        <XAxisLabel parameter={parameter} />
-        <MetricPaths sensLine={sensLine} specLine={specLine} f1Line={f1Line} />
-        {points.map((p, i) => (
-          <MetricDots
-            key={String(p.value)}
-            cx={xCat(i)}
-            sensitivity={p.metrics?.sensitivity ?? 0}
-            specificity={p.metrics?.specificity ?? 0}
-            f1Score={p.metrics?.f1Score ?? 0}
-          />
-        ))}
-      </svg>
-      <ChartLegend />
-    </ChartWrapper>
-  );
-}
-
-function NumericChart({
-  points,
-  parameter,
-  isStreaming,
-}: {
-  points: ThresholdSweepPoint[];
-  parameter: string;
-  isStreaming: boolean;
-}) {
-  const numValues = points.map((p) => Number(p.value));
-  const xMin = Math.min(...numValues);
-  const xMax = Math.max(...numValues);
-  const xRange = xMax - xMin || 1;
-  const x = (v: number) => PAD.left + ((v - xMin) / xRange) * plotW;
-
-  const makeLine = (getter: (p: ThresholdSweepPoint) => number) =>
-    points
-      .map(
-        (p, i) =>
-          `${i === 0 ? "M" : "L"}${x(Number(p.value)).toFixed(1)},${y(getter(p)).toFixed(1)}`,
-      )
-      .join(" ");
-
-  const sensLine = makeLine((p) => p.metrics?.sensitivity ?? 0);
-  const specLine = makeLine((p) => p.metrics?.specificity ?? 0);
-  const f1Line = makeLine((p) => p.metrics?.f1Score ?? 0);
-
-  const xTicks = points.filter(
-    (_, i) =>
-      i === 0 || i === points.length - 1 || i % Math.ceil(points.length / 6) === 0,
-  );
-
-  return (
-    <ChartWrapper parameter={parameter} isStreaming={isStreaming}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: H }}>
-        <YGrid />
-        {xTicks.map((p) => (
-          <text
-            key={String(p.value)}
-            x={x(Number(p.value))}
-            y={H - PAD.bottom + 16}
-            textAnchor="middle"
-            className="fill-muted-foreground"
-            style={{ fontSize: 9 }}
-          >
-            {fmtNum(Number(p.value))}
-          </text>
-        ))}
-        <XAxisLabel parameter={parameter} />
-        <MetricPaths sensLine={sensLine} specLine={specLine} f1Line={f1Line} />
-        {points.map((p) => (
-          <MetricDots
-            key={String(p.value)}
-            cx={x(Number(p.value))}
-            sensitivity={p.metrics?.sensitivity ?? 0}
-            specificity={p.metrics?.specificity ?? 0}
-            f1Score={p.metrics?.f1Score ?? 0}
-          />
-        ))}
-      </svg>
-      <ChartLegend />
-    </ChartWrapper>
-  );
-}
-
-function YGrid() {
-  return (
-    <>
-      {Y_TICKS.map((v) => (
-        <g key={v}>
-          <line
-            x1={PAD.left}
-            y1={y(v)}
-            x2={W - PAD.right}
-            y2={y(v)}
-            stroke="hsl(var(--border))"
-            strokeWidth={0.5}
-          />
-          <text
-            x={PAD.left - 6}
-            y={y(v) + 3}
-            textAnchor="end"
-            className="fill-muted-foreground"
-            style={{ fontSize: 9 }}
-          >
-            {(v * 100).toFixed(0)}%
-          </text>
-        </g>
-      ))}
-    </>
-  );
-}
-
-function XAxisLabel({ parameter }: { parameter: string }) {
-  return (
-    <text
-      x={PAD.left + plotW / 2}
-      y={H - 4}
-      textAnchor="middle"
-      className="fill-muted-foreground"
-      style={{ fontSize: 10 }}
-    >
-      {parameter}
-    </text>
-  );
-}
-
-function MetricPaths({
-  sensLine,
-  specLine,
-  f1Line,
-}: {
-  sensLine: string;
-  specLine: string;
-  f1Line: string;
-}) {
-  return (
-    <>
-      <path d={sensLine} fill="none" stroke={CHART_COLORS.primary} strokeWidth={2} />
-      <path
-        d={specLine}
-        fill="none"
-        stroke={CHART_COLORS.destructive}
-        strokeWidth={2}
-      />
-      <path
-        d={f1Line}
-        fill="none"
-        stroke="hsl(var(--foreground))"
-        strokeWidth={2}
-        strokeDasharray="4 2"
-      />
-    </>
-  );
-}
-
-function MetricDots({
-  cx,
-  sensitivity,
-  specificity,
-  f1Score,
-}: {
-  cx: number;
-  sensitivity: number;
-  specificity: number;
-  f1Score: number;
-}) {
-  return (
-    <g>
-      <circle cx={cx} cy={y(sensitivity)} r={2.5} fill={CHART_COLORS.primary} />
-      <circle cx={cx} cy={y(specificity)} r={2.5} fill={CHART_COLORS.destructive} />
-      <circle cx={cx} cy={y(f1Score)} r={2} fill="hsl(var(--foreground))" />
-    </g>
-  );
-}
-
-function ChartWrapper({
-  parameter,
-  isStreaming,
-  children,
-}: {
-  parameter: string;
-  isStreaming: boolean;
-  children: React.ReactNode;
-}) {
   return (
     <div>
       <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -279,29 +48,79 @@ function ChartWrapper({
           </span>
         )}
       </div>
-      {children}
-    </div>
-  );
-}
-
-function ChartLegend() {
-  return (
-    <div className="mt-2 flex justify-center gap-6 text-xs text-muted-foreground">
-      <span className="flex items-center gap-1.5">
-        <span className="inline-block h-0.5 w-4 rounded bg-[hsl(var(--chart-1))]" />
-        Sensitivity
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span className="inline-block h-0.5 w-4 rounded bg-[hsl(var(--chart-4))]" />
-        Specificity
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span
-          className="inline-block h-0.5 w-4 rounded border-t border-dashed border-foreground bg-transparent"
-          style={{ borderTopWidth: 2 }}
-        />
-        F1
-      </span>
+      <ResponsiveContainer width="100%" height={260}>
+        <LineChart
+          data={chartData}
+          margin={{ top: 10, right: 20, bottom: 20, left: 10 }}
+        >
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="hsl(var(--border))"
+            strokeOpacity={0.5}
+          />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+            label={{
+              value: parameter,
+              position: "insideBottom",
+              offset: -10,
+              style: { fontSize: 10, fill: "hsl(var(--muted-foreground))" },
+            }}
+          />
+          <YAxis
+            domain={[0, 1]}
+            ticks={[0, 0.25, 0.5, 0.75, 1.0]}
+            tickFormatter={(v: number) => `${(v * 100).toFixed(0)}%`}
+            tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+            width={45}
+          />
+          <Tooltip
+            contentStyle={{
+              fontSize: 11,
+              background: "hsl(var(--popover))",
+              border: "1px solid hsl(var(--border))",
+              borderRadius: 6,
+              color: "hsl(var(--popover-foreground))",
+            }}
+            formatter={(value, name) => [
+              `${(Number(value) * 100).toFixed(1)}%`,
+              String(name),
+            ]}
+          />
+          <Legend
+            wrapperStyle={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }}
+          />
+          <Line
+            type="monotone"
+            dataKey="sensitivity"
+            name="Sensitivity"
+            stroke={CHART_COLORS.primary}
+            strokeWidth={2}
+            dot={{ r: 2.5 }}
+            activeDot={{ r: 4 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="specificity"
+            name="Specificity"
+            stroke={CHART_COLORS.destructive}
+            strokeWidth={2}
+            dot={{ r: 2.5 }}
+            activeDot={{ r: 4 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="f1"
+            name="F1"
+            stroke="hsl(var(--foreground))"
+            strokeWidth={2}
+            strokeDasharray="4 2"
+            dot={{ r: 2 }}
+            activeDot={{ r: 4 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 }

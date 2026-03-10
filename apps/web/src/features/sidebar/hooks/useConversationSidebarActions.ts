@@ -36,6 +36,7 @@ export interface UseConversationSidebarActionsArgs {
   reportError: (message: string) => void;
   refreshStrategies: () => Promise<void>;
   setStrategyItems: Dispatch<SetStateAction<Strategy[]>>;
+  setNewConversationInFlight: (inFlight: boolean) => void;
 }
 
 export interface ConversationSidebarActions {
@@ -75,6 +76,7 @@ export function useConversationSidebarActions({
   reportError,
   refreshStrategies,
   setStrategyItems,
+  setNewConversationInFlight,
 }: UseConversationSidebarActionsArgs): ConversationSidebarActions {
   // --- Store selectors ---
   const strategyId = useSessionStore((s) => s.strategyId);
@@ -132,6 +134,10 @@ export function useConversationSidebarActions({
 
   // --- New conversation ---
   const handleNewConversation = useCallback(async () => {
+    // Signal that a new conversation is being created — prevents
+    // ensureActiveConversation from auto-picking an old strategy
+    // while the POST is in flight.
+    setNewConversationInFlight(true);
     try {
       const res = await openStrategy({ siteId });
       clearStrategy();
@@ -158,12 +164,15 @@ export function useConversationSidebarActions({
       reportError(
         typeof error === "string" ? error : "Failed to start a new conversation.",
       );
+    } finally {
+      setNewConversationInFlight(false);
     }
   }, [
     siteId,
     setStrategyId,
     clearStrategy,
     setStrategyItems,
+    setNewConversationInFlight,
     refreshStrategies,
     reportError,
   ]);
