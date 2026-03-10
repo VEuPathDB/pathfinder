@@ -18,6 +18,7 @@ from veupath_chatbot.services.control_helpers import (
 from veupath_chatbot.services.strategies.wdk_bridge import (
     parse_wdk_strategy_id,
     sync_to_projection,
+    upsert_summary_projection,
 )
 from veupath_chatbot.services.wdk import (
     get_site,
@@ -152,12 +153,11 @@ async def sync_all_wdk_strategies(
         synced_wdk_ids.add(wdk_id)
         try:
             async with stream_repo.session.begin_nested():
-                await sync_to_projection(
-                    wdk_id=wdk_id,
-                    site_id=site.id,
-                    api=api,
+                await upsert_summary_projection(
+                    item,
                     stream_repo=stream_repo,
                     user_id=user_id,
+                    site_id=site.id,
                 )
         except Exception as e:
             logger.warning(

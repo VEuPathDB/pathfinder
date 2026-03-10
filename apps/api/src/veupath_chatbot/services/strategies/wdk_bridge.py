@@ -11,6 +11,7 @@ module with a clean public API:
 - ``extract_wdk_is_saved`` — extract isSaved flag from WDK payload
 """
 
+import asyncio
 import hashlib
 import json
 from collections import OrderedDict
@@ -27,6 +28,7 @@ from veupath_chatbot.domain.strategy.ast import (
 )
 from veupath_chatbot.domain.strategy.compile import compile_strategy
 from veupath_chatbot.domain.strategy.ops import parse_op
+from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 from veupath_chatbot.integrations.veupathdb.factory import get_strategy_api
 from veupath_chatbot.integrations.veupathdb.strategy_api import StrategyAPI
 from veupath_chatbot.persistence.models import StreamProjection
@@ -53,6 +55,102 @@ def extract_wdk_is_saved(payload: JSONObject) -> bool:
     return bool(raw) if isinstance(raw, bool) else False
 
 
+def plan_needs_detail_fetch(projection: StreamProjection) -> bool:
+    """Check if a WDK-linked projection needs its full detail fetched from WDK.
+
+    Returns True when the projection has a ``wdk_strategy_id`` but no plan data
+    (i.e. it was synced with summary data only and the user is now opening it).
+    Local strategies (no ``wdk_strategy_id``) never need a WDK fetch.
+    """
+    if projection.wdk_strategy_id is None:
+        return False
+    plan = projection.plan
+    if not isinstance(plan, dict) or not plan:
+        return True
+    return "root" not in plan
+
+
+async def upsert_summary_projection(
+    wdk_item: JSONObject,
+    *,
+    stream_repo: StreamRepository,
+    user_id: UUID,
+    site_id: str,
+) -> StreamProjection | None:
+    """Create or update a projection from WDK list summary data only.
+
+    Unlike ``sync_to_projection``, this does NOT fetch the full strategy detail
+    from WDK. It only stores metadata available from the list endpoint:
+    name, recordClassName, estimatedSize, isSaved, leafAndTransformStepCount.
+
+    The ``plan`` field is left untouched (empty for new projections, preserved
+    for existing ones). Full plan data is fetched lazily on first GET.
+
+    Returns the projection, or ``None`` if the WDK item has no valid ID.
+    """
+    wdk_id = parse_wdk_strategy_id(wdk_item)
+    if wdk_id is None:
+        return None
+
+    name_raw = wdk_item.get("name")
+    name = (
+        str(name_raw)
+        if isinstance(name_raw, str) and name_raw
+        else f"WDK Strategy {wdk_id}"
+    )
+
+    record_class = wdk_item.get("recordClassName")
+    record_type = (
+        str(record_class).strip()
+        if isinstance(record_class, str) and record_class
+        else None
+    )
+
+    is_saved = extract_wdk_is_saved(wdk_item)
+
+    estimated_raw = wdk_item.get("estimatedSize")
+    estimated_size = estimated_raw if isinstance(estimated_raw, int) else None
+
+    step_count_raw = wdk_item.get("leafAndTransformStepCount")
+    step_count = step_count_raw if isinstance(step_count_raw, int) else 0
+
+    existing = await stream_repo.get_by_wdk_strategy_id(user_id, wdk_id)
+    if existing:
+        await stream_repo.update_projection(
+            existing.stream_id,
+            name=name,
+            record_type=record_type,
+            wdk_strategy_id=wdk_id,
+            wdk_strategy_id_set=True,
+            is_saved=is_saved,
+            is_saved_set=True,
+            step_count=step_count,
+            result_count=estimated_size,
+            result_count_set=True,
+        )
+        proj = await stream_repo.get_projection(existing.stream_id)
+    else:
+        stream = await stream_repo.create(
+            user_id=user_id,
+            site_id=site_id,
+            name=name,
+        )
+        await stream_repo.update_projection(
+            stream.id,
+            record_type=record_type,
+            wdk_strategy_id=wdk_id,
+            wdk_strategy_id_set=True,
+            is_saved=is_saved,
+            is_saved_set=True,
+            step_count=step_count,
+            result_count=estimated_size,
+            result_count_set=True,
+        )
+        proj = await stream_repo.get_projection(stream.id)
+
+    return proj
+
+
 def parse_wdk_strategy_id(item: JSONObject) -> int | None:
     """Extract integer WDK strategy ID from a list-strategies item.
 
@@ -68,16 +166,18 @@ def parse_wdk_strategy_id(item: JSONObject) -> int | None:
 async def fetch_and_convert(
     api: StrategyAPI,
     wdk_id: int,
-) -> tuple[StrategyAST, bool]:
+) -> tuple[StrategyAST, bool, JSONObject]:
     """Fetch a WDK strategy and convert to internal AST.
 
     Normalizes parameters best-effort (failures are logged and swallowed).
 
-    :returns: Tuple of (StrategyAST, is_saved).
+    :returns: Tuple of (StrategyAST, is_saved, step_counts).
+        ``step_counts`` maps step IDs to ``estimatedSize`` values from the
+        WDK response, enabling zero-cost count display.
     """
     wdk_strategy = await api.get_strategy(wdk_id)
 
-    ast, steps_data = _build_snapshot_from_wdk(wdk_strategy)
+    ast, steps_data, step_counts = _build_snapshot_from_wdk(wdk_strategy)
 
     try:
         await _normalize_synced_parameters(ast, steps_data, api)
@@ -89,7 +189,7 @@ async def fetch_and_convert(
         )
 
     is_saved = extract_wdk_is_saved(wdk_strategy)
-    return ast, is_saved
+    return ast, is_saved, step_counts
 
 
 async def sync_to_projection(
@@ -104,8 +204,10 @@ async def sync_to_projection(
 
     Shared by ``open_strategy`` and ``sync_all_wdk_strategies``.
     """
-    ast, is_saved = await fetch_and_convert(api, wdk_id)
+    ast, is_saved, step_counts = await fetch_and_convert(api, wdk_id)
     plan = ast.to_dict()
+    if step_counts:
+        plan["stepCounts"] = step_counts
     name = ast.name or f"WDK Strategy {wdk_id}"
 
     return await upsert_projection(
@@ -183,15 +285,59 @@ def _plan_cache_key(site_id: str, plan: JSONObject) -> str:
     return f"{site_id}:{digest}"
 
 
+async def _count_via_anonymous_report(
+    client: VEuPathDBClient,
+    record_type: str,
+    search_name: str,
+    parameters: JSONObject,
+) -> int | None:
+    """Get result count for a single search using the anonymous report endpoint.
+
+    ``POST /record-types/{recordType}/searches/{searchName}/reports/standard``
+    with ``numRecords: 0`` returns only ``meta.totalCount`` — no step or
+    strategy creation needed. Returns ``None`` on failure.
+    """
+    search_config: JSONObject = {"parameters": parameters}
+    report_config: JSONObject = {"pagination": {"offset": 0, "numRecords": 0}}
+    try:
+        result = await client.run_search_report(
+            record_type, search_name, search_config, report_config
+        )
+        meta = result.get("meta")
+        if isinstance(meta, dict):
+            count = meta.get("totalCount")
+            if isinstance(count, int):
+                return count
+    except Exception as e:
+        logger.warning(
+            "Anonymous report count failed",
+            record_type=record_type,
+            search_name=search_name,
+            error=str(e),
+        )
+    return None
+
+
+def _is_leaf_only_strategy(strategy_ast: StrategyAST) -> bool:
+    """Check if all steps in the strategy are leaf (search) steps."""
+    return all(step.infer_kind() == "search" for step in strategy_ast.get_all_steps())
+
+
 async def compute_step_counts_for_plan(
     plan: JSONObject,
     strategy_ast: StrategyAST,
     site_id: str,
 ) -> dict[str, int | None]:
-    """Compile a plan in WDK and return per-step result counts.
+    """Compute per-step result counts for a strategy plan.
 
-    Creates a temporary (unsaved) WDK strategy, fetches it once to read all
-    estimatedSize values, then cleans up.  Results are cached by plan hash.
+    For **leaf-only strategies** (all search steps, no combines/transforms),
+    uses WDK's anonymous report endpoint in parallel — no step or strategy
+    creation needed. This is dramatically faster than full compilation.
+
+    For **complex strategies** (with combines/transforms), falls back to
+    creating a temporary WDK strategy to get server-computed counts.
+
+    Results are cached by plan hash.
     """
     cache_key = _plan_cache_key(site_id, plan)
     cached = _STEP_COUNTS_CACHE.get(cache_key)
@@ -200,6 +346,43 @@ async def compute_step_counts_for_plan(
         return cached
 
     api = get_strategy_api(site_id)
+
+    # Fast path: leaf-only strategies use parallel anonymous reports.
+    if _is_leaf_only_strategy(strategy_ast):
+        counts = await _compute_leaf_counts_parallel(api.client, strategy_ast)
+        _cache_counts(cache_key, counts)
+        return counts
+
+    # Slow path: complex strategies require full WDK compilation.
+    counts = await _compute_counts_via_compilation(api, strategy_ast, site_id)
+    _cache_counts(cache_key, counts)
+    return counts
+
+
+async def _compute_leaf_counts_parallel(
+    client: VEuPathDBClient,
+    strategy_ast: StrategyAST,
+) -> dict[str, int | None]:
+    """Compute counts for all leaf steps in parallel using anonymous reports."""
+    all_steps = strategy_ast.get_all_steps()
+    record_type = strategy_ast.record_type
+
+    tasks = [
+        _count_via_anonymous_report(
+            client, record_type, step.search_name, step.parameters or {}
+        )
+        for step in all_steps
+    ]
+    results = await asyncio.gather(*tasks)
+    return {step.id: count for step, count in zip(all_steps, results, strict=True)}
+
+
+async def _compute_counts_via_compilation(
+    api: StrategyAPI,
+    strategy_ast: StrategyAST,
+    site_id: str,
+) -> dict[str, int | None]:
+    """Compute counts by creating a temporary WDK strategy (legacy path)."""
     result = await compile_strategy(
         strategy_ast,
         api,
@@ -237,12 +420,14 @@ async def compute_step_counts_for_plan(
             logger.warning("Failed to read counts from strategy payload", error=str(e))
 
     await delete_temp_strategy(api, temp_strategy_id)
+    return counts
 
+
+def _cache_counts(cache_key: str, counts: dict[str, int | None]) -> None:
+    """Store counts in the LRU cache."""
     _STEP_COUNTS_CACHE[cache_key] = counts
     if len(_STEP_COUNTS_CACHE) > _STEP_COUNTS_CACHE_MAX:
         _STEP_COUNTS_CACHE.popitem(last=False)
-
-    return counts
 
 
 # ── WDK → AST conversion (internal) ────────────────────────────────────
@@ -383,11 +568,15 @@ def _build_node_from_wdk(
 
 def _build_snapshot_from_wdk(
     wdk_strategy: JSONObject,
-) -> tuple[StrategyAST, JSONArray]:
-    """Convert a WDK strategy payload into an internal AST and steps list.
+) -> tuple[StrategyAST, JSONArray, JSONObject]:
+    """Convert a WDK strategy payload into an internal AST, steps list, and step counts.
 
     The steps list is used only for parameter normalization enrichment —
     steps are derived from plan at read time and not persisted.
+
+    The step counts dict maps step IDs (strings) to their ``estimatedSize``
+    values from the WDK response, enabling zero-cost count display for
+    WDK-linked strategies.
     """
     step_tree_value = wdk_strategy.get("stepTree")
     if not isinstance(step_tree_value, dict):
@@ -416,6 +605,7 @@ def _build_snapshot_from_wdk(
     )
 
     steps_data = build_steps_data_from_ast(ast)
+    step_counts: JSONObject = {}
 
     for step_value in steps_data:
         if not isinstance(step_value, dict):
@@ -436,8 +626,9 @@ def _build_snapshot_from_wdk(
             count = _extract_estimated_size(as_json_object(step_info_raw))
             if count is not None:
                 step["resultCount"] = count
+                step_counts[str(wdk_step_id)] = count
 
-    return ast, steps_data
+    return ast, steps_data, step_counts
 
 
 async def _normalize_synced_parameters(

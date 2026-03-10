@@ -316,7 +316,7 @@ class TestSnapshotEdgeCases:
             "stepTree": {"stepId": 1},
             "steps": {"1": _wdk_step(1, "S1")},
         }
-        ast, _ = _build_snapshot_from_wdk(wdk)
+        ast, _, _ = _build_snapshot_from_wdk(wdk)
         assert ast.name is None
 
     def test_strategy_with_null_description(self) -> None:
@@ -326,7 +326,7 @@ class TestSnapshotEdgeCases:
             "stepTree": {"stepId": 1},
             "steps": {"1": _wdk_step(1, "S1")},
         }
-        ast, _ = _build_snapshot_from_wdk(wdk)
+        ast, _, _ = _build_snapshot_from_wdk(wdk)
         assert ast.description is None
 
     def test_strategy_with_integer_name(self) -> None:
@@ -337,7 +337,7 @@ class TestSnapshotEdgeCases:
             "stepTree": {"stepId": 1},
             "steps": {"1": _wdk_step(1, "S1")},
         }
-        ast, _ = _build_snapshot_from_wdk(wdk)
+        ast, _, _ = _build_snapshot_from_wdk(wdk)
         # Non-string names should be treated as None
         assert ast.name is None
 
@@ -348,7 +348,7 @@ class TestSnapshotEdgeCases:
             "stepTree": {"stepId": 42},
             "steps": {"42": _wdk_step(42, "S1")},
         }
-        ast, _ = _build_snapshot_from_wdk(wdk)
+        ast, _, _ = _build_snapshot_from_wdk(wdk)
         assert ast.root.id == "42"
         assert isinstance(ast.root.id, str)
 
@@ -380,7 +380,7 @@ class TestSnapshotEdgeCases:
                 }
             },
         }
-        _, steps_data = _build_snapshot_from_wdk(wdk)
+        _, steps_data, _ = _build_snapshot_from_wdk(wdk)
         assert len(steps_data) >= 1
         step = steps_data[0]
         assert isinstance(step, dict)

@@ -280,7 +280,7 @@ class TestBuildSnapshotFromWdk:
                 "1": _wdk_step(1, "GenesByTextSearch", {"text_expression": "kinase"})
             },
         }
-        ast, steps_data = _build_snapshot_from_wdk(wdk_strategy)
+        ast, steps_data, _ = _build_snapshot_from_wdk(wdk_strategy)
         assert ast.record_type == "gene"
         assert ast.name == "My Strategy"
         assert ast.description == "Test description"
@@ -302,7 +302,7 @@ class TestBuildSnapshotFromWdk:
                 "3": _wdk_step(3, "BooleanQuestion", {"bq_operator": "UNION"}),
             },
         }
-        ast, steps_data = _build_snapshot_from_wdk(wdk_strategy)
+        ast, steps_data, _ = _build_snapshot_from_wdk(wdk_strategy)
         assert ast.root.infer_kind() == "combine"
         assert len(steps_data) == 3
 
@@ -322,7 +322,7 @@ class TestBuildSnapshotFromWdk:
             "stepTree": {"stepId": 42},
             "steps": {"42": _wdk_step(42, "GenesByTextSearch")},
         }
-        ast, steps_data = _build_snapshot_from_wdk(wdk_strategy)
+        ast, steps_data, _ = _build_snapshot_from_wdk(wdk_strategy)
         # The step ID should be the string version of the WDK step ID
         assert ast.root.id == "42"
         # steps_data should have wdkStepId populated
@@ -340,7 +340,7 @@ class TestBuildSnapshotFromWdk:
                 }
             },
         }
-        _, steps_data = _build_snapshot_from_wdk(wdk_strategy)
+        _, steps_data, _ = _build_snapshot_from_wdk(wdk_strategy)
         assert steps_data[0]["resultCount"] == 500
 
     def test_missing_name_is_none(self) -> None:
@@ -349,5 +349,5 @@ class TestBuildSnapshotFromWdk:
             "stepTree": {"stepId": 1},
             "steps": {"1": _wdk_step(1, "S1")},
         }
-        ast, _ = _build_snapshot_from_wdk(wdk_strategy)
+        ast, _, _ = _build_snapshot_from_wdk(wdk_strategy)
         assert ast.name is None

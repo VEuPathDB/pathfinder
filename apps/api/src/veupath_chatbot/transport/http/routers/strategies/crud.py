@@ -13,6 +13,10 @@ from veupath_chatbot.platform.tasks import spawn
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.strategies.auto_push import try_auto_push_to_wdk
 from veupath_chatbot.services.strategies.plan_validation import validate_plan_or_raise
+from veupath_chatbot.services.strategies.wdk_bridge import (
+    fetch_and_convert,
+    plan_needs_detail_fetch,
+)
 from veupath_chatbot.services.wdk import get_strategy_api
 from veupath_chatbot.transport.http.deps import CurrentUser, StreamRepo
 from veupath_chatbot.transport.http.schemas import (
@@ -81,6 +85,38 @@ async def get_strategy(
 ) -> StrategyResponse:
     """Get a strategy/stream by ID from the CQRS projection + Redis."""
     projection = await get_owned_projection_or_404(stream_repo, strategyId, user_id)
+
+    # Lazy detail fetch: if this is a WDK-linked strategy with no plan data,
+    # fetch the full detail from WDK now (summary-only projections are created
+    # during sync-wdk to avoid the N+1 problem).
+    if plan_needs_detail_fetch(projection):
+        site_id = projection.site_id
+        wdk_id = projection.wdk_strategy_id
+        if site_id and wdk_id is not None:
+            try:
+                api = get_strategy_api(site_id)
+                ast, is_saved, step_counts = await fetch_and_convert(api, wdk_id)
+                plan = ast.to_dict()
+                if step_counts:
+                    plan["stepCounts"] = step_counts
+                await stream_repo.update_projection(
+                    strategyId,
+                    plan=plan,
+                    record_type=ast.record_type,
+                    step_count=len(ast.get_all_steps()),
+                    is_saved=is_saved,
+                    is_saved_set=True,
+                )
+                projection = await get_owned_projection_or_404(
+                    stream_repo, strategyId, user_id
+                )
+            except Exception as e:
+                logger.warning(
+                    "Lazy WDK detail fetch failed",
+                    strategy_id=str(strategyId),
+                    wdk_id=wdk_id,
+                    error=str(e),
+                )
 
     redis = get_redis()
     messages = await read_stream_messages(redis, str(strategyId))

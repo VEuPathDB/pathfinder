@@ -39,12 +39,30 @@ def build_step_response(step: JSONObject) -> StepResponse:
 
 
 def derive_steps_from_plan(plan: JSONObject) -> list[StepResponse]:
-    """Derive step responses from a plan dict. Returns [] if plan is empty/invalid."""
+    """Derive step responses from a plan dict. Returns [] if plan is empty/invalid.
+
+    If the plan contains a ``stepCounts`` dict (stored during WDK detail fetch),
+    each step's ``resultCount`` is populated from it, enabling zero-cost count
+    display for WDK-linked strategies.
+    """
     if not plan or not isinstance(plan, dict) or "root" not in plan:
         return []
     try:
         ast = parse_plan(plan)
         steps_data = build_steps_data_from_ast(ast)
+
+        # Inject stored step counts from plan metadata.
+        step_counts = plan.get("stepCounts")
+        if isinstance(step_counts, dict):
+            for s in steps_data:
+                if not isinstance(s, dict):
+                    continue
+                sid = s.get("id")
+                if isinstance(sid, str) and sid in step_counts:
+                    count = step_counts[sid]
+                    if isinstance(count, int):
+                        s["resultCount"] = count
+
         return [build_step_response(s) for s in steps_data if isinstance(s, dict)]
     except ValueError, KeyError, TypeError:
         return []

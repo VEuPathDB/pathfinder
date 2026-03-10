@@ -17,6 +17,8 @@ from veupath_chatbot.tests.fixtures.wdk_responses import (
     standard_report_response,
     step_get_response,
     strategy_get_response,
+    strategy_list_item,
+    strategy_list_response,
     user_current_response,
 )
 
@@ -282,7 +284,7 @@ class TestStandardReportShape:
 
 
 # ---------------------------------------------------------------------------
-# Strategy GET response
+# Strategy GET response (detail)
 # ---------------------------------------------------------------------------
 class TestStrategyGetShape:
     """GET /users/{id}/strategies/{id} shape."""
@@ -300,17 +302,30 @@ class TestStrategyGetShape:
             "estimatedSize",
             "recordClassName",
             "stepTree",
+            "signature",
+            "lastModified",
+            "author",
+            "releaseVersion",
+            "isExample",
+            "leafAndTransformStepCount",
+            "nameOfFirstStep",
+            "lastViewed",
         }
         missing = required - set(data.keys())
         assert not missing, f"Strategy response missing keys: {missing}"
 
-    def test_no_steps_dict(self) -> None:
-        """The real WDK strategy response does NOT include a 'steps' dict.
-        Individual step details must be fetched separately via
-        GET /users/{id}/steps/{stepId}.
-        """
+    def test_has_steps_dict(self) -> None:
+        """The real WDK detail response DOES include a 'steps' dict.
+        Steps are keyed by step ID string with full step detail objects."""
         data = strategy_get_response()
-        assert "steps" not in data
+        assert "steps" in data
+        steps = data["steps"]
+        assert isinstance(steps, dict)
+        for key, value in steps.items():
+            assert isinstance(key, str)  # Step IDs are string keys
+            assert isinstance(value, dict)
+            assert "searchName" in value
+            assert "searchConfig" in value
 
     def test_step_tree_structure(self) -> None:
         """stepTree is a recursive {stepId, primaryInput?, secondaryInput?}."""
@@ -321,6 +336,125 @@ class TestStrategyGetShape:
         # With default 3 steps, root has primaryInput
         if "primaryInput" in tree:
             assert "stepId" in tree["primaryInput"]
+
+    def test_description_is_empty_string(self) -> None:
+        """WDK uses empty string for description, not null."""
+        data = strategy_get_response()
+        assert data["description"] == ""
+
+    def test_last_modified_key_name(self) -> None:
+        """WDK uses 'lastModified', not 'lastModifiedTime'."""
+        data = strategy_get_response()
+        assert "lastModified" in data
+        assert "lastModifiedTime" not in data
+
+    def test_steps_match_step_tree(self) -> None:
+        """Steps dict keys should correspond to step IDs in the tree."""
+        data = strategy_get_response()
+        steps = data["steps"]
+        # Collect all step IDs from the tree
+        tree_ids: set[int] = set()
+
+        def _collect(node: dict) -> None:
+            tree_ids.add(node["stepId"])
+            if "primaryInput" in node:
+                _collect(node["primaryInput"])
+            if "secondaryInput" in node:
+                _collect(node["secondaryInput"])
+
+        _collect(data["stepTree"])
+        assert tree_ids == {int(k) for k in steps}
+
+    def test_step_objects_have_required_fields(self) -> None:
+        """Each step in the steps dict has core fields."""
+        data = strategy_get_response()
+        required = {
+            "id",
+            "searchName",
+            "searchConfig",
+            "estimatedSize",
+            "recordClassName",
+        }
+        for key, step in data["steps"].items():
+            missing = required - set(step.keys())
+            assert not missing, f"Step '{key}' missing keys: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Strategy list item (summary — no stepTree/steps)
+# ---------------------------------------------------------------------------
+class TestStrategyListItemShape:
+    """GET /users/{id}/strategies list items are summaries."""
+
+    def test_has_required_fields(self) -> None:
+        data = strategy_list_item()
+        required = {
+            "strategyId",
+            "name",
+            "description",
+            "author",
+            "rootStepId",
+            "recordClassName",
+            "signature",
+            "createdTime",
+            "lastModified",
+            "lastViewed",
+            "releaseVersion",
+            "isPublic",
+            "isSaved",
+            "isValid",
+            "isDeleted",
+            "isExample",
+            "organization",
+            "estimatedSize",
+            "nameOfFirstStep",
+            "leafAndTransformStepCount",
+        }
+        missing = required - set(data.keys())
+        assert not missing, f"Strategy list item missing keys: {missing}"
+
+    def test_no_step_tree(self) -> None:
+        """List items do NOT include stepTree (detail-only)."""
+        data = strategy_list_item()
+        assert "stepTree" not in data
+
+    def test_no_steps_dict(self) -> None:
+        """List items do NOT include steps dict (detail-only)."""
+        data = strategy_list_item()
+        assert "steps" not in data
+
+    def test_field_types(self) -> None:
+        """Verify correct types for key fields."""
+        data = strategy_list_item()
+        assert isinstance(data["strategyId"], int)
+        assert isinstance(data["name"], str)
+        assert isinstance(data["description"], str)
+        assert isinstance(data["author"], str)
+        assert isinstance(data["rootStepId"], int)
+        assert isinstance(data["isPublic"], bool)
+        assert isinstance(data["isSaved"], bool)
+        assert isinstance(data["isValid"], bool)
+        assert isinstance(data["isDeleted"], bool)
+        assert isinstance(data["isExample"], bool)
+        assert isinstance(data["estimatedSize"], int)
+        assert isinstance(data["leafAndTransformStepCount"], int)
+        assert isinstance(data["releaseVersion"], str)
+        assert isinstance(data["signature"], str)
+
+    def test_list_response_returns_list(self) -> None:
+        data = strategy_list_response(count=3)
+        assert isinstance(data, list)
+        assert len(data) == 3
+        for item in data:
+            assert isinstance(item, dict)
+            assert "strategyId" in item
+            assert "stepTree" not in item
+            assert "steps" not in item
+
+    def test_list_response_unique_ids(self) -> None:
+        data = strategy_list_response(count=5)
+        ids = [item["strategyId"] for item in data]
+        assert len(ids) == len(set(ids))
 
 
 # ---------------------------------------------------------------------------

@@ -317,6 +317,37 @@ class VEuPathDBClient:
             ),
         )
 
+    async def run_search_report(
+        self,
+        record_type: str,
+        search_name: str,
+        search_config: JSONObject,
+        report_config: JSONObject | None = None,
+    ) -> JSONObject:
+        """Run a report on a search without creating a step or strategy.
+
+        Uses WDK's anonymous report endpoint:
+        ``POST /record-types/{recordType}/searches/{searchName}/reports/standard``
+
+        This is significantly faster than creating steps/strategies because it
+        requires no user session and can be parallelized.
+
+        :param record_type: WDK record type (e.g. ``"transcript"``).
+        :param search_name: WDK search name (e.g. ``"GenesByTaxon"``).
+        :param search_config: Search config with ``parameters`` dict.
+        :param report_config: Report config (pagination, attributes, etc.).
+        :returns: Standard report response with ``meta.totalCount``.
+        """
+        payload: JSONObject = {
+            "searchConfig": search_config,
+            "reportConfig": report_config or {},
+        }
+        result = await self.post(
+            f"/record-types/{record_type}/searches/{search_name}/reports/standard",
+            json=payload,
+        )
+        return result if isinstance(result, dict) else {}
+
     async def get_step_view_filters(self, user_id: str, step_id: int) -> JSONArray:
         """Get viewFilters from a step's answerSpec.
 

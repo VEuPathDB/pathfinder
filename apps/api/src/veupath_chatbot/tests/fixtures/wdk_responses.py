@@ -623,24 +623,24 @@ def strategy_get_response(
     strategy_id: int = 200,
     step_ids: list[int] | None = None,
 ) -> dict:
-    """GET /users/{userId}/strategies/{strategyId} -- full strategy.
+    """GET /users/{userId}/strategies/{strategyId} -- detailed strategy.
 
-    Real WDK strategy GET response fields (from WDK source JsonKeys):
-      strategyId, name, description, isSaved, isPublic, isDeleted,
-      isValid, rootStepId, estimatedSize, recordClassName, stepTree,
-      signature, createdTime, lastModifiedTime, author, organization,
-      releaseVersion
-
-    IMPORTANT: The real WDK does NOT include a ``steps`` dict in the
-    strategy response.  Individual step details must be fetched separately
-    via ``GET /users/{userId}/steps/{stepId}``.  Our Pathfinder code uses
-    a separate internal ``steps`` dict, but it is NOT part of the WDK wire
-    format.
+    Real WDK strategy GET response includes a ``steps`` dict keyed by
+    step ID strings, each containing full step detail objects. Also
+    includes ``stepTree``, ``author``, ``organization``, ``releaseVersion``,
+    ``lastModified``, ``lastViewed``, ``leafAndTransformStepCount``,
+    ``nameOfFirstStep``, etc.
 
     The ``stepTree`` is a recursive structure with ``stepId``,
     ``primaryInput``, and optionally ``secondaryInput``.
     """
     ids = step_ids or [100, 101, 102]
+
+    search_names = {
+        0: "GenesByTaxon",
+        1: "GenesByTextSearch",
+        2: "GenesByOrthologs",
+    }
 
     # Build stepTree: for a single step, just one node.
     # For multiple steps, rightmost is root with a chain of primaryInput.
@@ -654,22 +654,96 @@ def strategy_get_response(
 
     step_tree = _build_tree(ids)
 
+    # Build steps dict keyed by step ID strings
+    steps: dict[str, dict] = {}
+    for idx, sid in enumerate(ids):
+        sname = search_names.get(idx, "GenesByTaxon")
+        steps[str(sid)] = {
+            "id": sid,
+            "searchName": sname,
+            "searchConfig": {
+                "parameters": {"organism": '["Plasmodium falciparum 3D7"]'},
+                "wdkWeight": 0,
+            },
+            "displayName": "Organism" if sname == "GenesByTaxon" else sname,
+            "customName": None,
+            "estimatedSize": 150,
+            "recordClassName": "TranscriptRecordClasses.TranscriptRecordClass",
+            "isFiltered": False,
+            "hasCompleteStepAnalyses": False,
+        }
+
     return {
         "strategyId": strategy_id,
         "name": "Test strategy",
-        "description": None,
+        "description": "",
+        "author": "Guest User",
+        "organization": "",
+        "releaseVersion": "68",
         "isSaved": False,
         "isPublic": False,
         "isDeleted": False,
         "isValid": True,
+        "isExample": False,
         "rootStepId": ids[-1],
         "estimatedSize": 150,
         "recordClassName": "TranscriptRecordClasses.TranscriptRecordClass",
         "stepTree": step_tree,
+        "steps": steps,
         "signature": "abc123def456",
         "createdTime": "2026-03-01T00:00:00Z",
-        "lastModifiedTime": "2026-03-06T00:00:00Z",
+        "lastModified": "2026-03-06T00:00:00Z",
+        "lastViewed": "2026-03-06T00:00:00Z",
+        "leafAndTransformStepCount": len(ids),
+        "nameOfFirstStep": "Organism",
     }
+
+
+def strategy_list_item(
+    strategy_id: int = 200,
+    name: str = "Test strategy",
+    record_class_name: str = "TranscriptRecordClasses.TranscriptRecordClass",
+    estimated_size: int = 150,
+    is_saved: bool = False,
+    signature: str = "abc123def456",
+    leaf_and_transform_step_count: int = 1,
+) -> dict:
+    """GET /users/{id}/strategies list item -- summary only, no stepTree/steps."""
+    return {
+        "strategyId": strategy_id,
+        "name": name,
+        "description": "",
+        "author": "Guest User",
+        "rootStepId": 100,
+        "recordClassName": record_class_name,
+        "signature": signature,
+        "createdTime": "2026-03-01T00:00:00Z",
+        "lastModified": "2026-03-06T00:00:00Z",
+        "lastViewed": "2026-03-06T00:00:00Z",
+        "releaseVersion": "68",
+        "isPublic": False,
+        "isSaved": is_saved,
+        "isValid": True,
+        "isDeleted": False,
+        "isExample": False,
+        "organization": "",
+        "estimatedSize": estimated_size,
+        "nameOfFirstStep": "Organism",
+        "leafAndTransformStepCount": leaf_and_transform_step_count,
+    }
+
+
+def strategy_list_response(count: int = 3) -> list[dict]:
+    """GET /users/{id}/strategies -- list of strategy summaries."""
+    return [
+        strategy_list_item(
+            strategy_id=200 + i,
+            name=f"Strategy {i + 1}",
+            signature=f"sig{i:04d}",
+            leaf_and_transform_step_count=i + 1,
+        )
+        for i in range(count)
+    ]
 
 
 def step_get_response(

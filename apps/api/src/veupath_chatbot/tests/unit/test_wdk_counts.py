@@ -35,6 +35,9 @@ async def test_all_none_results_are_cached():
     When the WDK API fails to return counts, compute_step_counts_for_plan
     returns {step_id: None} for every step.  Previously this was never
     cached, causing repeated create-fetch-delete cycles on every call.
+
+    For leaf-only strategies, the function now uses anonymous reports
+    (not compilation), so we mock ``client.run_search_report``.
     """
     from veupath_chatbot.services.strategies.wdk_bridge import (
         _STEP_COUNTS_CACHE,
@@ -44,50 +47,26 @@ async def test_all_none_results_are_cached():
     plan = _simple_ast().to_dict()
     ast = _simple_ast()
 
+    mock_client = AsyncMock()
+    # Anonymous report returns no totalCount (simulates WDK failure)
+    mock_client.run_search_report.return_value = {"meta": {}}
+
     mock_api = AsyncMock()
-    # Simulate: strategy created but get_strategy returns no estimatedSize
-    mock_api.create_strategy.return_value = {"id": 999}
-    mock_api.get_strategy.return_value = {"steps": {}}
-    mock_api.delete_strategy.return_value = None
+    mock_api.client = mock_client
 
-    with (
-        patch(
-            "veupath_chatbot.services.strategies.wdk_bridge.get_strategy_api",
-            return_value=mock_api,
-        ),
-        patch(
-            "veupath_chatbot.services.strategies.wdk_bridge.compile_strategy",
-            new_callable=AsyncMock,
-        ) as mock_compile,
+    with patch(
+        "veupath_chatbot.services.strategies.wdk_bridge.get_strategy_api",
+        return_value=mock_api,
     ):
-        from veupath_chatbot.domain.strategy.ast import StepTreeNode
-        from veupath_chatbot.domain.strategy.compile import (
-            CompilationResult,
-            CompiledStep,
-        )
-
-        mock_compile.return_value = CompilationResult(
-            steps=[
-                CompiledStep(
-                    local_id="step1",
-                    wdk_step_id=1,
-                    step_type="search",
-                    display_name="GenesByTextSearch",
-                )
-            ],
-            step_tree=StepTreeNode(step_id=1),
-            root_step_id=1,
-        )
-
         # First call — should hit the API
         result1 = await compute_step_counts_for_plan(plan, ast, "plasmodb")
         assert result1 == {"step1": None}
-        assert mock_api.create_strategy.call_count == 1
+        assert mock_client.run_search_report.call_count == 1
 
         # Second call — should hit cache, NOT the API again
         result2 = await compute_step_counts_for_plan(plan, ast, "plasmodb")
         assert result2 == {"step1": None}
-        assert mock_api.create_strategy.call_count == 1, (
+        assert mock_client.run_search_report.call_count == 1, (
             "Expected cache hit — API should NOT be called again for all-None results"
         )
 
