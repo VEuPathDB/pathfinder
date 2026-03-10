@@ -1,6 +1,7 @@
 from collections.abc import Awaitable, Callable
 
 from qdrant_client import AsyncQdrantClient
+
 from veupath_chatbot.integrations.embeddings.openai_embeddings import OpenAIEmbeddings
 from veupath_chatbot.integrations.vectorstore.collections import (
     WDK_RECORD_TYPES_V1,

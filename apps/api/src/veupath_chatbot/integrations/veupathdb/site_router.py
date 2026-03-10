@@ -6,6 +6,7 @@ from typing import cast
 
 import yaml
 from pydantic import BaseModel, Field
+
 from veupath_chatbot.integrations.veupathdb.client import VEuPathDBClient
 from veupath_chatbot.platform.config import get_settings
 from veupath_chatbot.platform.errors import ErrorCode, NotFoundError

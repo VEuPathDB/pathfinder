@@ -12,6 +12,7 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
 from veupath_chatbot.platform.config import get_settings
 from veupath_chatbot.platform.context import veupathdb_auth_token_ctx
 from veupath_chatbot.platform.errors import WDKError

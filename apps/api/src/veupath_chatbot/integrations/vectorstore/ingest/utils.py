@@ -3,6 +3,7 @@ from itertools import batched
 from typing import Any, cast
 
 from qdrant_client import AsyncQdrantClient
+
 from veupath_chatbot.integrations.embeddings.openai_embeddings import OpenAIEmbeddings
 from veupath_chatbot.integrations.vectorstore.qdrant_store import QdrantStore
 from veupath_chatbot.platform.logging import get_logger

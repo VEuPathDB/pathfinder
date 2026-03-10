@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import cast
 
 import httpx
+
 from veupath_chatbot.integrations.embeddings.openai_embeddings import OpenAIEmbeddings
 from veupath_chatbot.integrations.vectorstore.bootstrap import get_embedding_dim
 from veupath_chatbot.integrations.vectorstore.collections import EXAMPLE_PLANS_V1

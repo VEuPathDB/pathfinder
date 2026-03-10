@@ -3,6 +3,7 @@ import asyncio
 import os
 
 from qdrant_client import AsyncQdrantClient
+
 from veupath_chatbot.domain.parameters.specs import unwrap_search_data
 from veupath_chatbot.integrations.embeddings.openai_embeddings import OpenAIEmbeddings
 from veupath_chatbot.integrations.vectorstore.bootstrap import get_embedding_dim
