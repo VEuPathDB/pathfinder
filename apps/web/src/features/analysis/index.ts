@@ -6,7 +6,7 @@ export { ConfusionMatrixSection } from "./components/ConfusionMatrixSection";
 export { RobustnessSection } from "./components/RobustnessSection";
 export { RankMetricsSection } from "./components/RankMetricsSection";
 export { CustomEnrichmentSection } from "./components/CustomEnrichmentSection";
-export { AiInterpretation } from "./components/AiInterpretation";
+
 export { GeneListsSection } from "./components/GeneListsSection";
 export { Section } from "./components/Section";
 export { pct, fmtNum } from "./utils/formatters";

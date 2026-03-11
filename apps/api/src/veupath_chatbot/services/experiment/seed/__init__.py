@@ -11,10 +11,18 @@ from veupath_chatbot.services.experiment.seed.definitions import (
     SeedDef,
 )
 from veupath_chatbot.services.experiment.seed.runner import run_seed
+from veupath_chatbot.services.experiment.seed.seeds import (
+    SEED_DATABASES,
+    get_all_seeds,
+    get_seeds_for_site,
+)
 
 __all__ = [
     "ControlSetDef",
+    "SEED_DATABASES",
     "SEEDS",
     "SeedDef",
+    "get_all_seeds",
+    "get_seeds_for_site",
     "run_seed",
 ]

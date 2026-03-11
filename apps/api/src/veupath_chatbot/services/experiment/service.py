@@ -502,14 +502,35 @@ async def _phase_enrich(
     from veupath_chatbot.services.wdk.enrichment_service import EnrichmentService
 
     await emit("enriching", message="Running enrichment analyses...")
+
+    step_id = experiment.wdk_step_id
+    search_name = config.search_name
+    record_type = config.record_type
+    parameters = config.parameters
+
+    # Gene-ID experiments may lack a WDK step and search_name.
+    # Build a temporary GeneByLocusTag dataset so enrichment can proceed.
+    if step_id is None and not search_name and config.target_gene_ids:
+        from veupath_chatbot.services.gene_sets.operations import (
+            _build_enrichment_params_from_gene_ids,
+        )
+
+        (
+            search_name,
+            parameters,
+            record_type,
+        ) = await _build_enrichment_params_from_gene_ids(
+            config.site_id, config.target_gene_ids
+        )
+
     svc = EnrichmentService()
     enrich_results, _ = await svc.run_batch(
         site_id=config.site_id,
         analysis_types=config.enrichment_types,
-        step_id=experiment.wdk_step_id,
-        search_name=config.search_name,
-        record_type=config.record_type,
-        parameters=config.parameters,
+        step_id=step_id,
+        search_name=search_name,
+        record_type=record_type,
+        parameters=parameters,
     )
     for enrich_result in enrich_results:
         upsert_enrichment_result(experiment.enrichment_results, enrich_result)

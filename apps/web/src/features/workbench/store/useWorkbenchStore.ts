@@ -21,7 +21,6 @@ export type PanelId =
   | "step-analysis"
   | "ai-insights"
   | "custom-enrichment"
-  | "ai-interpretation"
   | "ensemble"
   | "confidence"
   | "benchmark"
@@ -124,7 +123,14 @@ export const useWorkbenchStore = create<WorkbenchState>()((set) => ({
       geneSets: s.geneSets.map((gs) => (gs.id === id ? { ...gs, ...patch } : gs)),
     })),
 
-  setActiveSet: (id) => set({ activeSetId: id }),
+  setActiveSet: (id) =>
+    set((s) => ({
+      activeSetId: id,
+      // Clear stale experiment when switching gene sets
+      ...(id !== s.lastExperimentSetId
+        ? { lastExperiment: null, lastExperimentSetId: null }
+        : {}),
+    })),
 
   toggleSetSelection: (id) =>
     set((s) => ({

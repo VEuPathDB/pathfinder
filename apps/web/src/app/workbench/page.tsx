@@ -153,7 +153,7 @@ export default function WorkbenchPage() {
           />
         )}
 
-        <div className="min-h-0 min-w-0 flex-1 bg-card">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-card">
           <WorkbenchMain />
         </div>
 

@@ -137,6 +137,47 @@ def _wire_ai_dependencies() -> None:
         experiment_agent_cls=ExperimentAssistantAgent,
     )
 
+    # Workbench chat orchestrator
+    from uuid import UUID
+
+    from kani import ChatMessage
+
+    from veupath_chatbot.ai.agents.workbench import WorkbenchAgent
+    from veupath_chatbot.platform.types import ModelProvider, ReasoningEffort
+    from veupath_chatbot.services.workbench_chat import (
+        orchestrator as wb_orchestrator,
+    )
+
+    def _create_workbench_agent(
+        site_id: str,
+        experiment_id: str,
+        user_id: UUID | None = None,
+        system_prompt: str = "",
+        chat_history: list[ChatMessage] | None = None,
+        provider_override: ModelProvider | None = None,
+        model_override: str | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
+    ) -> WorkbenchAgent:
+        engine = create_engine(
+            provider_override=provider_override,
+            model_override=model_override,
+            reasoning_effort=reasoning_effort,
+        )
+        return WorkbenchAgent(
+            engine=engine,
+            site_id=site_id,
+            experiment_id=experiment_id,
+            user_id=user_id,
+            system_prompt=system_prompt,
+            chat_history=chat_history,
+        )
+
+    wb_orchestrator.configure(
+        create_workbench_agent_fn=_create_workbench_agent,
+        resolve_model_id_fn=resolve_effective_model_id,
+        mock_stream_fn=mock_stream_fn,
+    )
+
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application."""

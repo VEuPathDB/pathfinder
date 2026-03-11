@@ -28,8 +28,10 @@ export async function listExperiments(
  */
 export async function seedExperiments(
   onMessage: (message: string) => void,
+  siteId?: string,
 ): Promise<void> {
-  const url = buildUrl("/api/v1/experiments/seed");
+  const params = siteId ? `?site_id=${siteId}` : "";
+  const url = buildUrl(`/api/v1/experiments/seed${params}`);
   const headers = getAuthHeaders({ accept: "text/event-stream" });
 
   const response = await fetch(url, {

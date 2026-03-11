@@ -28,11 +28,13 @@ class StreamRepository:
         *,
         stream_id: UUID | None = None,
         name: str = "",
+        experiment_id: str | None = None,
     ) -> Stream:
         stream = Stream(
             id=stream_id or uuid4(),
             user_id=user_id,
             site_id=site_id,
+            experiment_id=experiment_id,
         )
         self.session.add(stream)
         await self.session.flush()
@@ -50,6 +52,18 @@ class StreamRepository:
     async def get_by_id(self, stream_id: UUID) -> Stream | None:
         result = await self.session.execute(
             select(Stream).where(Stream.id == stream_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def find_by_experiment(
+        self, user_id: UUID, experiment_id: str
+    ) -> Stream | None:
+        """Find an existing stream for a user + experiment combination."""
+        result = await self.session.execute(
+            select(Stream).where(
+                Stream.user_id == user_id,
+                Stream.experiment_id == experiment_id,
+            )
         )
         return result.scalar_one_or_none()
 

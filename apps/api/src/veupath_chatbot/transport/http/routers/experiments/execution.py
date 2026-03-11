@@ -170,8 +170,12 @@ async def seed_strategies(
     user_id: CurrentUser,
     stream_repo: StreamRepo,
     control_set_repo: ControlSetRepo,
+    site_id: str | None = None,
 ) -> StreamingResponse:
-    """Seed demo strategies and control sets across multiple VEuPathDB sites."""
+    """Seed demo strategies and control sets across VEuPathDB sites.
+
+    If *site_id* is provided, only seeds for that database are created.
+    """
     from veupath_chatbot.services.experiment.seed import run_seed
 
     async def _producer(send: Callable[[JSONObject], Awaitable[None]]) -> None:
@@ -180,6 +184,7 @@ async def seed_strategies(
                 user_id=user_id,
                 stream_repo=stream_repo,
                 control_set_repo=control_set_repo,
+                site_id=site_id,
             ):
                 await send(event)
         except Exception as exc:

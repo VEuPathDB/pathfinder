@@ -56,7 +56,6 @@ _STEP_FILES: dict[WizardStep, str] = {
     "parameters": "parameters.md",
     "controls": "controls.md",
     "run": "run.md",
-    "results": "results.md",
     "analysis": "analysis.md",
 }
 

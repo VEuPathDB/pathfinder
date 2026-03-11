@@ -54,16 +54,12 @@ export {
   createExperimentStream,
   createBatchExperimentStream,
   createBenchmarkStream,
-  streamAiAssist,
 } from "./streaming";
 
 export type {
   ExperimentSSEHandler,
   BenchmarkControlSetInput,
   BatchOrganismTarget,
-  WizardStep,
-  AiAssistMessage,
-  AiAssistHandlers,
 } from "./streaming";
 
 export {

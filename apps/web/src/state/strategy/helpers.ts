@@ -29,7 +29,7 @@ export function buildStrategy(
   return {
     id: existing?.id || "draft",
     name: existing?.name || DEFAULT_STREAM_NAME,
-    siteId: existing?.siteId || "plasmodb",
+    siteId: existing?.siteId || "veupathdb",
     recordType: existing?.recordType || steps[0]?.recordType || "gene",
     steps,
     rootStepId,

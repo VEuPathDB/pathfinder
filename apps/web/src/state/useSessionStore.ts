@@ -47,13 +47,13 @@ const SELECTED_SITE_DISPLAY_KEY = "pathfinder-selected-site-display";
 const STRATEGY_ID_KEY_PREFIX = "pathfinder-strategy-id:";
 
 const getInitialSelectedSite = () => {
-  if (typeof window === "undefined") return "plasmodb";
-  return window.localStorage.getItem(SELECTED_SITE_KEY) || "plasmodb";
+  if (typeof window === "undefined") return "veupathdb";
+  return window.localStorage.getItem(SELECTED_SITE_KEY) || "veupathdb";
 };
 
 const getInitialSelectedSiteDisplayName = () => {
-  if (typeof window === "undefined") return "PlasmoDB";
-  return window.localStorage.getItem(SELECTED_SITE_DISPLAY_KEY) || "PlasmoDB";
+  if (typeof window === "undefined") return "VEuPathDB";
+  return window.localStorage.getItem(SELECTED_SITE_DISPLAY_KEY) || "VEuPathDB";
 };
 
 const getInitialStrategyId = () => {

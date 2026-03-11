@@ -11,7 +11,10 @@ from uuid import UUID
 
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
-from veupath_chatbot.services.experiment.seed.definitions import SEEDS
+from veupath_chatbot.services.experiment.seed.seeds import (
+    get_all_seeds,
+    get_seeds_for_site,
+)
 
 logger = get_logger(__name__)
 
@@ -21,6 +24,7 @@ async def run_seed(
     user_id: UUID,
     stream_repo: Any,
     control_set_repo: Any,
+    site_id: str | None = None,
 ) -> AsyncIterator[JSONObject]:
     """Create seed strategies and control sets, yielding SSE progress events.
 
@@ -28,6 +32,9 @@ async def run_seed(
     1. Create a WDK strategy via ``_materialize_step_tree`` + ``create_strategy``
     2. Sync the strategy to the user's sidebar via ``_sync_to_projection``
     3. Create a control set via ``control_set_repo.create``
+
+    If *site_id* is provided, only seeds for that database are created.
+    Otherwise all available seeds are used.
 
     Imports are deferred to avoid circular dependencies.
     """
@@ -40,7 +47,8 @@ async def run_seed(
         sync_to_projection,
     )
 
-    total = len(SEEDS)
+    seeds = get_seeds_for_site(site_id) if site_id else get_all_seeds()
+    total = len(seeds)
     yield {
         "type": "seed_progress",
         "data": {
@@ -52,7 +60,7 @@ async def run_seed(
     strategies_ok = 0
     control_sets_ok = 0
 
-    for i, seed in enumerate(SEEDS):
+    for i, seed in enumerate(seeds):
         idx = i + 1
         yield {
             "type": "seed_progress",

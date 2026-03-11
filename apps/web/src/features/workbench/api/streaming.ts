@@ -10,16 +10,6 @@ import {
 } from "@/lib/operationSubscribe";
 import type { StepParameters } from "@/lib/strategyGraph/types";
 
-// Re-export shared types and functions from lib/api so workbench consumers
-// that already import from this barrel continue to work.
-export type {
-  WizardStep,
-  AiAssistMessage,
-  AiAssistHandlers,
-} from "@/lib/api/streaming";
-
-export { streamAiAssist } from "@/lib/api/streaming";
-
 /* ── Config serialization ────────────────────────────────────────── */
 
 /** Serialized experiment config payload sent to the API. */

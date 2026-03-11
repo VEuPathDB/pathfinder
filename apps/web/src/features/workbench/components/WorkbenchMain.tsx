@@ -1,16 +1,17 @@
 "use client";
 
 import { useWorkbenchStore } from "../store";
+import { useSessionStore } from "@/state/useSessionStore";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { Layers } from "lucide-react";
 import { BlockingOverlay } from "./BlockingOverlay";
+import { WorkbenchChat } from "./WorkbenchChat";
 import { SOURCE_CONFIG } from "./geneSetSourceConfig";
 import {
   EnrichmentPanel,
   DistributionsPanel,
   EvaluatePanel,
   CustomEnrichmentPanel,
-  AiInterpretationPanel,
   SweepPanel,
   ResultsTablePanel,
   StepContributionPanel,
@@ -36,7 +37,7 @@ function ActiveSetHeader() {
     SOURCE_CONFIG[activeSet.source]?.badgeClass ?? SOURCE_CONFIG.saved.badgeClass;
 
   return (
-    <div className="mb-4 rounded-lg border bg-card px-4 py-3 animate-fade-in">
+    <div className="mb-4 px-4 py-3 animate-fade-in">
       <div className="flex items-center gap-3">
         <h1 className="text-base font-semibold text-foreground">{activeSet.name}</h1>
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
@@ -79,7 +80,6 @@ const PANELS = [
   BatchPanel,
   BenchmarkPanel,
   CustomEnrichmentPanel,
-  AiInterpretationPanel,
   SweepPanel,
 ];
 
@@ -90,6 +90,8 @@ const PANELS = [
 export function WorkbenchMain() {
   const geneSets = useWorkbenchStore((s) => s.geneSets);
   const activeSetId = useWorkbenchStore((s) => s.activeSetId);
+  const lastExperiment = useWorkbenchStore((s) => s.lastExperiment);
+  const selectedSite = useSessionStore((s) => s.selectedSite);
 
   if (geneSets.length === 0) {
     return (
@@ -107,8 +109,13 @@ export function WorkbenchMain() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <div className="mx-auto w-full max-w-5xl space-y-3 p-6">
+      {/* Key on activeSetId so all panels remount (reset local state) on gene set switch */}
+      <div key={activeSetId} className="mx-auto w-full max-w-5xl space-y-3 p-6">
         <ActiveSetHeader />
+        <WorkbenchChat
+          experimentId={lastExperiment?.id ?? null}
+          siteId={selectedSite}
+        />
         {PANELS.map((Panel, i) => (
           <div
             key={i}
