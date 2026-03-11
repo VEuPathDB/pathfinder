@@ -278,6 +278,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/strategies/dismissed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Dismissed Strategies
+         * @description List user's dismissed (soft-deleted) strategies.
+         */
+        get: operations["list_dismissed_strategies_api_v1_strategies_dismissed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/strategies/{strategyId}": {
         parameters: {
             query?: never;
@@ -295,6 +315,13 @@ export type paths = {
         /**
          * Delete Strategy
          * @description Delete a strategy: cancel ops, clean Redis stream, delete CQRS records.
+         *
+         *     For WDK-linked strategies with ``deleteFromWdk=false`` (default), the
+         *     strategy is soft-deleted (dismissed) instead of hard-deleted. This prevents
+         *     WDK sync from re-importing it. Use the restore endpoint to un-dismiss.
+         *
+         *     Pass ``deleteFromWdk=true`` to hard-delete from both PathFinder and WDK.
+         *     Non-WDK strategies are always hard-deleted.
          */
         delete: operations["delete_strategy_api_v1_strategies__strategyId__delete"];
         options?: never;
@@ -304,6 +331,29 @@ export type paths = {
          * @description Update a strategy (CQRS only).
          */
         patch: operations["update_strategy_api_v1_strategies__strategyId__patch"];
+        trace?: never;
+    };
+    "/api/v1/strategies/{strategyId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Strategy
+         * @description Restore a dismissed (soft-deleted) strategy.
+         *
+         *     Clears dismissed_at, resets plan to empty (triggers lazy WDK re-fetch),
+         *     and wipes message history. The strategy reappears as if freshly imported.
+         */
+        post: operations["restore_strategy_api_v1_strategies__strategyId__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/strategies/step-counts": {
@@ -464,7 +514,9 @@ export type paths = {
         put?: never;
         /**
          * Seed Strategies
-         * @description Seed demo strategies and control sets across multiple VEuPathDB sites.
+         * @description Seed demo strategies and control sets across VEuPathDB sites.
+         *
+         *     If *site_id* is provided, only seeds for that database are created.
          */
         post: operations["seed_strategies_api_v1_experiments_seed_post"];
         delete?: never;
@@ -507,29 +559,6 @@ export type paths = {
          * @description Compare enrichment results across experiments.
          */
         post: operations["compare_enrichment_api_v1_experiments_enrichment_compare_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/experiments/ai-assist": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Ai Assist
-         * @description AI assistant for the experiment wizard.
-         *
-         *     Streams a response with tool-use activity (web/literature search, site
-         *     catalog lookup, gene lookup) to help the user with the current wizard step.
-         */
-        post: operations["ai_assist_api_v1_experiments_ai_assist_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -780,6 +809,49 @@ export type paths = {
          * @description Add a step to the experiment's strategy (combine, transform, etc.).
          */
         post: operations["refine_experiment_api_v1_experiments__experiment_id__refine_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/experiments/{experiment_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Workbench Chat
+         * @description Start a conversational AI chat for an experiment.
+         *
+         *     Returns operation ID for SSE subscription via
+         *     GET /operations/{operationId}/subscribe.
+         */
+        post: operations["workbench_chat_api_v1_experiments__experiment_id__chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/experiments/{experiment_id}/chat/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workbench Chat Messages
+         * @description Get conversation history for an experiment's chat.
+         */
+        get: operations["get_workbench_chat_messages_api_v1_experiments__experiment_id__chat_messages_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1222,25 +1294,6 @@ export type webhooks = Record<string, never>;
 
 export type components = {
     schemas: {
-        /**
-         * AiAssistRequest
-         * @description Request for the experiment wizard AI assistant.
-         */
-        AiAssistRequest: {
-            /** Siteid */
-            siteId: string;
-            /**
-             * Step
-             * @enum {string}
-             */
-            step: "search" | "parameters" | "controls" | "run" | "results" | "analysis";
-            /** Message */
-            message: string;
-            context?: components["schemas"]["JSONObject"];
-            history?: components["schemas"]["JSONArray"];
-            /** Model */
-            model?: string | null;
-        };
         /**
          * AuthStatusResponse
          * @description Current auth status response.
@@ -2648,6 +2701,8 @@ export type components = {
             resultCount?: number | null;
             /** Wdkurl */
             wdkUrl?: string | null;
+            /** Dismissedat */
+            dismissedAt?: string | null;
         };
         /**
          * SubKaniActivityResponse
@@ -2770,6 +2825,26 @@ export type components = {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WorkbenchChatRequest */
+        WorkbenchChatRequest: {
+            /** Message */
+            message: string;
+            /** Siteid */
+            siteId: string;
+            /** Provider */
+            provider?: ("openai" | "anthropic" | "google") | null;
+            /** Model */
+            model?: string | null;
+            /** Reasoningeffort */
+            reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+        };
+        /** WorkbenchChatResponse */
+        WorkbenchChatResponse: {
+            /** Operationid */
+            operationId: string;
+            /** Streamid */
+            streamId: string;
         };
         /** _ModelItem */
         _ModelItem: {
@@ -3217,6 +3292,37 @@ export interface operations {
             };
         };
     };
+    list_dismissed_strategies_api_v1_strategies_dismissed_get: {
+        parameters: {
+            query?: {
+                siteId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_strategy_api_v1_strategies__strategyId__get: {
         parameters: {
             query?: never;
@@ -3250,7 +3356,9 @@ export interface operations {
     };
     delete_strategy_api_v1_strategies__strategyId__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                deleteFromWdk?: boolean;
+            };
             header?: never;
             path: {
                 strategyId: string;
@@ -3291,6 +3399,37 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateStrategyRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_strategy_api_v1_strategies__strategyId__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                strategyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -3580,7 +3719,9 @@ export interface operations {
     };
     seed_strategies_api_v1_experiments_seed_post: {
         parameters: {
-            query?: never;
+            query?: {
+                site_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3594,6 +3735,15 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3651,39 +3801,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnrichmentCompareResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    ai_assist_api_v1_experiments_ai_assist_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AiAssistRequest"];
-            };
-        };
-        responses: {
-            /** @description SSE stream of AI assistant response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": string;
                 };
             };
             /** @description Validation Error */
@@ -4151,6 +4268,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JSONObject"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workbench_chat_api_v1_experiments__experiment_id__chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkbenchChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkbenchChatResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workbench_chat_messages_api_v1_experiments__experiment_id__chat_messages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONObject"][];
                 };
             };
             /** @description Validation Error */

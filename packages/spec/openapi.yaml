@@ -442,6 +442,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/strategies/dismissed:
+    get:
+      tags:
+      - strategies
+      summary: List Dismissed Strategies
+      description: List user's dismissed (soft-deleted) strategies.
+      operationId: list_dismissed_strategies_api_v1_strategies_dismissed_get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: siteId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Siteid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StrategyResponse'
+                title: Response List Dismissed Strategies Api V1 Strategies Dismissed Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/strategies/{strategyId}:
     get:
       tags:
@@ -511,7 +545,19 @@ paths:
       tags:
       - strategies
       summary: Delete Strategy
-      description: 'Delete a strategy: cancel ops, clean Redis stream, delete CQRS records.'
+      description: 'Delete a strategy: cancel ops, clean Redis stream, delete CQRS records.
+
+
+        For WDK-linked strategies with ``deleteFromWdk=false`` (default), the
+
+        strategy is soft-deleted (dismissed) instead of hard-deleted. This prevents
+
+        WDK sync from re-importing it. Use the restore endpoint to un-dismiss.
+
+
+        Pass ``deleteFromWdk=true`` to hard-delete from both PathFinder and WDK.
+
+        Non-WDK strategies are always hard-deleted.'
       operationId: delete_strategy_api_v1_strategies__strategyId__delete
       security:
       - APIKeyCookie: []
@@ -523,9 +569,51 @@ paths:
           type: string
           format: uuid
           title: Strategyid
+      - name: deleteFromWdk
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Deletefromwdk
       responses:
         '204':
           description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/strategies/{strategyId}/restore:
+    post:
+      tags:
+      - strategies
+      summary: Restore Strategy
+      description: 'Restore a dismissed (soft-deleted) strategy.
+
+
+        Clears dismissed_at, resets plan to empty (triggers lazy WDK re-fetch),
+
+        and wipes message history. The strategy reappears as if freshly imported.'
+      operationId: restore_strategy_api_v1_strategies__strategyId__restore_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: strategyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Strategyid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyResponse'
         '422':
           description: Validation Error
           content:
@@ -782,8 +870,22 @@ paths:
       tags:
       - experiments
       summary: Seed Strategies
-      description: Seed demo strategies and control sets across multiple VEuPathDB sites.
+      description: 'Seed demo strategies and control sets across VEuPathDB sites.
+
+
+        If *site_id* is provided, only seeds for that database are created.'
       operationId: seed_strategies_api_v1_experiments_seed_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: site_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Site Id
       responses:
         '200':
           description: SSE stream of seed strategy/control-set progress
@@ -791,8 +893,12 @@ paths:
             text/event-stream:
               schema:
                 type: string
-      security:
-      - APIKeyCookie: []
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/experiments/overlap:
     post:
       tags:
@@ -841,39 +947,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EnrichmentCompareResult'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - APIKeyCookie: []
-  /api/v1/experiments/ai-assist:
-    post:
-      tags:
-      - experiments
-      summary: Ai Assist
-      description: 'AI assistant for the experiment wizard.
-
-
-        Streams a response with tool-use activity (web/literature search, site
-
-        catalog lookup, gene lookup) to help the user with the current wizard step.'
-      operationId: ai_assist_api_v1_experiments_ai_assist_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AiAssistRequest'
-        required: true
-      responses:
-        '200':
-          description: SSE stream of AI assistant response
-          content:
-            text/event-stream:
-              schema:
-                type: string
         '422':
           description: Validation Error
           content:
@@ -1371,6 +1444,78 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JSONObject'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/experiments/{experiment_id}/chat:
+    post:
+      tags:
+      - experiments
+      summary: Workbench Chat
+      description: 'Start a conversational AI chat for an experiment.
+
+
+        Returns operation ID for SSE subscription via
+
+        GET /operations/{operationId}/subscribe.'
+      operationId: workbench_chat_api_v1_experiments__experiment_id__chat_post
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: experiment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Experiment Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkbenchChatRequest'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkbenchChatResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/experiments/{experiment_id}/chat/messages:
+    get:
+      tags:
+      - experiments
+      summary: Get Workbench Chat Messages
+      description: Get conversation history for an experiment's chat.
+      operationId: get_workbench_chat_messages_api_v1_experiments__experiment_id__chat_messages_get
+      security:
+      - APIKeyCookie: []
+      parameters:
+      - name: experiment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Experiment Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JSONObject'
+                title: Response Get Workbench Chat Messages Api V1 Experiments  Experiment Id  Chat Messages Get
         '422':
           description: Validation Error
           content:
@@ -2182,42 +2327,6 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
-    AiAssistRequest:
-      properties:
-        siteId:
-          type: string
-          title: Siteid
-        step:
-          type: string
-          enum:
-          - search
-          - parameters
-          - controls
-          - run
-          - results
-          - analysis
-          title: Step
-        message:
-          type: string
-          maxLength: 50000
-          minLength: 1
-          title: Message
-        context:
-          $ref: '#/components/schemas/JSONObject'
-        history:
-          $ref: '#/components/schemas/JSONArray'
-        model:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Model
-      type: object
-      required:
-      - siteId
-      - step
-      - message
-      title: AiAssistRequest
-      description: Request for the experiment wizard AI assistant.
     AuthStatusResponse:
       properties:
         signedIn:
@@ -4630,6 +4739,12 @@ components:
           - type: string
           - type: 'null'
           title: Wdkurl
+        dismissedAt:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Dismissedat
       type: object
       required:
       - id
@@ -4852,6 +4967,58 @@ components:
       - msg
       - type
       title: ValidationError
+    WorkbenchChatRequest:
+      properties:
+        message:
+          type: string
+          maxLength: 200000
+          minLength: 1
+          title: Message
+        siteId:
+          type: string
+          title: Siteid
+        provider:
+          anyOf:
+          - type: string
+            enum:
+            - openai
+            - anthropic
+            - google
+          - type: 'null'
+          title: Provider
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        reasoningEffort:
+          anyOf:
+          - type: string
+            enum:
+            - none
+            - low
+            - medium
+            - high
+          - type: 'null'
+          title: Reasoningeffort
+      type: object
+      required:
+      - message
+      - siteId
+      title: WorkbenchChatRequest
+    WorkbenchChatResponse:
+      properties:
+        operationId:
+          type: string
+          title: Operationid
+        streamId:
+          type: string
+          title: Streamid
+      type: object
+      required:
+      - operationId
+      - streamId
+      title: WorkbenchChatResponse
     _ModelItem:
       properties:
         id:
