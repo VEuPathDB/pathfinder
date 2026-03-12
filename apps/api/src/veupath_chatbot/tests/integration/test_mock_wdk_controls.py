@@ -591,13 +591,20 @@ class TestErrorHandling:
             200, json=strategy_creation_response(STRATEGY_ID)
         )
 
-        # Target count returns 500 error -> _get_total_count_for_step returns None
-        # Combined count returns 500 error -> _get_total_count_for_step returns None
+        # Target count returns 500 error -> retried 3× by tenacity -> WDKError -> None
+        # Combined count returns 500 error -> retried 3× by tenacity -> WDKError -> None
         # get_step_answer returns records
         respx.post(url__regex=rf".*/users/{USER_ID}/steps/\d+/reports/standard").mock(
             side_effect=[
+                # Target count: 3 attempts (initial + 2 retries), all 500
                 _resp(500, {"message": "target count failed"}),
+                _resp(500, {"message": "target count failed"}),
+                _resp(500, {"message": "target count failed"}),
+                # Combined count: 3 attempts (initial + 2 retries), all 500
                 _resp(500, {"message": "combined count failed"}),
+                _resp(500, {"message": "combined count failed"}),
+                _resp(500, {"message": "combined count failed"}),
+                # get_step_answer succeeds
                 _resp(200, standard_report_response(POSITIVE_CONTROLS[:2], 2)),
             ]
         )
