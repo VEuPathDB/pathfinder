@@ -310,5 +310,5 @@ class TestSiteConfigValidation:
     def test_sites_config_missing_fields_use_defaults(self) -> None:
         config = SitesConfig.model_validate({})
         assert config.sites == {}
-        assert config.default_site == "plasmodb"
+        assert config.default_site == "veupathdb"
         assert config.routing.portal_timeout == 120.0
