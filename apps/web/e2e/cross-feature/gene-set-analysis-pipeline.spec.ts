@@ -7,6 +7,7 @@ test.describe("Gene Set Analysis Pipeline", () => {
   test("add overlapping sets, perform intersection, verify counts, run enrichment on derived set", async ({
     page,
     seedData,
+    sitePicker,
     workbenchSidebarPage,
     workbenchMainPage,
     apiClient,
@@ -14,6 +15,7 @@ test.describe("Gene Set Analysis Pipeline", () => {
     await clearAllGeneSets(page.context(), BASE_URL);
     await page.goto("/workbench");
     await expect(page.getByRole("heading", { name: /gene sets/i })).toBeVisible();
+    await sitePicker.selectSite("plasmodb");
 
     // Set A: first 3 genes, Set B: genes 1-4 (overlapping genes at indices 1,2)
     const setAGenes = seedData.plasmoGenes.slice(0, 3);

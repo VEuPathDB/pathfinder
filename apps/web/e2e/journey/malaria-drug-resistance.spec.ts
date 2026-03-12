@@ -31,7 +31,7 @@ test.describe("Malaria Drug Resistance Journey", () => {
     // ── Phase 1: Multi-round Chat ─────────────────────────────────
 
     await chatPage.goto();
-    await sitePicker.expectCurrentSite("plasmodb");
+    await sitePicker.selectSite("plasmodb");
 
     // Round 1
     await chatPage.send(

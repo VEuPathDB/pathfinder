@@ -15,9 +15,10 @@ async function addAndActivateGeneSet(
 }
 
 test.describe("Analysis Panels", () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, sitePicker }) => {
     await page.goto("/workbench");
     await expect(page.getByRole("heading", { name: /gene sets/i })).toBeVisible();
+    await sitePicker.selectSite("plasmodb");
   });
 
   test("enrichment runs and returns real WDK results", async ({
@@ -85,7 +86,7 @@ test.describe("Analysis Panels", () => {
     ).toBeVisible();
   });
 
-  test("all 13 analysis panels are listed", async ({
+  test("all 12 analysis panels are listed", async ({
     page,
     seedData,
     workbenchSidebarPage,
@@ -110,11 +111,10 @@ test.describe("Analysis Panels", () => {
       "Batch Evaluation",
       "Benchmark",
       "Custom Enrichment",
-      "AI Interpretation",
       "Parameter Sweep",
     ];
 
-    // UI: All 13 panels visible
+    // UI: All 12 panels visible
     for (const title of panelTitles) {
       await workbenchMainPage.expectPanelVisible(title);
     }

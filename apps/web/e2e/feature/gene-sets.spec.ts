@@ -4,10 +4,11 @@ import { clearAllGeneSets } from "../fixtures/api-client";
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 
 test.describe("Gene Sets", () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, sitePicker }) => {
     await clearAllGeneSets(page.context(), BASE_URL);
     await page.goto("/workbench");
     await expect(page.getByRole("heading", { name: /gene sets/i })).toBeVisible();
+    await sitePicker.selectSite("plasmodb");
   });
 
   test("add gene set shows correct count in UI and persists to DB", async ({

@@ -14,7 +14,7 @@ test.describe("Auth", () => {
     await authPage.expectSignedIn();
 
     // UI: Site picker shows default site
-    await sitePicker.expectCurrentSite("plasmodb");
+    await sitePicker.expectCurrentSite("veupathdb");
 
     // UI: Settings accessible with all tabs
     await settingsPage.open();

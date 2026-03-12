@@ -7,6 +7,7 @@ test.describe("Multi-Experiment Comparison", () => {
   test("create multiple gene sets, run enrichment on each, compare via set operations", async ({
     page,
     seedData,
+    sitePicker,
     workbenchSidebarPage,
     workbenchMainPage,
     apiClient,
@@ -14,6 +15,7 @@ test.describe("Multi-Experiment Comparison", () => {
     await clearAllGeneSets(page.context(), BASE_URL);
     await page.goto("/workbench");
     await expect(page.getByRole("heading", { name: /gene sets/i })).toBeVisible();
+    await sitePicker.selectSite("plasmodb");
 
     const fullGenes = seedData.plasmoGenes;
     const subsetGenes = seedData.plasmoGenes.slice(0, 3);

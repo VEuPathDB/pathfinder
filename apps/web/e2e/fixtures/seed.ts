@@ -98,7 +98,7 @@ export async function fetchSeedData(baseURL: string): Promise<SeedData> {
   return {
     plasmoGenes,
     toxoGenes,
-    defaultSite: "plasmodb",
+    defaultSite: "veupathdb",
     availableSites: sites,
     siteData,
   };

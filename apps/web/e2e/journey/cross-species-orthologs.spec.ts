@@ -26,7 +26,7 @@ test.describe("Cross-Species Orthologs Journey", () => {
     // ── Phase 1: PlasmoDB — Chat & Gene Set ──────────────────────
 
     await chatPage.goto();
-    await sitePicker.expectCurrentSite("plasmodb");
+    await sitePicker.selectSite("plasmodb");
 
     // Multi-round chat
     await chatPage.send(

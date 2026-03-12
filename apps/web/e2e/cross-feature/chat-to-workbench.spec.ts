@@ -10,6 +10,7 @@ test.describe("Chat → Workbench Flow", () => {
     page,
     seedData,
     apiClient,
+    sitePicker,
     workbenchSidebarPage,
     workbenchMainPage,
   }) => {
@@ -17,6 +18,7 @@ test.describe("Chat → Workbench Flow", () => {
 
     // ── Phase 1: Chat & Strategy ────────────────────────────────
     await chatPage.goto();
+    await sitePicker.selectSite("plasmodb");
     await chatPage.newChat();
 
     // Chat with the AI

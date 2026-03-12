@@ -36,9 +36,9 @@ test.describe("Full Researcher Lifecycle", () => {
     // Phase 1: Chat & Strategy (PlasmoDB)
     // ═══════════════════════════════════════════════════════════════
 
-    // Verify authenticated and on PlasmoDB
+    // Switch to PlasmoDB for this journey
     await chatPage.goto();
-    await sitePicker.expectCurrentSite("plasmodb");
+    await sitePicker.selectSite("plasmodb");
 
     // Start fresh conversation
     await chatPage.newChat();

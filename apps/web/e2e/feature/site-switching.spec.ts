@@ -11,12 +11,12 @@ test.describe("Site Switching", () => {
     await chatPage.newChat();
   });
 
-  test("default site is PlasmoDB — verified in UI and API", async ({
+  test("default site is VEuPathDB — verified in UI and API", async ({
     sitePicker,
     apiClient,
   }) => {
-    // UI: Site picker shows plasmodb
-    await sitePicker.expectCurrentSite("plasmodb");
+    // UI: Site picker shows veupathdb
+    await sitePicker.expectCurrentSite("veupathdb");
 
     // API: Sites endpoint returns all real VEuPathDB sites
     const resp = await apiClient.get("/api/v1/sites");
@@ -42,6 +42,7 @@ test.describe("Site Switching", () => {
     // Add a gene set on PlasmoDB
     await page.goto("/workbench");
     await expect(page.getByRole("heading", { name: /gene sets/i })).toBeVisible();
+    await sitePicker.selectSite("plasmodb");
     await workbenchSidebarPage.openAddModal();
     await page.getByLabel(/name/i).fill("PlasmoDB Set");
     await page

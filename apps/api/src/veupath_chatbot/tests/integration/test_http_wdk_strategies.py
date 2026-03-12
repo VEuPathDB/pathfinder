@@ -45,9 +45,10 @@ async def test_sync_wdk_deletes_internal_control_test_strategies(
 async def test_sync_wdk_creates_projections_from_summary_only(
     authed_client: httpx.AsyncClient, wdk_respx: respx.Router
 ) -> None:
-    """POST /sync-wdk creates projections using only the list endpoint.
+    """POST /sync-wdk creates projections using the list endpoint.
 
-    It should NOT fetch individual strategy details (no GET /strategies/{id} calls).
+    The sync response is built from summary data.  Background auto-import
+    of gene sets may fetch individual strategy details afterward.
     """
     base = "https://plasmodb.org/plasmo/service"
 
@@ -76,10 +77,8 @@ async def test_sync_wdk_creates_projections_from_summary_only(
 
     wdk_respx.get(f"{base}/users/current").respond(200, json={"id": "guest"})
     wdk_respx.get(f"{base}/users/guest/strategies").respond(200, json=items)
-    # Mock detail route but it should NOT be called
-    detail_route = wdk_respx.get(url__regex=r".*/users/guest/strategies/\d+$").respond(
-        200, json={}
-    )
+    # Mock detail route — background auto-import may fetch details
+    wdk_respx.get(url__regex=r".*/users/guest/strategies/\d+$").respond(200, json={})
 
     resp = await authed_client.post(
         "/api/v1/strategies/sync-wdk", params={"siteId": "plasmodb"}
@@ -89,12 +88,9 @@ async def test_sync_wdk_creates_projections_from_summary_only(
     data = resp.json()
     assert len(data) == 3
 
-    # Verify summary fields are populated
+    # Verify summary fields are populated from the list endpoint
     names = {s["name"] for s in data}
     assert names == {"Strategy A", "Strategy B", "Strategy C"}
-
-    # Verify NO individual strategy detail fetches were made
-    assert not detail_route.called, "Sync should not fetch individual strategy details"
 
 
 async def test_sync_wdk_populates_record_type_and_counts(
