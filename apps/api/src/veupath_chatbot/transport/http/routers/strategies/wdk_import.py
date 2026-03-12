@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, BackgroundTasks, Query
 from shared_py.defaults import DEFAULT_STREAM_NAME
 
 from veupath_chatbot.platform.errors import (
@@ -12,7 +12,6 @@ from veupath_chatbot.platform.errors import (
     WDKError,
 )
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.tasks import spawn
 from veupath_chatbot.services.control_helpers import (
     cleanup_internal_control_test_strategies,
 )
@@ -132,6 +131,7 @@ async def sync_all_wdk_strategies(
     site_id: Annotated[str, Query(alias="siteId")],
     stream_repo: StreamRepo,
     user_id: CurrentUser,
+    background_tasks: BackgroundTasks,
 ) -> list[StrategyResponse]:
     """Batch-sync all WDK strategies into the CQRS layer and return the full list."""
     site = get_site(site_id)
@@ -191,12 +191,15 @@ async def sync_all_wdk_strategies(
                 error=str(e),
             )
 
-    # Auto-import gene sets in the background — don't block the response
-    # while WDK API calls resolve gene IDs for each eligible strategy.
-    spawn(
-        background_auto_import_gene_sets(site_id=site.id, user_id=user_id),
-        name=f"auto-import-gene-sets-{site.id}",
+    projections = await stream_repo.list_projections(user_id, site_id)
+
+    # Commit the session so all locks are released before the background task
+    # opens its own session — prevents deadlock between the prune DELETE and
+    # the auto-import's concurrent SELECT/UPDATE on the same tables.
+    await stream_repo.session.commit()
+
+    background_tasks.add_task(
+        background_auto_import_gene_sets, site_id=site.id, user_id=user_id
     )
 
-    projections = await stream_repo.list_projections(user_id, site_id)
     return [build_projection_summary(p, site_id=site_id) for p in projections]
