@@ -1,6 +1,6 @@
 import { describe, expect, it, type Mock } from "vitest";
 import { handleChatEvent } from "./handleChatEvent";
-import type { ChatSSEEvent } from "@/features/chat/sse_events";
+import type { ChatSSEEvent } from "@/lib/sse_events";
 import { OPTIMIZATION_PROGRESS_EVENTS } from "./__fixtures__/realisticEvents";
 import { makeCtx } from "./handleChatEvent.testUtils";
 

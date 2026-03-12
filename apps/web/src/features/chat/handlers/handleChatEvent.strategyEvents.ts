@@ -8,7 +8,7 @@ import type {
   GraphPlanData,
   ExecutorBuildRequestData,
   GraphClearedData,
-} from "@/features/chat/sse_events";
+} from "@/lib/sse_events";
 
 /**
  * Resolve the target graph ID from event candidates, falling back to

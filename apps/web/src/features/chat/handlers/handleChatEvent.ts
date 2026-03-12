@@ -1,4 +1,4 @@
-import type { ChatSSEEvent } from "@/features/chat/sse_events";
+import type { ChatSSEEvent } from "@/lib/sse_events";
 import type { ChatEventContext } from "./handleChatEvent.types";
 import {
   handleAssistantDeltaEvent,

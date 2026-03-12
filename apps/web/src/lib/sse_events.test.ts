@@ -15,7 +15,7 @@ import {
   StrategyMetaDataSchema,
   type RawSSEData,
   type ToolCallStartData,
-} from "./sse_events";
+} from "@/lib/sse_events";
 
 describe("parseChatSSEEvent", () => {
   it("parses known event type with JSON payload", () => {

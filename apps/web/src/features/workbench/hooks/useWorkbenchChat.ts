@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { ChatSSEEvent } from "@/features/chat/sse_events";
+import type { ChatSSEEvent } from "@/lib/sse_events";
 import type { Citation } from "@pathfinder/shared";
 import { getWorkbenchChatMessages, streamWorkbenchChat } from "../api/workbenchChatApi";
 

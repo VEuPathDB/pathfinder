@@ -14,7 +14,7 @@ import {
   subscribeToOperation,
   type OperationSubscription,
 } from "@/lib/operationSubscribe";
-import { parseChatSSEEvent, type RawSSEData } from "@/features/chat/sse_events";
+import { parseChatSSEEvent, type RawSSEData } from "@/lib/sse_events";
 import { handleChatEvent } from "@/features/chat/handlers/handleChatEvent";
 import type { ChatEventContext } from "@/features/chat/handlers/handleChatEvent";
 import type { useThinkingState } from "@/features/chat/hooks/useThinkingState";

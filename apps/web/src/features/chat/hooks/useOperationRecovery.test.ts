@@ -25,7 +25,7 @@ vi.mock("@/lib/operationSubscribe", () => ({
   subscribeToOperation: subscribeToOperationMock,
 }));
 
-vi.mock("@/features/chat/sse_events", () => ({
+vi.mock("@/lib/sse_events", () => ({
   parseChatSSEEvent: vi.fn((raw: { type: string; data: string }) => ({
     type: raw.type,
     data: JSON.parse(raw.data),

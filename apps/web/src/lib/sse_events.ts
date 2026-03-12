@@ -5,8 +5,7 @@ import type {
   Strategy,
 } from "@pathfinder/shared";
 import type { RawSSEEvent } from "@/lib/sse";
-import type { GraphSnapshotInput } from "@/features/chat/utils/graphSnapshot";
-import type { StepParameters } from "@/lib/strategyGraph/types";
+import type { GraphSnapshotInput, StepParameters } from "@/lib/strategyGraph/types";
 import { isRecord } from "@/lib/utils/isRecord";
 import { z } from "zod";
 

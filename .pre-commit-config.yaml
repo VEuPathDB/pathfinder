@@ -37,6 +37,27 @@ repos:
         language: system
         pass_filenames: false
         files: ^(apps/web/|packages/shared-ts/).*
+      - id: boundaries-web
+        name: check boundaries (web)
+        entry: bash -c "cd apps/web && npm run check:boundaries"
+        language: system
+        pass_filenames: false
+        files: ^(apps/web/|packages/shared-ts/).*
+      - id: vitest-web
+        name: vitest (web)
+        entry: bash -c "cd apps/web && npx vitest run"
+        language: system
+        pass_filenames: false
+        files: ^(apps/web/|packages/shared-ts/).*
+        stages: [pre-push]
+      - id: pytest-api
+        name: pytest (api)
+        entry: bash -c "cd apps/api && uv run python -m pytest src/veupath_chatbot/tests/unit/ -v"
+        language: system
+        pass_filenames: false
+        types: [python]
+        files: ^apps/api/.*
+        stages: [pre-push]
       - id: build-web
         name: next build (web)
         entry: bash -c "cd apps/web && NEXT_PUBLIC_API_URL='http://localhost:8000' npm run build"

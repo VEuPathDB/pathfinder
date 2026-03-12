@@ -7,7 +7,7 @@ import type {
   SubKaniToolCallStartData,
   SubKaniToolCallEndData,
   SubKaniTaskEndData,
-} from "@/features/chat/sse_events";
+} from "@/lib/sse_events";
 
 export function handleToolCallStartEvent(
   ctx: ChatEventContext,

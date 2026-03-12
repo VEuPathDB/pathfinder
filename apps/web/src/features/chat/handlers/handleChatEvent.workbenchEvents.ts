@@ -1,5 +1,5 @@
 import type { ChatEventContext } from "./handleChatEvent.types";
-import type { WorkbenchGeneSetData } from "@/features/chat/sse_events";
+import type { WorkbenchGeneSetData } from "@/lib/sse_events";
 
 /**
  * Handle `workbench_gene_set` events -- AI created a gene set in the workbench.

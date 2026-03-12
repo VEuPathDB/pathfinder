@@ -18,7 +18,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { handleChatEvent } from "./handleChatEvent";
-import type { ChatSSEEvent } from "@/features/chat/sse_events";
+import type { ChatSSEEvent } from "@/lib/sse_events";
 import { useStrategyStore } from "@/state/useStrategyStore";
 import { StreamingSession } from "@/features/chat/streaming/StreamingSession";
 import { makeCtx } from "./handleChatEvent.testUtils";

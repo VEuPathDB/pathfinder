@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { handleChatEvent } from "./handleChatEvent";
 import type { ChatEventContext } from "./handleChatEvent.types";
-import type { ChatSSEEvent } from "@/features/chat/sse_events";
+import type { ChatSSEEvent } from "@/lib/sse_events";
 import type { Citation, PlanningArtifact, ToolCall } from "@pathfinder/shared";
 import { StreamingSession } from "@/features/chat/streaming/StreamingSession";
 import { EXECUTE_EPITOPE_SEARCH_EVENTS } from "./__fixtures__/realisticEvents";

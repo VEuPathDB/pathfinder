@@ -1,7 +1,7 @@
 import { requestJson } from "@/lib/api/http";
-import type { ChatSSEEvent } from "@/features/chat/sse_events";
-import type { RawSSEData } from "@/features/chat/sse_events";
-import { parseChatSSEEvent } from "@/features/chat/sse_events";
+import type { ChatSSEEvent } from "@/lib/sse_events";
+import type { RawSSEData } from "@/lib/sse_events";
+import { parseChatSSEEvent } from "@/lib/sse_events";
 import {
   subscribeToOperation,
   type OperationSubscription,

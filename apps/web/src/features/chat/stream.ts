@@ -3,8 +3,8 @@ import {
   subscribeToOperation,
   type OperationSubscription,
 } from "@/lib/operationSubscribe";
-import type { ChatSSEEvent, RawSSEData } from "./sse_events";
-import { parseChatSSEEvent } from "./sse_events";
+import type { ChatSSEEvent, RawSSEData } from "@/lib/sse_events";
+import { parseChatSSEEvent } from "@/lib/sse_events";
 import type { ChatMention, ModelSelection } from "@pathfinder/shared";
 
 export interface StreamChatContext {

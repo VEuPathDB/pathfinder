@@ -11,8 +11,8 @@ from veupath_chatbot.services.experiment.seed.gene_lists import (
     PLASMO_RIBOSOMAL,
     TOXO_KINASES,
     TOXO_RIBOSOMAL,
-    TRITRYP_LM_KINASES,
-    TRITRYP_LM_RIBOSOMAL,
+    TRITRYP_KINASES,
+    TRITRYP_RIBOSOMAL,
 )
 
 # ---------------------------------------------------------------------------
@@ -66,8 +66,8 @@ class TestGeneListSizes:
             (TOXO_RIBOSOMAL, "TOXO_RIBOSOMAL", 20),
             (CRYPTO_KINASES, "CRYPTO_KINASES", 20),
             (CRYPTO_RIBOSOMAL, "CRYPTO_RIBOSOMAL", 20),
-            (TRITRYP_LM_KINASES, "TRITRYP_LM_KINASES", 20),
-            (TRITRYP_LM_RIBOSOMAL, "TRITRYP_LM_RIBOSOMAL", 20),
+            (TRITRYP_KINASES, "TRITRYP_KINASES", 20),
+            (TRITRYP_RIBOSOMAL, "TRITRYP_RIBOSOMAL", 20),
         ],
     )
     def test_gene_list_exact_size(self, gene_list, name, expected_size):
@@ -121,7 +121,7 @@ class TestGeneIdFormats:
             assert gene_id.lower().startswith("cgd"), f"Unexpected prefix: {gene_id}"
 
     def test_tritryp_ribosomal_ids_start_with_lmjf(self):
-        for gene_id in TRITRYP_LM_RIBOSOMAL:
+        for gene_id in TRITRYP_RIBOSOMAL:
             assert gene_id.startswith("LmjF."), f"Unexpected prefix: {gene_id}"
 
     def test_crypto_dna_replication_ids_start_with_cgd(self):
@@ -138,8 +138,8 @@ class TestGeneIdFormats:
             CRYPTO_KINASES,
             CRYPTO_RIBOSOMAL,
             CRYPTO_DNA_REPLICATION,
-            TRITRYP_LM_KINASES,
-            TRITRYP_LM_RIBOSOMAL,
+            TRITRYP_KINASES,
+            TRITRYP_RIBOSOMAL,
         ]
         for gene_list in all_lists:
             for gene_id in gene_list:

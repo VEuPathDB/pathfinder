@@ -26,8 +26,8 @@ from veupath_chatbot.services.experiment.seed.gene_lists import (
     TG_ORG,
     TOXO_KINASES,
     TOXO_RIBOSOMAL,
-    TRITRYP_LM_KINASES,
-    TRITRYP_LM_RIBOSOMAL,
+    TRITRYP_KINASES,
+    TRITRYP_RIBOSOMAL,
 )
 
 # ---------------------------------------------------------------------------
@@ -74,8 +74,8 @@ class TestGeneListIntegrity:
             (CRYPTO_KINASES, "CRYPTO_KINASES"),
             (CRYPTO_RIBOSOMAL, "CRYPTO_RIBOSOMAL"),
             (CRYPTO_DNA_REPLICATION, "CRYPTO_DNA_REPLICATION"),
-            (TRITRYP_LM_KINASES, "TRITRYP_LM_KINASES"),
-            (TRITRYP_LM_RIBOSOMAL, "TRITRYP_LM_RIBOSOMAL"),
+            (TRITRYP_KINASES, "TRITRYP_KINASES"),
+            (TRITRYP_RIBOSOMAL, "TRITRYP_RIBOSOMAL"),
         ],
     )
     def test_gene_list_non_empty(self, gene_list, name):
@@ -91,8 +91,8 @@ class TestGeneListIntegrity:
             (CRYPTO_KINASES, "CRYPTO_KINASES"),
             (CRYPTO_RIBOSOMAL, "CRYPTO_RIBOSOMAL"),
             (CRYPTO_DNA_REPLICATION, "CRYPTO_DNA_REPLICATION"),
-            (TRITRYP_LM_KINASES, "TRITRYP_LM_KINASES"),
-            (TRITRYP_LM_RIBOSOMAL, "TRITRYP_LM_RIBOSOMAL"),
+            (TRITRYP_KINASES, "TRITRYP_KINASES"),
+            (TRITRYP_RIBOSOMAL, "TRITRYP_RIBOSOMAL"),
         ],
     )
     def test_gene_list_no_duplicates(self, gene_list, name):
@@ -108,8 +108,8 @@ class TestGeneListIntegrity:
             (CRYPTO_KINASES, "CRYPTO_KINASES"),
             (CRYPTO_RIBOSOMAL, "CRYPTO_RIBOSOMAL"),
             (CRYPTO_DNA_REPLICATION, "CRYPTO_DNA_REPLICATION"),
-            (TRITRYP_LM_KINASES, "TRITRYP_LM_KINASES"),
-            (TRITRYP_LM_RIBOSOMAL, "TRITRYP_LM_RIBOSOMAL"),
+            (TRITRYP_KINASES, "TRITRYP_KINASES"),
+            (TRITRYP_RIBOSOMAL, "TRITRYP_RIBOSOMAL"),
         ],
     )
     def test_gene_list_all_strings(self, gene_list, name):
@@ -139,7 +139,7 @@ class TestGeneListIntegrity:
             assert gene_id.lower().startswith("cgd"), f"Unexpected prefix: {gene_id}"
 
     def test_tritryp_ids_start_with_lmjf(self):
-        for gene_id in TRITRYP_LM_KINASES:
+        for gene_id in TRITRYP_KINASES:
             assert gene_id.startswith("LmjF."), f"Unexpected prefix: {gene_id}"
 
     def test_kinase_ribosomal_no_overlap(self):
@@ -148,7 +148,7 @@ class TestGeneListIntegrity:
             (PLASMO_KINASES, PLASMO_RIBOSOMAL, "plasmo"),
             (TOXO_KINASES, TOXO_RIBOSOMAL, "toxo"),
             (CRYPTO_KINASES, CRYPTO_RIBOSOMAL, "crypto"),
-            (TRITRYP_LM_KINASES, TRITRYP_LM_RIBOSOMAL, "tritryp"),
+            (TRITRYP_KINASES, TRITRYP_RIBOSOMAL, "tritryp"),
         ]:
             overlap = set(kinases) & set(ribosomal)
             assert len(overlap) == 0, f"{org} kinases and ribosomal overlap: {overlap}"

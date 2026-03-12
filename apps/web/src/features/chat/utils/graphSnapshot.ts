@@ -1,30 +1,12 @@
 import type { Step, Strategy } from "@pathfinder/shared";
 import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 import { isFallbackDisplayName } from "@/lib/strategyGraph";
-import type { StepParameters } from "@/lib/strategyGraph/types";
+import type {
+  GraphSnapshotInput,
+  GraphSnapshotStepInput,
+} from "@/lib/strategyGraph/types";
 
-export interface GraphSnapshotStepInput {
-  id: string;
-  kind?: string;
-  displayName?: string;
-  searchName?: string;
-  operator?: string;
-  parameters?: StepParameters;
-  inputStepIds?: string[];
-  primaryInputStepId?: string;
-  secondaryInputStepId?: string;
-  recordType?: string;
-}
-
-export interface GraphSnapshotInput {
-  graphId?: string;
-  graphName?: string;
-  recordType?: string | null;
-  name?: string;
-  description?: string | null;
-  rootStepId?: string | null;
-  steps?: GraphSnapshotStepInput[];
-}
+export type { GraphSnapshotInput, GraphSnapshotStepInput };
 
 const toStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];

@@ -22,6 +22,8 @@ vi.mock("reaviz", () => ({
   ),
   VennSeries: () => <div />,
   VennArc: () => <div />,
+  VennLabel: () => <div />,
+  ChartTooltip: () => <div />,
 }));
 
 afterEach(cleanup);

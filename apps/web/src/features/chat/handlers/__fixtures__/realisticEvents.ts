@@ -5,7 +5,7 @@
  * including real PlasmoDB search names, gene IDs, and parameter values.
  */
 
-import type { ChatSSEEvent } from "@/features/chat/sse_events";
+import type { ChatSSEEvent } from "@/lib/sse_events";
 
 // All event types (including graph_plan, message_end, etc.) are part of
 // the ChatSSEEvent union — no broad type hack needed.

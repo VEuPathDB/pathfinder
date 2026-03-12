@@ -18,7 +18,7 @@ import type {
   ModelSelectedData,
   MessageEndData,
   ErrorData,
-} from "@/features/chat/sse_events";
+} from "@/lib/sse_events";
 import { DEFAULT_STREAM_NAME } from "@pathfinder/shared";
 
 /**
