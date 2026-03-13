@@ -127,7 +127,44 @@ Docker Compose will pick up variables from a repo-root `.env` file (if present) 
 - **Optional / common**
   - `DATABASE_URL` (defaults to PostgreSQL on `localhost:5432` if unset)
   - `QDRANT_URL` / `QDRANT_API_KEY` (only needed if you’re not using the docker-compose defaults)
+  - `OLLAMA_BASE_URL` (default `http://localhost:11434/v1`; use `http://host.docker.internal:11434/v1` when running the API inside Docker)
   - Startup-ingestion tuning is configured in `apps/api/config.toml` (keys: `rag_startup_*`)
+
+### Local models (Ollama)
+
+PathFinder supports local LLMs via [Ollama](https://ollama.com). To add local models:
+
+1. Install and start Ollama (`ollama serve`).
+2. Pull any models you want (e.g. `ollama pull qwen3:8b`).
+3. Copy the example config and edit it:
+
+```bash
+cp ollama_models.yaml.example ollama_models.yaml
+```
+
+Each entry in `ollama_models.yaml` specifies:
+
+| Field          | Required | Description                                        |
+|----------------|----------|----------------------------------------------------|
+| `model`        | yes      | Ollama model name (e.g. `qwen3:8b`, `llama3`)     |
+| `name`         | no       | Display name in the UI (defaults to model name)    |
+| `thinking`     | no       | Whether the model supports reasoning (default `false`) |
+| `context_size` | no       | Max context window in tokens (default `4096`)      |
+
+Example:
+
+```yaml
+models:
+  - model: qwen3:8b
+    name: Qwen 3 8B
+    thinking: true
+    context_size: 40960
+  - model: llama3
+    name: Llama 3
+    context_size: 8192
+```
+
+When running the API inside Docker, set `OLLAMA_BASE_URL=http://host.docker.internal:11434/v1` in your `.env` so the container can reach Ollama on the host.
 
 ### Option A: run everything with Docker Compose (recommended)
 

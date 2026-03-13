@@ -8,6 +8,8 @@ const validEntry = {
   model: "gpt-5",
   supportsReasoning: true,
   enabled: true,
+  contextSize: 400_000,
+  defaultReasoningBudget: 0,
 };
 
 describe("ModelCatalogEntrySchema", () => {
