@@ -1,5 +1,7 @@
 import { type Page, expect } from "@playwright/test";
 
+type SettingsTab = "Model" | "Data" | "Advanced" | "Seeding";
+
 export class SettingsPage {
   constructor(private page: Page) {}
 
@@ -12,23 +14,23 @@ export class SettingsPage {
   }
 
   async close() {
-    // Settings modal has no close button — dismiss with Escape key.
+    // Settings modal has a close button in the header now.
     await this.page.keyboard.press("Escape");
     await expect(this.page.getByRole("dialog")).not.toBeVisible({ timeout: 5_000 });
   }
 
-  async openTab(tabName: "General" | "Data" | "Advanced") {
+  async openTab(tabName: SettingsTab) {
     await this.page.getByRole("dialog").getByRole("button", { name: tabName }).click();
   }
 
-  async expectTabVisible(tabName: "General" | "Data" | "Advanced") {
+  async expectTabVisible(tabName: SettingsTab) {
     await expect(
       this.page.getByRole("dialog").getByRole("button", { name: tabName }),
     ).toBeVisible();
   }
 
-  async expectThreeTabsVisible() {
-    for (const tab of ["General", "Data", "Advanced"] as const) {
+  async expectAllTabsVisible() {
+    for (const tab of ["Model", "Data", "Advanced", "Seeding"] as const) {
       await this.expectTabVisible(tab);
     }
   }

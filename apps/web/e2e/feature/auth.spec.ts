@@ -18,7 +18,7 @@ test.describe("Auth", () => {
 
     // UI: Settings accessible with all tabs
     await settingsPage.open();
-    await settingsPage.expectThreeTabsVisible();
+    await settingsPage.expectAllTabsVisible();
     await settingsPage.close();
 
     // API postcondition: real endpoints work

@@ -5,9 +5,9 @@ test.describe("Settings", () => {
     await chatPage.goto();
   });
 
-  test("open settings shows three tabs", async ({ settingsPage }) => {
+  test("open settings shows all tabs", async ({ settingsPage }) => {
     await settingsPage.open();
-    await settingsPage.expectThreeTabsVisible();
+    await settingsPage.expectAllTabsVisible();
   });
 
   test("switch between settings tabs", async ({ settingsPage }) => {
@@ -15,7 +15,8 @@ test.describe("Settings", () => {
 
     await settingsPage.openTab("Data");
     await settingsPage.openTab("Advanced");
-    await settingsPage.openTab("General");
+    await settingsPage.openTab("Seeding");
+    await settingsPage.openTab("Model");
   });
 
   test("close settings modal", async ({ settingsPage }) => {

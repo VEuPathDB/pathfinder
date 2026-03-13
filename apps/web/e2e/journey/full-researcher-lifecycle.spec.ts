@@ -188,7 +188,7 @@ test.describe("Full Researcher Lifecycle", () => {
 
     // Settings modal
     await settingsPage.open();
-    await settingsPage.expectThreeTabsVisible();
+    await settingsPage.expectAllTabsVisible();
     await settingsPage.openTab("Data");
     await settingsPage.close();
 
