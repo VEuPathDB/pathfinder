@@ -10,9 +10,18 @@ biologically meaningful search configurations targeting:
   - Secreted virulence factors (cathepsins, proteases)
 """
 
-import json
 from typing import Any
 
+from veupath_chatbot.services.experiment.seed.helpers import (
+    ec_search_params,
+    gene_type_params,
+    go_search_params,
+    mol_weight_params,
+    paralog_count_params,
+    signal_peptide_params,
+    text_search_params,
+    transmembrane_params,
+)
 from veupath_chatbot.services.experiment.seed.types import ControlSetDef, SeedDef
 
 # ---------------------------------------------------------------------------
@@ -817,27 +826,16 @@ GIARDIA_MDR = [
 # ---------------------------------------------------------------------------
 
 
-def _org(names: list[str]) -> str:
-    return json.dumps(names)
-
-
 def _go_search_params(organism: str, go_id: str) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "go_term_evidence": json.dumps(["Curated", "Computed"]),
-        "go_term_slim": "No",
-        "go_typeahead": json.dumps([go_id]),
-        "go_term": "N/A",
-    }
+    """Build GenesByGoTerm parameters (GiardiaDB uses go_term="N/A")."""
+    return go_search_params(organism, go_id, go_term_value="N/A")
 
 
 def _ec_kinase_params(organism: str, ec_sources: list[str]) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "ec_source": json.dumps(ec_sources),
-        "ec_number_pattern": "2.7.11.1",
-        "ec_wildcard": "N/A",
-    }
+    """Build GenesByEcNumber parameters for kinases (GiardiaDB-specific)."""
+    return ec_search_params(
+        organism, ec_number="2.7.11.1", ec_sources=ec_sources, ec_wildcard="N/A"
+    )
 
 
 def _text_search_params(
@@ -846,63 +844,10 @@ def _text_search_params(
     *,
     whole_words: str = "yes",
 ) -> dict[str, str]:
-    return {
-        "text_expression": text,
-        "text_fields": json.dumps(["product"]),
-        "text_search_organism": json.dumps([organism]),
-        "document_type": "gene",
-        "whole_words": whole_words,
-    }
-
-
-def _tm_domain_params(
-    organism: str,
-    min_tm: str = "1",
-    max_tm: str = "99",
-) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "min_tm": min_tm,
-        "max_tm": max_tm,
-    }
-
-
-def _signal_peptide_params(organism: str) -> dict[str, str]:
-    return {"organism": _org([organism])}
-
-
-def _paralog_count_params(
-    organism: str,
-    min_p: str = "5",
-    max_p: str = "500",
-) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "num_paralogs": json.dumps({"min": min_p, "max": max_p}),
-    }
-
-
-def _mol_weight_params(
-    organism: str,
-    min_w: str = "10000",
-    max_w: str = "50000",
-) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "min_molecular_weight": min_w,
-        "max_molecular_weight": max_w,
-    }
-
-
-def _gene_type_params(
-    organism: str,
-    gene_type: str = "protein coding",
-) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "geneType": json.dumps([gene_type]),
-        "includePseudogenes": "No",
-    }
+    """Build GenesByText parameters (GiardiaDB adds whole_words param not in shared helper)."""
+    params = text_search_params(organism, text)
+    params["whole_words"] = whole_words
+    return params
 
 
 # ---------------------------------------------------------------------------
@@ -936,7 +881,7 @@ _s1_tm_domains: dict[str, Any] = {
     "id": "s1_tm_domains",
     "displayName": ">=3 TM domains",
     "searchName": "GenesByTransmembraneDomains",
-    "parameters": _tm_domain_params(GL_ORG, "3", "99"),
+    "parameters": transmembrane_params(GL_ORG, "3", "99"),
 }
 
 _s1_surface_with_tm: dict[str, Any] = {
@@ -951,7 +896,7 @@ _s1_paralogs: dict[str, Any] = {
     "id": "s1_paralogs",
     "displayName": "Expanded families (>=50 paralogs)",
     "searchName": "GenesByParalogCount",
-    "parameters": _paralog_count_params(GL_ORG, "50", "500"),
+    "parameters": paralog_count_params(GL_ORG, "50", "500"),
 }
 
 _s1_membrane_go: dict[str, Any] = {
@@ -1037,7 +982,7 @@ _s2_signal: dict[str, Any] = {
     "id": "s2_signal",
     "displayName": "Signal peptide",
     "searchName": "GenesWithSignalPeptide",
-    "parameters": _signal_peptide_params(GL_ORG),
+    "parameters": signal_peptide_params(GL_ORG),
 }
 
 _s2_protease_go: dict[str, Any] = {
@@ -1067,7 +1012,7 @@ _s2_protein_coding: dict[str, Any] = {
     "id": "s2_protein_coding",
     "displayName": "Protein coding genes",
     "searchName": "GenesByGeneType",
-    "parameters": _gene_type_params(GL_ORG),
+    "parameters": gene_type_params(GL_ORG),
 }
 
 _s2_filtered: dict[str, Any] = {
@@ -1123,7 +1068,7 @@ _s3_mol_weight: dict[str, Any] = {
     "id": "s3_mol_weight",
     "displayName": "MW 20-200 kDa",
     "searchName": "GenesByMolecularWeight",
-    "parameters": _mol_weight_params(GL_ORG, "20000", "200000"),
+    "parameters": mol_weight_params(GL_ORG, "20000", "200000"),
 }
 
 _s3_sized_enzymes: dict[str, Any] = {
@@ -1239,7 +1184,7 @@ _s4_mol_weight: dict[str, Any] = {
     "id": "s4_mol_weight",
     "displayName": "MW >= 10 kDa",
     "searchName": "GenesByMolecularWeight",
-    "parameters": _mol_weight_params(GL_ORG, "10000", "1000000"),
+    "parameters": mol_weight_params(GL_ORG, "10000", "1000000"),
 }
 
 _s4_sized: dict[str, Any] = {
@@ -1310,7 +1255,7 @@ _s5_protein_coding: dict[str, Any] = {
     "id": "s5_protein_coding",
     "displayName": "Protein coding",
     "searchName": "GenesByGeneType",
-    "parameters": _gene_type_params(GL_ORG),
+    "parameters": gene_type_params(GL_ORG),
 }
 
 _s5_verified_kinases: dict[str, Any] = {
@@ -1344,7 +1289,7 @@ _s6_signal: dict[str, Any] = {
     "id": "s6_signal",
     "displayName": "Signal peptide",
     "searchName": "GenesWithSignalPeptide",
-    "parameters": _signal_peptide_params(GL_ORG),
+    "parameters": signal_peptide_params(GL_ORG),
 }
 
 _s6_protease_go: dict[str, Any] = {

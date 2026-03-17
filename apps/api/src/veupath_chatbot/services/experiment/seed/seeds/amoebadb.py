@@ -11,8 +11,12 @@ AmoebaDB (Mar 2026), biologically meaningful search configurations targeting:
   - Signaling: Rho GTPases, kinases, phosphatases
 """
 
-import json
-
+from veupath_chatbot.services.experiment.seed.helpers import (
+    ec_search_params,
+    signal_peptide_params,
+    text_search_params,
+    transmembrane_params,
+)
 from veupath_chatbot.services.experiment.seed.types import ControlSetDef, SeedDef
 
 # ---------------------------------------------------------------------------
@@ -741,59 +745,12 @@ EH_PHOSPHATASES = [
 # ---------------------------------------------------------------------------
 
 
-def _org(names: list[str]) -> str:
-    return json.dumps(names)
-
-
-def _text_search_params(
-    organism: str,
-    term: str,
-    fields: list[str] | None = None,
-) -> dict[str, str]:
-    if fields is None:
-        fields = ["product"]
-    return {
-        "text_search_organism": _org([organism]),
-        "text_expression": term,
-        "document_type": "gene",
-        "text_fields": json.dumps(fields),
-    }
-
-
-def _ec_search_params(
-    organism: str,
-    ec_number: str,
-    ec_sources: list[str] | None = None,
-) -> dict[str, str]:
-    if ec_sources is None:
-        ec_sources = [
-            "KEGG_Enzyme",
-            "GenBank",
-            "computationally inferred from Orthology",
-            "Uniprot",
-        ]
-    return {
-        "organism": _org([organism]),
-        "ec_source": json.dumps(ec_sources),
-        "ec_number_pattern": ec_number,
-        "ec_wildcard": "No",
-    }
-
-
-def _signal_peptide_params(organism: str) -> dict[str, str]:
-    return {"organism": _org([organism])}
-
-
-def _tm_domain_params(
-    organism: str,
-    min_tm: int = 1,
-    max_tm: int = 30,
-) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "min_tm": str(min_tm),
-        "max_tm": str(max_tm),
-    }
+_EH_DEFAULT_EC_SOURCES = [
+    "KEGG_Enzyme",
+    "GenBank",
+    "computationally inferred from Orthology",
+    "Uniprot",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -836,7 +793,7 @@ SEEDS: list[SeedDef] = [
                                 "id": "leaf_cp",
                                 "displayName": "Cysteine Proteases",
                                 "searchName": "GenesByText",
-                                "parameters": _text_search_params(
+                                "parameters": text_search_params(
                                     EH_ORG, "cysteine protease OR cysteine proteinase"
                                 ),
                             },
@@ -844,15 +801,17 @@ SEEDS: list[SeedDef] = [
                                 "id": "leaf_lectin",
                                 "displayName": "Lectins",
                                 "searchName": "GenesByText",
-                                "parameters": _text_search_params(EH_ORG, "lectin"),
+                                "parameters": text_search_params(EH_ORG, "lectin"),
                             },
                         },
                         "secondaryInput": {
                             "id": "leaf_amoebapore",
                             "displayName": "Amoebapores",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
-                                EH_ORG, "amoebapore OR saposin", ["product", "InterPro"]
+                            "parameters": text_search_params(
+                                EH_ORG,
+                                "amoebapore OR saposin",
+                                fields=["product", "InterPro"],
                             ),
                         },
                     },
@@ -860,7 +819,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_signal_pep",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(EH_ORG),
+                        "parameters": signal_peptide_params(EH_ORG),
                     },
                 },
                 "secondaryInput": {
@@ -871,13 +830,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_surface",
                         "displayName": "Surface Antigens",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(EH_ORG, "surface"),
+                        "parameters": text_search_params(EH_ORG, "surface"),
                     },
                     "secondaryInput": {
                         "id": "leaf_tm",
                         "displayName": "Transmembrane Domains",
                         "searchName": "GenesByTransmembraneDomains",
-                        "parameters": _tm_domain_params(EH_ORG),
+                        "parameters": transmembrane_params(EH_ORG, "1", "30"),
                     },
                 },
             },
@@ -885,7 +844,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_ribosomal",
                 "displayName": "Ribosomal (exclude)",
                 "searchName": "GenesByText",
-                "parameters": _text_search_params(EH_ORG, '"ribosomal protein"'),
+                "parameters": text_search_params(EH_ORG, '"ribosomal protein"'),
             },
         },
         control_set=ControlSetDef(
@@ -933,7 +892,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_protease",
                             "displayName": "Proteases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 EH_ORG, "protease OR proteinase OR peptidase"
                             ),
                         },
@@ -941,7 +900,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_surface_inv",
                             "displayName": "Surface Molecules",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 EH_ORG, "surface OR lectin"
                             ),
                         },
@@ -954,13 +913,13 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_actin",
                             "displayName": "Actin Cytoskeleton",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(EH_ORG, "actin"),
+                            "parameters": text_search_params(EH_ORG, "actin"),
                         },
                         "secondaryInput": {
                             "id": "leaf_rho",
                             "displayName": "Rho GTPases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 EH_ORG, '"Rho family GTPase"'
                             ),
                         },
@@ -974,13 +933,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_sp_inv",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(EH_ORG),
+                        "parameters": signal_peptide_params(EH_ORG),
                     },
                     "secondaryInput": {
                         "id": "leaf_tm_inv",
                         "displayName": "Transmembrane",
                         "searchName": "GenesByTransmembraneDomains",
-                        "parameters": _tm_domain_params(EH_ORG),
+                        "parameters": transmembrane_params(EH_ORG, "1", "30"),
                     },
                 },
             },
@@ -988,7 +947,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_ribosomal_inv",
                 "displayName": "Ribosomal (exclude)",
                 "searchName": "GenesByText",
-                "parameters": _text_search_params(EH_ORG, '"ribosomal protein"'),
+                "parameters": text_search_params(EH_ORG, '"ribosomal protein"'),
             },
         },
         control_set=ControlSetDef(
@@ -1040,13 +999,13 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_thioredoxin",
                             "displayName": "Thioredoxin Family",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(EH_ORG, "thioredoxin"),
+                            "parameters": text_search_params(EH_ORG, "thioredoxin"),
                         },
                         "secondaryInput": {
                             "id": "leaf_adh",
                             "displayName": "Dehydrogenases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(EH_ORG, "dehydrogenase"),
+                            "parameters": text_search_params(EH_ORG, "dehydrogenase"),
                         },
                     },
                     "secondaryInput": {
@@ -1057,7 +1016,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_ferredoxin",
                             "displayName": "Iron-Sulfur / Ferredoxin",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 EH_ORG, "ferredoxin OR iron-sulfur"
                             ),
                         },
@@ -1065,7 +1024,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_redox",
                             "displayName": "Peroxiredoxin / SOD",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 EH_ORG, "peroxiredoxin OR superoxide OR lysozyme"
                             ),
                         },
@@ -1075,14 +1034,14 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_hsp",
                     "displayName": "Heat Shock (exclude)",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(EH_ORG, '"heat shock"'),
+                    "parameters": text_search_params(EH_ORG, '"heat shock"'),
                 },
             },
             "secondaryInput": {
                 "id": "leaf_ribo_drug",
                 "displayName": "Ribosomal (exclude)",
                 "searchName": "GenesByText",
-                "parameters": _text_search_params(EH_ORG, '"ribosomal protein"'),
+                "parameters": text_search_params(EH_ORG, '"ribosomal protein"'),
             },
         },
         control_set=ControlSetDef(
@@ -1129,15 +1088,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_chitin",
                         "displayName": "Chitin Synthase/Chitinase",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(
-                            EH_ORG, "chitin OR chitinase"
-                        ),
+                        "parameters": text_search_params(EH_ORG, "chitin OR chitinase"),
                     },
                     "secondaryInput": {
                         "id": "leaf_jacob",
                         "displayName": "Jacob / Cyst Wall",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(
+                        "parameters": text_search_params(
                             EH_ORG, '"cyst wall" OR jacob'
                         ),
                     },
@@ -1150,13 +1107,17 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_kinase_ec",
                         "displayName": "Ser/Thr Kinases",
                         "searchName": "GenesByEcNumber",
-                        "parameters": _ec_search_params(EH_ORG, "2.7.11.1"),
+                        "parameters": ec_search_params(
+                            EH_ORG,
+                            ec_number="2.7.11.1",
+                            ec_sources=_EH_DEFAULT_EC_SOURCES,
+                        ),
                     },
                     "secondaryInput": {
                         "id": "leaf_sp_encyst",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(EH_ORG),
+                        "parameters": signal_peptide_params(EH_ORG),
                     },
                 },
             },
@@ -1164,7 +1125,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_ribo_encyst",
                 "displayName": "Ribosomal (exclude)",
                 "searchName": "GenesByText",
-                "parameters": _text_search_params(EH_ORG, '"ribosomal protein"'),
+                "parameters": text_search_params(EH_ORG, '"ribosomal protein"'),
             },
         },
         control_set=ControlSetDef(
@@ -1211,13 +1172,17 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_kinase",
                             "displayName": "Ser/Thr Kinases (EC)",
                             "searchName": "GenesByEcNumber",
-                            "parameters": _ec_search_params(EH_ORG, "2.7.11.1"),
+                            "parameters": ec_search_params(
+                                EH_ORG,
+                                ec_number="2.7.11.1",
+                                ec_sources=_EH_DEFAULT_EC_SOURCES,
+                            ),
                         },
                         "secondaryInput": {
                             "id": "leaf_phosphatase",
                             "displayName": "Phosphatases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(EH_ORG, "phosphatase"),
+                            "parameters": text_search_params(EH_ORG, "phosphatase"),
                         },
                     },
                     "secondaryInput": {
@@ -1228,7 +1193,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_rho_sig",
                             "displayName": "Rho GTPases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 EH_ORG, '"Rho family GTPase"'
                             ),
                         },
@@ -1236,7 +1201,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_rab_sig",
                             "displayName": "Rab GTPases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 EH_ORG, '"Rab family GTPase"'
                             ),
                         },
@@ -1246,14 +1211,14 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_transporter",
                     "displayName": "Transporters (exclude)",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(EH_ORG, "transporter"),
+                    "parameters": text_search_params(EH_ORG, "transporter"),
                 },
             },
             "secondaryInput": {
                 "id": "leaf_ribo_sig",
                 "displayName": "Ribosomal (exclude)",
                 "searchName": "GenesByText",
-                "parameters": _text_search_params(EH_ORG, '"ribosomal protein"'),
+                "parameters": text_search_params(EH_ORG, '"ribosomal protein"'),
             },
         },
         control_set=ControlSetDef(
@@ -1290,13 +1255,15 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_ec_kinase",
                 "displayName": "EC Kinases (2.7.11.1)",
                 "searchName": "GenesByEcNumber",
-                "parameters": _ec_search_params(EH_ORG, "2.7.11.1"),
+                "parameters": ec_search_params(
+                    EH_ORG, ec_number="2.7.11.1", ec_sources=_EH_DEFAULT_EC_SOURCES
+                ),
             },
             "secondaryInput": {
                 "id": "leaf_sp_base",
                 "displayName": "Signal Peptide",
                 "searchName": "GenesWithSignalPeptide",
-                "parameters": _signal_peptide_params(EH_ORG),
+                "parameters": signal_peptide_params(EH_ORG),
             },
         },
         control_set=ControlSetDef(

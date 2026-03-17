@@ -1,7 +1,13 @@
 """Seed definitions for PlasmoDB."""
 
-import json
-
+from veupath_chatbot.services.experiment.seed.helpers import (
+    ec_search_params,
+    go_search_params,
+    org,
+    signal_peptide_params,
+    text_search_params,
+    transmembrane_params,
+)
 from veupath_chatbot.services.experiment.seed.types import ControlSetDef, SeedDef
 
 # ---------------------------------------------------------------------------
@@ -1340,59 +1346,17 @@ PF_TRANSLATION: list[str] = [
 
 
 # ---------------------------------------------------------------------------
-# Parameter helpers
+# Parameter helpers — PlasmoDB-specific (no shared helper exists for these)
 # ---------------------------------------------------------------------------
-def _org(names: list[str]) -> str:
-    return json.dumps(names)
-
-
-def _go(organism: str, go_id: str) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "go_term_evidence": json.dumps(PF_GO_EVIDENCE),
-        "go_term_slim": "No",
-        "go_typeahead": json.dumps([go_id]),
-        "go_term": go_id,
-    }
-
-
-def _ec(organism: str, ec: str) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "ec_source": json.dumps(PF_EC_SOURCES),
-        "ec_number_pattern": ec,
-        "ec_wildcard": "No",
-    }
-
-
-def _text(
-    organism: str, expression: str, fields: list[str] | None = None
-) -> dict[str, str]:
-    if fields is None:
-        fields = ["product"]
-    return {
-        "text_search_organism": _org([organism]),
-        "text_expression": expression,
-        "text_fields": json.dumps(fields),
-        "document_type": "gene",
-    }
-
-
-def _signal_peptide(organism: str) -> dict[str, str]:
-    return {"organism": _org([organism])}
-
-
-def _transmembrane(organism: str, min_tm: int = 1, max_tm: int = 20) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "min_tm": str(min_tm),
-        "max_tm": str(max_tm),
-    }
 
 
 def _export_pred(organism: str, min_score: float = 1.5) -> dict[str, str]:
+    """Build ExportPred parameters.
+
+    Unique to PlasmoDB: ExportPred scoring is a Plasmodium-specific search.
+    """
     return {
-        "organism": _org([organism]),
+        "organism": org([organism]),
         "min_exportpred_score": str(min_score),
     }
 
@@ -1402,8 +1366,12 @@ def _metabolic_pathway(
     pathway_id: str,
     source: str = "Any",
 ) -> dict[str, str]:
+    """Build GenesByMetabolicPathway parameters.
+
+    Unique to PlasmoDB: metabolic pathway searches with KEGG IDs.
+    """
     return {
-        "organism": _org([organism]),
+        "organism": org([organism]),
         "pathways_source": source,
         "metabolic_pathway_id_with_genes": pathway_id,
         "pathway_wildcard": "No",
@@ -1452,20 +1420,26 @@ SEEDS: list[SeedDef] = [
                                 "id": "step_1",
                                 "displayName": "Protein Kinases",
                                 "searchName": "GenesByGoTerm",
-                                "parameters": _go(PF_ORG, "GO:0004672"),
+                                "parameters": go_search_params(
+                                    PF_ORG, "GO:0004672", evidence=PF_GO_EVIDENCE
+                                ),
                             },
                             "secondaryInput": {
                                 "id": "step_2",
                                 "displayName": "Proteases",
                                 "searchName": "GenesByGoTerm",
-                                "parameters": _go(PF_ORG, "GO:0008233"),
+                                "parameters": go_search_params(
+                                    PF_ORG, "GO:0008233", evidence=PF_GO_EVIDENCE
+                                ),
                             },
                         },
                         "secondaryInput": {
                             "id": "step_3",
                             "displayName": "Oxidoreductases (EC 1.1.1.37)",
                             "searchName": "GenesByEcNumber",
-                            "parameters": _ec(PF_ORG, "1.1.1.37"),
+                            "parameters": ec_search_params(
+                                PF_ORG, ec_number="1.1.1.37", ec_sources=PF_EC_SOURCES
+                            ),
                         },
                     },
                     "secondaryInput": {
@@ -1476,13 +1450,13 @@ SEEDS: list[SeedDef] = [
                             "id": "step_4",
                             "displayName": "Signal Peptide",
                             "searchName": "GenesWithSignalPeptide",
-                            "parameters": _signal_peptide(PF_ORG),
+                            "parameters": signal_peptide_params(PF_ORG),
                         },
                         "secondaryInput": {
                             "id": "step_5",
                             "displayName": "Transmembrane Domains",
                             "searchName": "GenesByTransmembraneDomains",
-                            "parameters": _transmembrane(PF_ORG, min_tm=1, max_tm=20),
+                            "parameters": transmembrane_params(PF_ORG, "1", "20"),
                         },
                     },
                 },
@@ -1490,14 +1464,18 @@ SEEDS: list[SeedDef] = [
                     "id": "step_8",
                     "displayName": "Ribosomal Proteins",
                     "searchName": "GenesByGoTerm",
-                    "parameters": _go(PF_ORG, "GO:0003735"),
+                    "parameters": go_search_params(
+                        PF_ORG, "GO:0003735", evidence=PF_GO_EVIDENCE
+                    ),
                 },
             },
             "secondaryInput": {
                 "id": "step_10",
                 "displayName": "Translation Machinery",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go(PF_ORG, "GO:0006412"),
+                "parameters": go_search_params(
+                    PF_ORG, "GO:0006412", evidence=PF_GO_EVIDENCE
+                ),
             },
         },
         control_set=ControlSetDef(
@@ -1546,13 +1524,13 @@ SEEDS: list[SeedDef] = [
                         "id": "step_1",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide(PF_ORG),
+                        "parameters": signal_peptide_params(PF_ORG),
                     },
                     "secondaryInput": {
                         "id": "step_2",
                         "displayName": "Transmembrane Domains",
                         "searchName": "GenesByTransmembraneDomains",
-                        "parameters": _transmembrane(PF_ORG, min_tm=1, max_tm=20),
+                        "parameters": transmembrane_params(PF_ORG, "1", "20"),
                     },
                 },
                 "secondaryInput": {
@@ -1563,7 +1541,7 @@ SEEDS: list[SeedDef] = [
                         "id": "step_3",
                         "displayName": "Invasion/Merozoite Text",
                         "searchName": "GenesByText",
-                        "parameters": _text(
+                        "parameters": text_search_params(
                             PF_ORG, "invasion OR merozoite OR erythrocyte binding"
                         ),
                     },
@@ -1571,7 +1549,7 @@ SEEDS: list[SeedDef] = [
                         "id": "step_4",
                         "displayName": "AMA1/EBA/Rhoptry Text",
                         "searchName": "GenesByText",
-                        "parameters": _text(
+                        "parameters": text_search_params(
                             PF_ORG, "AMA1 OR EBA OR rhoptry OR RON OR RAP"
                         ),
                     },
@@ -1581,7 +1559,7 @@ SEEDS: list[SeedDef] = [
                 "id": "step_7",
                 "displayName": "Antigenic Variation Genes",
                 "searchName": "GenesByText",
-                "parameters": _text(PF_ORG, "PfEMP1 OR rifin OR stevor"),
+                "parameters": text_search_params(PF_ORG, "PfEMP1 OR rifin OR stevor"),
             },
         },
         control_set=ControlSetDef(
@@ -1642,20 +1620,26 @@ SEEDS: list[SeedDef] = [
                             "id": "step_2",
                             "displayName": "Protein Kinases",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go(PF_ORG, "GO:0004672"),
+                            "parameters": go_search_params(
+                                PF_ORG, "GO:0004672", evidence=PF_GO_EVIDENCE
+                            ),
                         },
                         "secondaryInput": {
                             "id": "step_3",
                             "displayName": "Proteases",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go(PF_ORG, "GO:0008233"),
+                            "parameters": go_search_params(
+                                PF_ORG, "GO:0008233", evidence=PF_GO_EVIDENCE
+                            ),
                         },
                     },
                     "secondaryInput": {
                         "id": "step_4",
                         "displayName": "Protein Folding / Chaperones",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go(PF_ORG, "GO:0006457"),
+                        "parameters": go_search_params(
+                            PF_ORG, "GO:0006457", evidence=PF_GO_EVIDENCE
+                        ),
                     },
                 },
                 "secondaryInput": {
@@ -1666,13 +1650,17 @@ SEEDS: list[SeedDef] = [
                         "id": "step_5",
                         "displayName": "Transporter Activity",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go(PF_ORG, "GO:0005215"),
+                        "parameters": go_search_params(
+                            PF_ORG, "GO:0005215", evidence=PF_GO_EVIDENCE
+                        ),
                     },
                     "secondaryInput": {
                         "id": "step_6",
                         "displayName": "Exported/PEXEL/Maurer Text",
                         "searchName": "GenesByText",
-                        "parameters": _text(PF_ORG, "exported OR PEXEL OR Maurer"),
+                        "parameters": text_search_params(
+                            PF_ORG, "exported OR PEXEL OR Maurer"
+                        ),
                     },
                 },
             },
@@ -1718,13 +1706,13 @@ SEEDS: list[SeedDef] = [
                     "id": "step_1",
                     "displayName": "Apicoplast Text",
                     "searchName": "GenesByText",
-                    "parameters": _text(PF_ORG, "apicoplast"),
+                    "parameters": text_search_params(PF_ORG, "apicoplast"),
                 },
                 "secondaryInput": {
                     "id": "step_2",
                     "displayName": "Signal Peptide",
                     "searchName": "GenesWithSignalPeptide",
-                    "parameters": _signal_peptide(PF_ORG),
+                    "parameters": signal_peptide_params(PF_ORG),
                 },
             },
             "secondaryInput": {
@@ -1788,7 +1776,7 @@ SEEDS: list[SeedDef] = [
             "id": "step_1",
             "displayName": "Signal Peptide Genes",
             "searchName": "GenesWithSignalPeptide",
-            "parameters": _signal_peptide(PF_ORG),
+            "parameters": signal_peptide_params(PF_ORG),
         },
         control_set=ControlSetDef(
             name="Secreted proteins (signal peptide)",
@@ -1830,20 +1818,20 @@ SEEDS: list[SeedDef] = [
                         "id": "step_1",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide(PF_ORG),
+                        "parameters": signal_peptide_params(PF_ORG),
                     },
                     "secondaryInput": {
                         "id": "step_2",
                         "displayName": "Transmembrane Domains",
                         "searchName": "GenesByTransmembraneDomains",
-                        "parameters": _transmembrane(PF_ORG, min_tm=1, max_tm=20),
+                        "parameters": transmembrane_params(PF_ORG, "1", "20"),
                     },
                 },
                 "secondaryInput": {
                     "id": "step_3",
                     "displayName": "Gametocyte/Sexual Stage Text",
                     "searchName": "GenesByText",
-                    "parameters": _text(
+                    "parameters": text_search_params(
                         PF_ORG,
                         "gametocyte OR sexual stage OR ookinete OR Pfs25 OR Pfs48 OR Pfs230",
                     ),
@@ -1857,13 +1845,15 @@ SEEDS: list[SeedDef] = [
                     "id": "step_5",
                     "displayName": "PfEMP1/RIFIN/STEVOR",
                     "searchName": "GenesByText",
-                    "parameters": _text(PF_ORG, "PfEMP1 OR rifin OR stevor"),
+                    "parameters": text_search_params(
+                        PF_ORG, "PfEMP1 OR rifin OR stevor"
+                    ),
                 },
                 "secondaryInput": {
                     "id": "step_6",
                     "displayName": "var/EMP Text",
                     "searchName": "GenesByText",
-                    "parameters": _text(
+                    "parameters": text_search_params(
                         PF_ORG, "var gene OR erythrocyte membrane protein"
                     ),
                 },

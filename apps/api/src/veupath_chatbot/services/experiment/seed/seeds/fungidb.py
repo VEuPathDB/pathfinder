@@ -15,6 +15,12 @@ All gene IDs verified against live FungiDB API (March 2026).
 
 import json
 
+from veupath_chatbot.services.experiment.seed.helpers import (
+    org,
+    signal_peptide_params,
+    text_search_params,
+    transmembrane_params,
+)
 from veupath_chatbot.services.experiment.seed.types import ControlSetDef, SeedDef
 
 # ---------------------------------------------------------------------------
@@ -873,15 +879,15 @@ AFUM_CELLULASES = [
 # ---------------------------------------------------------------------------
 
 
-def _org(names: list[str]) -> str:
-    """Encode organism list as WDK JSON-array string."""
-    return json.dumps(names)
-
-
 def _go_search_params(organism: str, go_id: str) -> dict[str, str]:
-    """Build GenesByGoTerm parameters."""
+    """Build GenesByGoTerm parameters for FungiDB.
+
+    Unique to FungiDB: uses a plain string for go_term_evidence ("Computed")
+    instead of a JSON-encoded list, and go_typeahead is a raw string instead
+    of a JSON array.  Cannot use the shared go_search_params helper.
+    """
     return {
-        "organism": _org([organism]),
+        "organism": org([organism]),
         "go_term_evidence": "Computed",
         "go_term_slim": "No",
         "go_typeahead": go_id,
@@ -889,48 +895,18 @@ def _go_search_params(organism: str, go_id: str) -> dict[str, str]:
     }
 
 
-def _text_search_params(
-    organism: str, text: str, fields: str = '["product"]'
-) -> dict[str, str]:
-    """Build GenesByText parameters."""
-    return {
-        "text_search_organism": _org([organism]),
-        "text_expression": text,
-        "document_type": "gene",
-        "text_fields": fields,
-    }
-
-
 def _ec_search_params(organism: str, ec_number: str) -> dict[str, str]:
-    """Build GenesByEcNumber parameters."""
+    """Build GenesByEcNumber parameters for FungiDB.
+
+    Unique to FungiDB: ec_wildcard is set to the ec_number value itself
+    (not "No"), and ec_sources is always ["KEGG_Enzyme"].
+    Cannot use the shared ec_search_params helper.
+    """
     return {
-        "organism": _org([organism]),
+        "organism": org([organism]),
         "ec_source": json.dumps(["KEGG_Enzyme"]),
         "ec_number_pattern": ec_number,
         "ec_wildcard": ec_number,
-    }
-
-
-def _signal_peptide_params(organism: str) -> dict[str, str]:
-    """Build GenesWithSignalPeptide parameters."""
-    return {"organism": _org([organism])}
-
-
-def _tm_domain_params(organism: str, min_tm: str, max_tm: str) -> dict[str, str]:
-    """Build GenesByTransmembraneDomains parameters."""
-    return {
-        "organism": _org([organism]),
-        "min_tm": min_tm,
-        "max_tm": max_tm,
-    }
-
-
-def _mw_params(organism: str, min_mw: str, max_mw: str) -> dict[str, str]:
-    """Build GenesByMolecularWeight parameters."""
-    return {
-        "organism": _org([organism]),
-        "min_molecular_weight": min_mw,
-        "max_molecular_weight": max_mw,
     }
 
 
@@ -975,7 +951,7 @@ SEEDS: list[SeedDef] = [
                                 "id": "leaf_chitin",
                                 "displayName": "Chitin Synthases",
                                 "searchName": "GenesByText",
-                                "parameters": _text_search_params(
+                                "parameters": text_search_params(
                                     ORGANISM, '"chitin synthase"'
                                 ),
                             },
@@ -983,7 +959,7 @@ SEEDS: list[SeedDef] = [
                                 "id": "leaf_glucan",
                                 "displayName": "Glucan Synthases",
                                 "searchName": "GenesByText",
-                                "parameters": _text_search_params(
+                                "parameters": text_search_params(
                                     ORGANISM, '"glucan synthase"'
                                 ),
                             },
@@ -992,14 +968,14 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_gpi",
                             "displayName": "GPI-anchored Proteins",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(ORGANISM, "GPI-anchored"),
+                            "parameters": text_search_params(ORGANISM, "GPI-anchored"),
                         },
                     },
                     "secondaryInput": {
                         "id": "leaf_signal_1",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(ORGANISM),
+                        "parameters": signal_peptide_params(ORGANISM),
                     },
                 },
                 "secondaryInput": {
@@ -1010,15 +986,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_cyp450",
                         "displayName": "Cytochrome P450s",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(
-                            ORGANISM, '"cytochrome P450"'
-                        ),
+                        "parameters": text_search_params(ORGANISM, '"cytochrome P450"'),
                     },
                     "secondaryInput": {
                         "id": "leaf_tm",
                         "displayName": "Transmembrane Proteins (>=1 TM)",
                         "searchName": "GenesByTransmembraneDomains",
-                        "parameters": _tm_domain_params(ORGANISM, "1", "20"),
+                        "parameters": transmembrane_params(ORGANISM, "1", "20"),
                     },
                 },
             },
@@ -1026,7 +1000,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_ribosomal",
                 "displayName": "Ribosomal Proteins (excluded)",
                 "searchName": "GenesByText",
-                "parameters": _text_search_params(ORGANISM, '"ribosomal protein"'),
+                "parameters": text_search_params(ORGANISM, '"ribosomal protein"'),
             },
         },
         control_set=ControlSetDef(
@@ -1081,13 +1055,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_proteases",
                         "displayName": "Proteases",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(ORGANISM, "protease"),
+                        "parameters": text_search_params(ORGANISM, "protease"),
                     },
                     "secondaryInput": {
                         "id": "leaf_signal_2",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(ORGANISM),
+                        "parameters": signal_peptide_params(ORGANISM),
                     },
                 },
             },
@@ -1105,7 +1079,7 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_heat_shock",
                     "displayName": "Heat Shock Proteins",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(ORGANISM, '"heat shock"'),
+                    "parameters": text_search_params(ORGANISM, '"heat shock"'),
                 },
             },
         },
@@ -1159,7 +1133,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_nrps",
                             "displayName": "Nonribosomal Peptide Synthetases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 ORGANISM, '"nonribosomal peptide"'
                             ),
                         },
@@ -1167,7 +1141,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_pks",
                             "displayName": "Polyketide Synthases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 ORGANISM, '"polyketide synthase"'
                             ),
                         },
@@ -1176,21 +1150,21 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_terpene",
                         "displayName": "Terpene Synthases",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(ORGANISM, "terpene"),
+                        "parameters": text_search_params(ORGANISM, "terpene"),
                     },
                 },
                 "secondaryInput": {
                     "id": "leaf_cyp450_sm",
                     "displayName": "Cytochrome P450s (tailoring)",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(ORGANISM, '"cytochrome P450"'),
+                    "parameters": text_search_params(ORGANISM, '"cytochrome P450"'),
                 },
             },
             "secondaryInput": {
                 "id": "leaf_ribosomal_2",
                 "displayName": "Ribosomal Proteins (excluded)",
                 "searchName": "GenesByText",
-                "parameters": _text_search_params(ORGANISM, '"ribosomal protein"'),
+                "parameters": text_search_params(ORGANISM, '"ribosomal protein"'),
             },
         },
         control_set=ControlSetDef(
@@ -1249,7 +1223,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_chitin_2",
                             "displayName": "Chitin Synthases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 ORGANISM, '"chitin synthase"'
                             ),
                         },
@@ -1257,7 +1231,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_glucan_2",
                             "displayName": "Glucan Synthases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 ORGANISM, '"glucan synthase"'
                             ),
                         },
@@ -1271,13 +1245,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_gpi_2",
                         "displayName": "GPI-anchored Proteins",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(ORGANISM, "GPI-anchored"),
+                        "parameters": text_search_params(ORGANISM, "GPI-anchored"),
                     },
                     "secondaryInput": {
                         "id": "leaf_mannosyl",
                         "displayName": "Mannosyltransferases",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(
+                        "parameters": text_search_params(
                             ORGANISM, "mannosyltransferase"
                         ),
                     },
@@ -1287,7 +1261,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_signal_3",
                 "displayName": "Signal Peptide",
                 "searchName": "GenesWithSignalPeptide",
-                "parameters": _signal_peptide_params(ORGANISM),
+                "parameters": signal_peptide_params(ORGANISM),
             },
         },
         control_set=ControlSetDef(
@@ -1335,17 +1309,15 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_ergosterol",
                         "displayName": "Ergosterol Biosynthesis",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(
-                            ORGANISM, "ergosterol", '["product","GOTerms"]'
+                        "parameters": text_search_params(
+                            ORGANISM, "ergosterol", fields=["product", "GOTerms"]
                         ),
                     },
                     "secondaryInput": {
                         "id": "leaf_cyp450_azole",
                         "displayName": "Cytochrome P450s",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(
-                            ORGANISM, '"cytochrome P450"'
-                        ),
+                        "parameters": text_search_params(ORGANISM, '"cytochrome P450"'),
                     },
                 },
                 "secondaryInput": {
@@ -1356,15 +1328,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_abc",
                         "displayName": "ABC Transporters",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(
-                            ORGANISM, '"ABC transporter"'
-                        ),
+                        "parameters": text_search_params(ORGANISM, '"ABC transporter"'),
                     },
                     "secondaryInput": {
                         "id": "leaf_efflux",
                         "displayName": "Efflux Pumps",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(ORGANISM, "efflux"),
+                        "parameters": text_search_params(ORGANISM, "efflux"),
                     },
                 },
             },
@@ -1372,7 +1342,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_tm_azole",
                 "displayName": "Transmembrane Proteins",
                 "searchName": "GenesByTransmembraneDomains",
-                "parameters": _tm_domain_params(ORGANISM, "1", "20"),
+                "parameters": transmembrane_params(ORGANISM, "1", "20"),
             },
         },
         control_set=ControlSetDef(
@@ -1422,13 +1392,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_siderophore",
                         "displayName": "Siderophore Biosynthesis",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(ORGANISM, "siderophore"),
+                        "parameters": text_search_params(ORGANISM, "siderophore"),
                     },
                     "secondaryInput": {
                         "id": "leaf_iron",
                         "displayName": "Iron Metabolism",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(ORGANISM, "iron"),
+                        "parameters": text_search_params(ORGANISM, "iron"),
                     },
                 },
                 "secondaryInput": {
@@ -1443,13 +1413,13 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_catalase",
                             "displayName": "Catalases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(ORGANISM, "catalase"),
+                            "parameters": text_search_params(ORGANISM, "catalase"),
                         },
                         "secondaryInput": {
                             "id": "leaf_sod",
                             "displayName": "Superoxide Dismutases",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 ORGANISM, '"superoxide dismutase"'
                             ),
                         },
