@@ -9,7 +9,7 @@ and will fail with ImportError until the implementation is written.
 
 from unittest.mock import MagicMock
 
-from veupath_chatbot.services.strategies.wdk_bridge import plan_needs_detail_fetch
+from veupath_chatbot.services.strategies.wdk_sync import plan_needs_detail_fetch
 
 
 class TestPlanNeedsDetailFetch:

@@ -9,8 +9,6 @@ component databases:
 All gene IDs verified against https://veupathdb.org/veupathdb/service
 """
 
-import json
-
 from veupath_chatbot.services.experiment.seed.types import ControlSetDef, SeedDef
 
 # ---------------------------------------------------------------------------
@@ -630,13 +628,12 @@ TCRUZI_FLAGELLAR = [
 # ---------------------------------------------------------------------------
 
 
-def _org(names: list[str]) -> str:
-    """Encode organism list as WDK JSON-array string."""
-    return json.dumps(names)
-
-
 def _text_search_params(organism: str, expression: str) -> dict[str, str]:
-    """Build GenesByText parameters searching product field."""
+    """VEuPathDB-specific: uses raw strings for organism/fields, not JSON arrays.
+
+    Cannot use the shared text_search_params helper because VEuPathDB passes
+    organism and text_fields as plain strings rather than JSON-encoded lists.
+    """
     return {
         "text_expression": expression,
         "text_fields": "product",

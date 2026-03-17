@@ -13,8 +13,13 @@ Strategies model real vector biology research:
 All gene IDs verified against VectorBase live API (March 2026).
 """
 
-import json
-
+from veupath_chatbot.services.experiment.seed.helpers import (
+    exon_count_params,
+    location_params,
+    mol_weight_params,
+    signal_peptide_params,
+    transmembrane_params,
+)
 from veupath_chatbot.services.experiment.seed.types import ControlSetDef, SeedDef
 
 # ---------------------------------------------------------------------------
@@ -1128,87 +1133,19 @@ AGAM_PERITROPHIN = [
 # ---------------------------------------------------------------------------
 
 
-def _org(names: list[str]) -> str:
-    """Encode organism list as WDK JSON-array string."""
-    return json.dumps(names)
-
-
-def _go_search_params(organism: str, go_id: str) -> dict[str, str]:
-    """Build GenesByGoTerm parameters."""
-    return {
-        "organism": _org([organism]),
-        "go_term_evidence": json.dumps(["Curated", "Computed"]),
-        "go_term_slim": "No",
-        "go_typeahead": json.dumps([go_id]),
-        "go_term": go_id,
-    }
-
-
 def _text_search_params(
     organism: str, text: str, field: str = "product"
 ) -> dict[str, str]:
-    """Build GenesByText parameters."""
+    """VectorBase-specific: uses raw strings for organism/fields, not JSON arrays.
+
+    Cannot use the shared text_search_params helper because VectorBase passes
+    organism and text_fields as plain strings rather than JSON-encoded lists.
+    """
     return {
         "text_search_organism": organism,
         "text_expression": text,
         "text_fields": field,
         "document_type": "gene",
-    }
-
-
-def _signal_peptide_params(organism: str) -> dict[str, str]:
-    """Build GenesWithSignalPeptide parameters."""
-    return {"organism": _org([organism])}
-
-
-def _tm_domain_params(organism: str, min_tm: str, max_tm: str) -> dict[str, str]:
-    """Build GenesByTransmembraneDomains parameters."""
-    return {
-        "organism": _org([organism]),
-        "min_tm": min_tm,
-        "max_tm": max_tm,
-    }
-
-
-def _interpro_params(organism: str, database: str, typeahead: str) -> dict[str, str]:
-    """Build GenesByInterproDomain parameters."""
-    return {
-        "organism": _org([organism]),
-        "domain_database": database,
-        "domain_typeahead": typeahead,
-        "domain_accession": "*",
-    }
-
-
-def _location_params(
-    organism: str, chromosome: str, start: str, end: str
-) -> dict[str, str]:
-    """Build GenesByLocation parameters."""
-    return {
-        "organismSinglePick": _org([organism]),
-        "chromosomeOptional": chromosome,
-        "sequenceId": "",
-        "start_point": start,
-        "end_point": end,
-    }
-
-
-def _exon_count_params(organism: str, min_exons: str, max_exons: str) -> dict[str, str]:
-    """Build GenesByExonCount parameters."""
-    return {
-        "organism": _org([organism]),
-        "scope": "Gene",
-        "num_exons_gte": min_exons,
-        "num_exons_lte": max_exons,
-    }
-
-
-def _mol_weight_params(organism: str, min_mw: str, max_mw: str) -> dict[str, str]:
-    """Build GenesByMolecularWeight parameters."""
-    return {
-        "organism": _org([organism]),
-        "min_molecular_weight": min_mw,
-        "max_molecular_weight": max_mw,
     }
 
 
@@ -1261,22 +1198,6 @@ def _rnaseq_pfalciparum_midgut_params(
         "fold_change": fold_change,
         "hard_floor": "6591.17770484092987047740297968873220306",
         "protein_coding_only": "yes",
-    }
-
-
-def _taxon_params(organism: str) -> dict[str, str]:
-    """Build GenesByTaxon parameters."""
-    return {"organism": _org([organism])}
-
-
-def _gene_type_params(
-    organism: str, gene_type: str = "protein coding"
-) -> dict[str, str]:
-    """Build GenesByGeneType parameters."""
-    return {
-        "organism": _org([organism]),
-        "geneType": json.dumps([gene_type]),
-        "includePseudogenes": "No",
     }
 
 
@@ -1359,7 +1280,7 @@ SEEDS: list[SeedDef] = [
                     "id": "tm7plus",
                     "displayName": "7+ Transmembrane Domains",
                     "searchName": "GenesByTransmembraneDomains",
-                    "parameters": _tm_domain_params(AG_ORG, "7", "20"),
+                    "parameters": transmembrane_params(AG_ORG, "7", "20"),
                 },
             },
         },
@@ -1436,7 +1357,7 @@ SEEDS: list[SeedDef] = [
                         "id": "signal_peptide_immune",
                         "displayName": "Signal Peptide (Secreted)",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(AG_ORG),
+                        "parameters": signal_peptide_params(AG_ORG),
                     },
                 },
             },
@@ -1527,7 +1448,7 @@ SEEDS: list[SeedDef] = [
                         "id": "tm7_olfactory",
                         "displayName": "7+ Transmembrane Domains",
                         "searchName": "GenesByTransmembraneDomains",
-                        "parameters": _tm_domain_params(AG_ORG, "7", "20"),
+                        "parameters": transmembrane_params(AG_ORG, "7", "20"),
                     },
                 },
                 "secondaryInput": {
@@ -1553,7 +1474,7 @@ SEEDS: list[SeedDef] = [
                     "id": "signal_obp",
                     "displayName": "Signal Peptide (Secreted)",
                     "searchName": "GenesWithSignalPeptide",
-                    "parameters": _signal_peptide_params(AG_ORG),
+                    "parameters": signal_peptide_params(AG_ORG),
                 },
             },
         },
@@ -1635,13 +1556,13 @@ SEEDS: list[SeedDef] = [
                     "id": "signal_salivary",
                     "displayName": "Signal Peptide (Secreted)",
                     "searchName": "GenesWithSignalPeptide",
-                    "parameters": _signal_peptide_params(AG_ORG),
+                    "parameters": signal_peptide_params(AG_ORG),
                 },
                 "secondaryInput": {
                     "id": "small_mw",
                     "displayName": "Molecular Weight < 60kDa",
                     "searchName": "GenesByMolecularWeight",
-                    "parameters": _mol_weight_params(AG_ORG, "0", "60000"),
+                    "parameters": mol_weight_params(AG_ORG, "0", "60000"),
                 },
             },
         },
@@ -1693,7 +1614,7 @@ SEEDS: list[SeedDef] = [
                         "id": "multi_exon",
                         "displayName": "Genes with 3+ Exons",
                         "searchName": "GenesByExonCount",
-                        "parameters": _exon_count_params(AG_ORG, "3", "50"),
+                        "parameters": exon_count_params(AG_ORG, "3", "50"),
                     },
                 },
                 "secondaryInput": {
@@ -1778,13 +1699,13 @@ SEEDS: list[SeedDef] = [
                     "id": "chr2l",
                     "displayName": "Chromosome 2L Genes",
                     "searchName": "GenesByLocation",
-                    "parameters": _location_params(AG_ORG, "2L", "1", "0"),
+                    "parameters": location_params(AG_ORG, "2L", "1", "0"),
                 },
                 "secondaryInput": {
                     "id": "high_mw",
                     "displayName": "Molecular Weight > 100kDa",
                     "searchName": "GenesByMolecularWeight",
-                    "parameters": _mol_weight_params(AG_ORG, "100000", "1000000"),
+                    "parameters": mol_weight_params(AG_ORG, "100000", "1000000"),
                 },
             },
             "secondaryInput": {

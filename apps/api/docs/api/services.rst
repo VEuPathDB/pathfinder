@@ -97,6 +97,40 @@ trial runs a temporary WDK strategy and scores the result.
    :undoc-members:
    :show-inheritance:
 
+.. automodule:: veupath_chatbot.services.parameter_optimization.trials
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Catalog (Parameter Validation)
+-------------------------------
+
+**Purpose:** Validation of search parameter values. Normalizes, canonicalizes,
+and validates parameter values against WDK search specs before step creation
+or strategy execution.
+
+.. automodule:: veupath_chatbot.services.catalog.param_validation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Export Service
+--------------
+
+**Purpose:** CSV/TSV/TXT generation and Redis temporary storage for data
+exports. Generates downloadable files from strategy results, gene sets, and
+enrichment results, storing them briefly in Redis for client retrieval.
+
+.. automodule:: veupath_chatbot.services.export.service
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.services.parameter_optimization.callbacks
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Control Tests
 -------------
 
@@ -107,6 +141,30 @@ optimization and for validation.
 **Key function:** :py:func:`run_positive_negative_controls`
 
 .. automodule:: veupath_chatbot.services.control_tests
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Control Helpers
+---------------
+
+**Purpose:** Formatting and parsing utilities for control test evaluation.
+Encodes gene ID lists in various formats (newline, comma, JSON) and handles
+temporary strategy cleanup.
+
+.. automodule:: veupath_chatbot.services.control_helpers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Search Reranking
+----------------
+
+**Purpose:** Reusable "fetch wide, rerank narrow" pattern for search results.
+Robust fuzzy matching with exactness bonuses for gene ID lookups. Used to
+improve relevance of WDK search results.
+
+.. automodule:: veupath_chatbot.services.search_rerank
    :members:
    :undoc-members:
    :show-inheritance:
@@ -122,7 +180,7 @@ when the agent needs to discover or validate parameters.
 
 - :py:func:`get_search_parameters` — Full parameter specs for a search
 - :py:func:`validate_search_params` — Validate parameter values
-- :py:func:`get_dependent_vocab` — Refresh dependent parameter options
+- :py:func:`get_refreshed_dependent_params` — Refresh dependent parameter options
 
 .. automodule:: veupath_chatbot.services.catalog.parameters
    :members:
@@ -144,6 +202,30 @@ Catalog (Sites & Record Types)
    :undoc-members:
    :show-inheritance:
 
+Catalog (Parameter Resolution)
+-------------------------------
+
+**Purpose:** WDK parameter fetching, caching, and vocabulary expansion.
+Resolves search parameter specs with allowed values, handles dependent
+vocabularies, and flattens nested parameter structures for agent consumption.
+
+.. automodule:: veupath_chatbot.services.catalog.param_resolution
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Catalog (RAG Search)
+--------------------
+
+**Purpose:** RAG search orchestration — embed query → search Qdrant →
+threshold → prune results. Centralizes the shared RAG pipeline used by
+catalog and example-plan tools.
+
+.. automodule:: veupath_chatbot.services.catalog.rag_search
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Strategy Session
 ----------------
 
@@ -154,3 +236,38 @@ when switching strategies or restoring sessions.
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
+
+Experiment Seed Data
+--------------------
+
+**Purpose:** Generate demo experiments with pre-built multi-step strategies and
+control sets across 13 VEuPathDB databases. Seeds use ``multi-step`` mode
+internally to create strategy trees (the only place multi-step mode is used).
+Triggered via ``POST /api/v1/experiments/seed`` or the Settings > Seeding UI.
+
+Each database has curated seed definitions with organism-specific searches,
+known positive/negative gene controls, and step trees that demonstrate
+real research workflows (e.g. drug resistance genes in PlasmoDB, virulence
+factors in TriTrypDB).
+
+.. automodule:: veupath_chatbot.services.experiment.seed
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.services.experiment.seed.runner
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.services.experiment.seed.helpers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.services.experiment.seed.types
+   :members:
+   :undoc-members:
+   :show-inheritance:
+

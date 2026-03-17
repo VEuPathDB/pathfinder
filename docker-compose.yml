@@ -46,7 +46,8 @@ services:
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     environment:
       # Runtime env read by next.config.js rewrites (standalone server re-reads
       # the config at startup) and by SSR code.

@@ -145,32 +145,28 @@ class TestGetResultCount:
             )
 
         assert r1.http_status == 202
+        strategy_id = r1.strategy_id
+        assert strategy_id, "Expected strategy_id from build flow"
 
-        # Extract the WDK step ID from build_strategy result
+        # Extract WDK step ID from the graph_snapshot SSE event.
+        # The snapshot nests steps under data.graphSnapshot.steps.
         wdk_step_id = None
-        for start, end in r1.tool_calls:
-            if start.data.get("name") == "build_strategy":
-                result_str = end.data.get("result", "{}")
-                try:
-                    data = (
-                        json.loads(result_str)
-                        if isinstance(result_str, str)
-                        else result_str
-                    )
-                except json.JSONDecodeError, TypeError:
-                    continue
-                if isinstance(data, dict):
-                    wdk_step_id = data.get("wdkRootStepId") or data.get("rootStepId")
-                    if wdk_step_id is None:
-                        # Try nested
-                        step_ids = data.get("wdkStepIds") or {}
-                        if isinstance(step_ids, dict) and step_ids:
-                            wdk_step_id = list(step_ids.values())[0]
-
-        if wdk_step_id is None:
-            pytest.xfail("Could not extract WDK step ID from build_strategy result")
-        if not isinstance(wdk_step_id, (int, float, str)):
-            pytest.xfail("wdk_step_id is not int-able")
+        for snapshot in r1.events_of_type("graph_snapshot"):
+            gs = snapshot.data.get("graphSnapshot")
+            if isinstance(gs, dict):
+                steps = gs.get("steps")
+                if isinstance(steps, list):
+                    for step in steps:
+                        if isinstance(step, dict):
+                            sid = step.get("wdkStepId")
+                            if sid is not None:
+                                wdk_step_id = sid
+                                break
+            if wdk_step_id is not None:
+                break
+        assert wdk_step_id is not None, (
+            "Could not extract WDK step ID from graph_snapshot events"
+        )
 
         # Phase 2: get result count
         count_turns = [
@@ -185,7 +181,6 @@ class TestGetResultCount:
             ScriptedTurn(content="The search returned some results."),
         ]
 
-        strategy_id = r1.strategy_id
         with scripted_engine_factory(count_turns):
             r2 = await collect_chat_stream(
                 authed_client,

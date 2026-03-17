@@ -47,7 +47,7 @@ async def run_seed(
     from veupath_chatbot.services.experiment.materialization import (
         _materialize_step_tree,
     )
-    from veupath_chatbot.services.strategies.wdk_bridge import (
+    from veupath_chatbot.services.strategies.wdk_sync import (
         sync_to_projection,
     )
 
