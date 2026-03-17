@@ -53,15 +53,37 @@ Research Registry
    :undoc-members:
    :show-inheritance:
 
+Result Tools
+------------
+
+**Purpose:** Tools for retrieving step results from VEuPathDB -- sample records,
+download URLs, and result summaries. Includes WDK error handling for common
+API failures.
+
+.. automodule:: veupath_chatbot.ai.tools.result_tools
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Strategy Tool Registry
+----------------------
+
+**Purpose:** Strategy, execution, result, and conversation tool delegation
+mixin. Auto-discovers ``@ai_function`` methods on composed tool instances via
+``__getattr__`` and ``__dir__`` delegation pattern.
+
+.. automodule:: veupath_chatbot.ai.tools.strategy_registry
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Execution Tools
 ---------------
 
-**Purpose:** Tool wiring: parse tool arguments from LLM output, apply graph
-snapshots from tool results, build strategy. Used when the agent needs to
-interpret create_step/build_strategy results.
+**Purpose:** Tools for retrieving strategy execution results (e.g. result
+counts for built steps). Includes WDK error handling for common API failures.
 
-**Key functions:** :py:func:`parse_tool_arguments`, :py:func:`parse_tool_result`,
-:py:func:`apply_graph_snapshot_from_tool_result`
+**Key class:** :py:class:`ExecutionTools`
 
 .. automodule:: veupath_chatbot.ai.tools.execution_tools
    :members:
@@ -182,6 +204,61 @@ attachment operations, discovery, and editing.
    :show-inheritance:
 
 .. automodule:: veupath_chatbot.ai.tools.strategy_tools.operations
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Export Tools
+------------
+
+**Purpose:** Data export tools for strategies, gene sets, and experiment results.
+
+.. automodule:: veupath_chatbot.ai.tools.export_tools
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Workbench Tools
+---------------
+
+**Purpose:** Workbench data access and analysis tools.
+
+.. automodule:: veupath_chatbot.ai.tools.workbench_read_tools
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.ai.tools.planner.workbench_tools
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+WDK Error Handler
+-----------------
+
+**Purpose:** Error handling and formatting for WDK API errors during tool execution.
+
+.. automodule:: veupath_chatbot.ai.tools.wdk_error_handler
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Combined Result
+---------------
+
+**Purpose:** Combine and merge results from multiple tool sources.
+
+.. automodule:: veupath_chatbot.ai.tools.combined_result
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Catalog Registry
+----------------
+
+**Purpose:** Catalog tool registry mixin.
+
+.. automodule:: veupath_chatbot.ai.tools.catalog_registry
    :members:
    :undoc-members:
    :show-inheritance:

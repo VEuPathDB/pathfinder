@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, startTransition } from "react";
+import { useEffect, useMemo, useRef, useState, startTransition } from "react";
 import type { Search, StepKind } from "@pathfinder/shared";
 import type { StepParameters } from "@/lib/strategyGraph/types";
 import { usePrevious } from "@/lib/hooks/usePrevious";
 import { useParamSpecs } from "@/lib/hooks/useParamSpecs";
 import { extractVocabOptions, type VocabOption } from "@/lib/utils/vocab";
 import { extractSpecVocabulary } from "../components/stepEditorUtils";
+import { coerceParametersForSpecs } from "@/features/strategy/parameters/coerce";
 
 interface UseStepParametersArgs {
   stepId: string;
@@ -60,20 +61,57 @@ export function useStepParameters({
   });
 
   // -------------------------------------------------------------------------
-  // Reset params when spec key changes (step, record type, or search changed)
+  // Reset params when step identity or search name changes (user switched search).
+  // Keyed only on stepId + searchName — NOT record type, which can resolve
+  // asynchronously and cause a spurious reset that clears loaded params.
   // -------------------------------------------------------------------------
-  const resolvedSpecRecordType = resolveRecordTypeForSearch(selectedSearch?.recordType);
-  const specKey = `${stepId}:${resolvedSpecRecordType || ""}:${searchName || ""}`;
-  const prevSpecKey = usePrevious(specKey);
+  const identityKey = `${stepId}:${searchName || ""}`;
+  const prevIdentityKey = usePrevious(identityKey);
 
   useEffect(() => {
-    if (prevSpecKey === undefined) return;
-    if (prevSpecKey === specKey) return;
+    if (prevIdentityKey === undefined) return;
+    if (prevIdentityKey === identityKey) return;
     startTransition(() => {
       setParameters({});
       setRawParams("{}");
     });
-  }, [specKey, prevSpecKey]);
+  }, [identityKey, prevIdentityKey]);
+
+  // -------------------------------------------------------------------------
+  // Coerce initial params when paramSpecs first load.
+  // WDK-synced strategies store multi-pick values as JSON-encoded strings
+  // (e.g. '["Plasmodium falciparum 3D7"]'). The widgets expect arrays, so
+  // we coerce once paramSpecs are available to determine which params are
+  // multi-pick. This runs exactly once per mount (component remounts for
+  // each new step since StepEditor is conditionally rendered).
+  // -------------------------------------------------------------------------
+  const hasCoercedRef = useRef(false);
+  useEffect(() => {
+    if (paramSpecs.length === 0 || isLoading) return;
+    if (hasCoercedRef.current) return;
+    hasCoercedRef.current = true;
+
+    startTransition(() => {
+      setParameters((prev) => {
+        if (Object.keys(prev).length === 0) return prev;
+        return coerceParametersForSpecs(prev, paramSpecs, {
+          allowStringParsing: false,
+        });
+      });
+      setRawParams((prev) => {
+        try {
+          const obj = JSON.parse(prev) as StepParameters;
+          if (Object.keys(obj).length === 0) return prev;
+          const coerced = coerceParametersForSpecs(obj, paramSpecs, {
+            allowStringParsing: false,
+          });
+          return JSON.stringify(coerced, null, 2);
+        } catch {
+          return prev;
+        }
+      });
+    });
+  }, [paramSpecs, isLoading]);
 
   // -------------------------------------------------------------------------
   // Vocabulary options (derived from param specs)
@@ -89,6 +127,25 @@ export function useStepParameters({
     }, {});
   }, [paramSpecs]);
 
+  // -------------------------------------------------------------------------
+  // Hidden param defaults — for params with isVisible=false that no composite
+  // widget claims. These get merged into the save payload at lowest priority.
+  // -------------------------------------------------------------------------
+  const hiddenDefaults = useMemo(() => {
+    const defaults: StepParameters = {};
+    for (const spec of paramSpecs) {
+      if (spec.isVisible === false && spec.name) {
+        const defaultVal = spec.initialDisplayValue;
+        if (defaultVal != null) {
+          defaults[spec.name] = defaultVal;
+        } else if (spec.type === "input-step") {
+          defaults[spec.name] = "";
+        }
+      }
+    }
+    return defaults;
+  }, [paramSpecs]);
+
   return {
     parameters,
     setParameters,
@@ -99,6 +156,7 @@ export function useStepParameters({
     paramSpecs,
     isLoading,
     vocabOptions,
+    hiddenDefaults,
     dependentOptions,
     dependentLoading,
     dependentErrors,

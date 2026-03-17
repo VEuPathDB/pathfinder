@@ -8,15 +8,15 @@ import pytest
 
 from veupath_chatbot.domain.strategy.ops import CombineOp, parse_op
 from veupath_chatbot.platform.types import JSONObject
-from veupath_chatbot.services.strategies.wdk_bridge import (
-    _build_node_from_wdk,
-    _build_snapshot_from_wdk,
-    _extract_estimated_size,
-    _extract_operator,
-    _extract_record_type,
-    _get_step_info,
-    _plan_cache_key,
+from veupath_chatbot.services.strategies.wdk_conversion import (
+    build_node_from_wdk,
+    build_snapshot_from_wdk,
+    extract_estimated_size,
+    extract_operator,
+    extract_record_type,
+    get_step_info,
 )
+from veupath_chatbot.services.strategies.wdk_counts import plan_cache_key
 
 
 def _wdk_step(step_id: int, search_name: str, params: dict | None = None) -> dict:
@@ -96,7 +96,7 @@ class TestOperatorTranslation:
 
 
 # ===========================================================================
-# _extract_operator edge cases
+# extract_operator edge cases
 # ===========================================================================
 
 
@@ -106,31 +106,31 @@ class TestExtractOperatorEdgeCases:
     def test_list_value_extracts_first(self) -> None:
         """WDK may return multi-valued params as lists."""
         params: JSONObject = {"bq_operator": ["INTERSECT", "UNION"]}
-        assert _extract_operator(params) == "INTERSECT"
+        assert extract_operator(params) == "INTERSECT"
 
     def test_empty_list_returns_none(self) -> None:
         params: JSONObject = {"bq_operator": []}
-        assert _extract_operator(params) is None
+        assert extract_operator(params) is None
 
     def test_key_with_operator_substring(self) -> None:
         """Any key containing 'operator' (case-insensitive) is matched."""
         params: JSONObject = {"my_OPERATOR_field": "UNION"}
-        assert _extract_operator(params) == "UNION"
+        assert extract_operator(params) == "UNION"
 
     def test_non_string_non_list_value(self) -> None:
         """If the operator value is neither string nor list, it's skipped."""
         params: JSONObject = {"bq_operator": 42}
-        assert _extract_operator(params) is None
+        assert extract_operator(params) is None
 
     def test_multiple_operator_keys_returns_first_match(self) -> None:
         """First matching key in iteration order wins."""
         params: JSONObject = {"bq_operator": "INTERSECT", "other_operator": "UNION"}
-        result = _extract_operator(params)
+        result = extract_operator(params)
         assert result in ("INTERSECT", "UNION")
 
 
 # ===========================================================================
-# Step type inference in _build_node_from_wdk
+# Step type inference in build_node_from_wdk
 # ===========================================================================
 
 
@@ -141,7 +141,7 @@ class TestStepTypeInference:
         """A step with no primaryInput or secondaryInput is a search (leaf)."""
         step_tree: JSONObject = {"stepId": 1}
         steps: JSONObject = {"1": _wdk_step(1, "GenesByTextSearch", {"text": "kinase"})}
-        node = _build_node_from_wdk(step_tree, steps, "gene")
+        node = build_node_from_wdk(step_tree, steps, "gene")
         assert node.infer_kind() == "search"
         assert node.primary_input is None
         assert node.secondary_input is None
@@ -156,7 +156,7 @@ class TestStepTypeInference:
             "1": _wdk_step(1, "GenesByTextSearch"),
             "2": _wdk_step(2, "GenesByRNASeqEvidence", {"threshold": "10"}),
         }
-        node = _build_node_from_wdk(step_tree, steps, "gene")
+        node = build_node_from_wdk(step_tree, steps, "gene")
         assert node.infer_kind() == "transform"
         assert node.primary_input is not None
         assert node.secondary_input is None
@@ -173,7 +173,7 @@ class TestStepTypeInference:
             "2": _wdk_step(2, "S2"),
             "3": _wdk_step(3, "BooleanQuestion", {"bq_operator": "UNION"}),
         }
-        node = _build_node_from_wdk(step_tree, steps, "gene")
+        node = build_node_from_wdk(step_tree, steps, "gene")
         assert node.infer_kind() == "combine"
         assert node.primary_input is not None
         assert node.secondary_input is not None
@@ -192,24 +192,24 @@ class TestMissingFields:
         step_tree: JSONObject = {"stepId": 999}
         steps: JSONObject = {"1": _wdk_step(1, "S1")}
         with pytest.raises(ValueError, match="Step 999 not found"):
-            _build_node_from_wdk(step_tree, steps, "gene")
+            build_node_from_wdk(step_tree, steps, "gene")
 
     def test_step_id_not_integer(self) -> None:
         """stepId must be an integer."""
         step_tree: JSONObject = {"stepId": "abc"}
         with pytest.raises(ValueError, match="stepId"):
-            _build_node_from_wdk(step_tree, {}, "gene")
+            build_node_from_wdk(step_tree, {}, "gene")
 
     def test_step_id_none_raises(self) -> None:
         step_tree: JSONObject = {"stepId": None}
         with pytest.raises(ValueError, match="stepId"):
-            _build_node_from_wdk(step_tree, {}, "gene")
+            build_node_from_wdk(step_tree, {}, "gene")
 
     def test_search_config_parameters_missing(self) -> None:
         """When searchConfig has no parameters key, default to empty dict."""
         step_tree: JSONObject = {"stepId": 1}
         steps: JSONObject = {"1": {"searchName": "S1", "searchConfig": {}}}
-        node = _build_node_from_wdk(step_tree, steps, "gene")
+        node = build_node_from_wdk(step_tree, steps, "gene")
         assert node.parameters == {}
 
     def test_extra_fields_in_step_info_ignored(self) -> None:
@@ -225,7 +225,7 @@ class TestMissingFields:
                 "unknownField": "should be ignored",
             }
         }
-        node = _build_node_from_wdk(step_tree, steps, "gene")
+        node = build_node_from_wdk(step_tree, steps, "gene")
         assert node.search_name == "GenesByTextSearch"
         assert node.parameters == {"text": "kinase"}
 
@@ -237,7 +237,7 @@ class TestMissingFields:
             "isCollapsible": False,
         }
         steps: JSONObject = {"1": _wdk_step(1, "GenesByTextSearch")}
-        node = _build_node_from_wdk(step_tree, steps, "gene")
+        node = build_node_from_wdk(step_tree, steps, "gene")
         assert node.search_name == "GenesByTextSearch"
 
 
@@ -267,7 +267,7 @@ class TestDeepTreeStructures:
             "4": _wdk_step(4, "GenesByLocation"),
             "5": _wdk_step(5, "BooleanQuestion", {"bq_operator": "UNION"}),
         }
-        node = _build_node_from_wdk(step_tree, steps, "gene")
+        node = build_node_from_wdk(step_tree, steps, "gene")
         # Root is UNION of (INTERSECT of S1,S2) and S4
         assert node.infer_kind() == "combine"
         assert node.operator == CombineOp.UNION
@@ -292,7 +292,7 @@ class TestDeepTreeStructures:
             "3": _wdk_step(3, "BooleanQuestion", {"bq_operator": "INTERSECT"}),
             "4": _wdk_step(4, "GenesByOrthologs", {"organism": "Pf3D7"}),
         }
-        node = _build_node_from_wdk(step_tree, steps, "gene")
+        node = build_node_from_wdk(step_tree, steps, "gene")
         assert node.infer_kind() == "transform"
         assert node.search_name == "GenesByOrthologs"
         input_node = node.primary_input
@@ -301,7 +301,7 @@ class TestDeepTreeStructures:
 
 
 # ===========================================================================
-# _build_snapshot_from_wdk edge cases
+# build_snapshot_from_wdk edge cases
 # ===========================================================================
 
 
@@ -316,7 +316,7 @@ class TestSnapshotEdgeCases:
             "stepTree": {"stepId": 1},
             "steps": {"1": _wdk_step(1, "S1")},
         }
-        ast, _, _ = _build_snapshot_from_wdk(wdk)
+        ast, _, _ = build_snapshot_from_wdk(wdk)
         assert ast.name is None
 
     def test_strategy_with_null_description(self) -> None:
@@ -326,7 +326,7 @@ class TestSnapshotEdgeCases:
             "stepTree": {"stepId": 1},
             "steps": {"1": _wdk_step(1, "S1")},
         }
-        ast, _, _ = _build_snapshot_from_wdk(wdk)
+        ast, _, _ = build_snapshot_from_wdk(wdk)
         assert ast.description is None
 
     def test_strategy_with_integer_name(self) -> None:
@@ -337,7 +337,7 @@ class TestSnapshotEdgeCases:
             "stepTree": {"stepId": 1},
             "steps": {"1": _wdk_step(1, "S1")},
         }
-        ast, _, _ = _build_snapshot_from_wdk(wdk)
+        ast, _, _ = build_snapshot_from_wdk(wdk)
         # Non-string names should be treated as None
         assert ast.name is None
 
@@ -348,24 +348,24 @@ class TestSnapshotEdgeCases:
             "stepTree": {"stepId": 42},
             "steps": {"42": _wdk_step(42, "S1")},
         }
-        ast, _, _ = _build_snapshot_from_wdk(wdk)
+        ast, _, _ = build_snapshot_from_wdk(wdk)
         assert ast.root.id == "42"
         assert isinstance(ast.root.id, str)
 
     def test_estimated_size_zero_preserved(self) -> None:
         """estimatedSize=0 should be preserved, not treated as falsy."""
         step_info: JSONObject = {"estimatedSize": 0}
-        assert _extract_estimated_size(step_info) == 0
+        assert extract_estimated_size(step_info) == 0
 
     def test_estimated_size_negative(self) -> None:
         """Negative estimatedSize is technically valid (WDK uses -1 for unknown)."""
         step_info: JSONObject = {"estimatedSize": -1}
-        assert _extract_estimated_size(step_info) == -1
+        assert extract_estimated_size(step_info) == -1
 
     def test_estimated_size_float_returns_none(self) -> None:
         """Float estimatedSize is not valid (must be int)."""
         step_info: JSONObject = {"estimatedSize": 42.5}
-        assert _extract_estimated_size(step_info) is None
+        assert extract_estimated_size(step_info) is None
 
     def test_steps_data_includes_wdk_step_id(self) -> None:
         """The steps_data list should have wdkStepId populated."""
@@ -380,7 +380,7 @@ class TestSnapshotEdgeCases:
                 }
             },
         }
-        _, steps_data, _ = _build_snapshot_from_wdk(wdk)
+        _, steps_data, _ = build_snapshot_from_wdk(wdk)
         assert len(steps_data) >= 1
         step = steps_data[0]
         assert isinstance(step, dict)
@@ -389,7 +389,7 @@ class TestSnapshotEdgeCases:
 
 
 # ===========================================================================
-# _extract_record_type edge cases
+# extract_record_type edge cases
 # ===========================================================================
 
 
@@ -399,24 +399,24 @@ class TestRecordTypeExtraction:
     def test_whitespace_padded_value(self) -> None:
         """Should strip whitespace."""
         assert (
-            _extract_record_type({"recordClassName": "  transcript  "}) == "transcript"
+            extract_record_type({"recordClassName": "  transcript  "}) == "transcript"
         )
 
     def test_numeric_value_raises(self) -> None:
         with pytest.raises(ValueError, match="recordClassName"):
-            _extract_record_type({"recordClassName": 42})
+            extract_record_type({"recordClassName": 42})
 
     def test_boolean_value_raises(self) -> None:
         with pytest.raises(ValueError, match="recordClassName"):
-            _extract_record_type({"recordClassName": True})
+            extract_record_type({"recordClassName": True})
 
     def test_list_value_raises(self) -> None:
         with pytest.raises(ValueError, match="recordClassName"):
-            _extract_record_type({"recordClassName": ["gene"]})
+            extract_record_type({"recordClassName": ["gene"]})
 
 
 # ===========================================================================
-# _plan_cache_key edge cases
+# plan_cache_key edge cases
 # ===========================================================================
 
 
@@ -427,11 +427,11 @@ class TestPlanCacheKeyEdgeCases:
         """json.dumps with sort_keys=True ensures key order doesn't matter."""
         plan1: JSONObject = {"a": 1, "b": 2}
         plan2: JSONObject = {"b": 2, "a": 1}
-        assert _plan_cache_key("site", plan1) == _plan_cache_key("site", plan2)
+        assert plan_cache_key("site", plan1) == plan_cache_key("site", plan2)
 
     def test_empty_plan(self) -> None:
         """Empty plan should still produce a valid cache key."""
-        key = _plan_cache_key("site", {})
+        key = plan_cache_key("site", {})
         assert "site:" in key
         assert len(key) > len("site:")
 
@@ -443,12 +443,12 @@ class TestPlanCacheKeyEdgeCases:
                 "primaryInput": {"searchName": "S2"},
             }
         }
-        key = _plan_cache_key("plasmo", plan)
+        key = plan_cache_key("plasmo", plan)
         assert key.startswith("plasmo:")
 
 
 # ===========================================================================
-# _get_step_info edge cases
+# get_step_info edge cases
 # ===========================================================================
 
 
@@ -458,23 +458,23 @@ class TestGetStepInfoEdgeCases:
     def test_step_id_string_conversion(self) -> None:
         """Steps dict keys are strings, but step_id is int -- must convert."""
         steps: JSONObject = {"42": {"searchName": "S1"}}
-        result = _get_step_info(steps, 42)
+        result = get_step_info(steps, 42)
         assert result["searchName"] == "S1"
 
     def test_step_value_not_dict_raises(self) -> None:
         """If the step entry is not a dict, it should raise."""
         steps: JSONObject = {"42": "not_a_dict"}
         with pytest.raises(ValueError, match="Step 42 not found"):
-            _get_step_info(steps, 42)
+            get_step_info(steps, 42)
 
     def test_step_value_none_raises(self) -> None:
         steps: JSONObject = {"42": None}
         with pytest.raises(ValueError, match="Step 42 not found"):
-            _get_step_info(steps, 42)
+            get_step_info(steps, 42)
 
     def test_large_step_id(self) -> None:
         """WDK step IDs can be large longs."""
         big_id = 999999999
         steps: JSONObject = {str(big_id): {"searchName": "S1"}}
-        result = _get_step_info(steps, big_id)
+        result = get_step_info(steps, big_id)
         assert result["searchName"] == "S1"

@@ -11,11 +11,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 from veupath_chatbot.domain.strategy.ops import CombineOp
 from veupath_chatbot.platform.types import JSONObject
-from veupath_chatbot.services.strategies.wdk_bridge import (
+from veupath_chatbot.services.strategies.wdk_conversion import (
     extract_wdk_is_saved,
-    fetch_and_convert,
     parse_wdk_strategy_id,
 )
+from veupath_chatbot.services.strategies.wdk_sync import fetch_and_convert
 
 # ── Helpers ────────────────────────────────────────────────────────────
 

@@ -8,8 +8,15 @@ against HostDB (Homo sapiens REF), Mar 2026.
 
 from __future__ import annotations
 
-import json
-
+from veupath_chatbot.services.experiment.seed.helpers import (
+    gene_type_params,
+    go_search_params,
+    mol_weight_params,
+    rnaseq_fc_params,
+    signal_peptide_params,
+    text_search_params,
+    transmembrane_params,
+)
 from veupath_chatbot.services.experiment.seed.types import ControlSetDef, SeedDef
 
 # ---------------------------------------------------------------------------
@@ -556,110 +563,6 @@ HOSTDB_HSP = [
 
 
 # ---------------------------------------------------------------------------
-# Parameter helpers
-# ---------------------------------------------------------------------------
-
-
-def _org(names: list[str]) -> str:
-    """Encode organism list as WDK JSON-array string."""
-    return json.dumps(names)
-
-
-def _go_search_params(organism: str, go_id: str) -> dict[str, str]:
-    """Build GenesByGoTerm parameters."""
-    return {
-        "organism": _org([organism]),
-        "go_term_evidence": json.dumps(["Curated", "Computed"]),
-        "go_term_slim": "No",
-        "go_typeahead": json.dumps([go_id]),
-        "go_term": go_id,
-    }
-
-
-def _text_search_params(
-    organism: str, expression: str, fields: list[str] | None = None
-) -> dict[str, str]:
-    """Build GenesByText parameters."""
-    if fields is None:
-        fields = ["product"]
-    return {
-        "text_search_organism": _org([organism]),
-        "text_expression": expression,
-        "document_type": "gene",
-        "text_fields": json.dumps(fields),
-    }
-
-
-def _text_name_search(organism: str, pattern: str) -> dict[str, str]:
-    """Build GenesByText parameters searching gene name/symbol."""
-    return _text_search_params(organism, pattern, ["name"])
-
-
-def _rnaseq_fc_params(
-    *,
-    dataset_url: str,
-    profileset: str,
-    direction: str,
-    ref_samples: list[str],
-    comp_samples: list[str],
-    fold_change: str = "2",
-    hard_floor: str,
-    protein_coding: str = "yes",
-    ref_op: str = "average1",
-    comp_op: str = "average1",
-) -> dict[str, str]:
-    """Build RNA-Seq fold-change search parameters."""
-    return {
-        "dataset_url": dataset_url,
-        "profileset_generic": profileset,
-        "regulated_dir": direction,
-        "samples_fc_ref_generic": json.dumps(ref_samples),
-        "min_max_avg_ref": ref_op,
-        "samples_fc_comp_generic": json.dumps(comp_samples),
-        "min_max_avg_comp": comp_op,
-        "fold_change": fold_change,
-        "hard_floor": hard_floor,
-        "protein_coding_only": protein_coding,
-    }
-
-
-def _tm_domain_params(
-    organism: str, min_tm: str = "1", max_tm: str = "99"
-) -> dict[str, str]:
-    """Build GenesByTransmembraneDomains parameters."""
-    return {
-        "organism": _org([organism]),
-        "min_tm": min_tm,
-        "max_tm": max_tm,
-    }
-
-
-def _signal_peptide_params(organism: str) -> dict[str, str]:
-    """Build GenesWithSignalPeptide parameters."""
-    return {"organism": _org([organism])}
-
-
-def _mw_params(organism: str, min_mw: str, max_mw: str) -> dict[str, str]:
-    """Build GenesByMolecularWeight parameters."""
-    return {
-        "organism": _org([organism]),
-        "min_molecular_weight": min_mw,
-        "max_molecular_weight": max_mw,
-    }
-
-
-def _gene_type_params(
-    organism: str, gene_type: str = "protein coding"
-) -> dict[str, str]:
-    """Build GenesByGeneType parameters."""
-    return {
-        "organism": _org([organism]),
-        "geneType": json.dumps([gene_type]),
-        "includePseudogenes": "No",
-    }
-
-
-# ---------------------------------------------------------------------------
 # Strategy Definitions (6 strategies)
 # ---------------------------------------------------------------------------
 
@@ -693,7 +596,9 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_tlr",
                         "displayName": "Toll-like Receptors (TLR*)",
                         "searchName": "GenesByText",
-                        "parameters": _text_name_search(HS_ORG, "TLR*"),
+                        "parameters": text_search_params(
+                            HS_ORG, "TLR*", fields=["name"]
+                        ),
                     },
                     "secondaryInput": {
                         "id": "nlr_nod_union",
@@ -703,13 +608,17 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_nlrp",
                             "displayName": "NLRP Family",
                             "searchName": "GenesByText",
-                            "parameters": _text_name_search(HS_ORG, "NLRP*"),
+                            "parameters": text_search_params(
+                                HS_ORG, "NLRP*", fields=["name"]
+                            ),
                         },
                         "secondaryInput": {
                             "id": "leaf_nod",
                             "displayName": "NOD Receptors",
                             "searchName": "GenesByText",
-                            "parameters": _text_name_search(HS_ORG, "NOD*"),
+                            "parameters": text_search_params(
+                                HS_ORG, "NOD*", fields=["name"]
+                            ),
                         },
                     },
                 },
@@ -721,8 +630,8 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_adaptors",
                         "displayName": "MYD88/IRAK/TRAF Adaptors",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(
-                            HS_ORG, "MYD88 OR IRAK OR TRAF", ["name"]
+                        "parameters": text_search_params(
+                            HS_ORG, "MYD88 OR IRAK OR TRAF", fields=["name"]
                         ),
                     },
                     "secondaryInput": {
@@ -733,13 +642,17 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_nfkb",
                             "displayName": "NF-kB Subunits",
                             "searchName": "GenesByText",
-                            "parameters": _text_name_search(HS_ORG, "NFKB*"),
+                            "parameters": text_search_params(
+                                HS_ORG, "NFKB*", fields=["name"]
+                            ),
                         },
                         "secondaryInput": {
                             "id": "leaf_irf",
                             "displayName": "IRF Factors",
                             "searchName": "GenesByText",
-                            "parameters": _text_name_search(HS_ORG, "IRF*"),
+                            "parameters": text_search_params(
+                                HS_ORG, "IRF*", fields=["name"]
+                            ),
                         },
                     },
                 },
@@ -752,13 +665,15 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_jakstat",
                     "displayName": "JAK-STAT Pathway",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(HS_ORG, "JAK OR STAT", ["name"]),
+                    "parameters": text_search_params(
+                        HS_ORG, "JAK OR STAT", fields=["name"]
+                    ),
                 },
                 "secondaryInput": {
                     "id": "leaf_caspases",
                     "displayName": "Inflammasome Caspases",
                     "searchName": "GenesByText",
-                    "parameters": _text_name_search(HS_ORG, "CASP*"),
+                    "parameters": text_search_params(HS_ORG, "CASP*", fields=["name"]),
                 },
             },
         },
@@ -811,20 +726,20 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_defensins",
                         "displayName": "Defensins",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(HS_ORG, "defensin"),
+                        "parameters": text_search_params(HS_ORG, "defensin"),
                     },
                     "secondaryInput": {
                         "id": "leaf_cathelicidin",
                         "displayName": "Cathelicidins",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(HS_ORG, "cathelicidin"),
+                        "parameters": text_search_params(HS_ORG, "cathelicidin"),
                     },
                 },
                 "secondaryInput": {
                     "id": "leaf_signal_pep",
                     "displayName": "Signal Peptide (Secreted)",
                     "searchName": "GenesWithSignalPeptide",
-                    "parameters": _signal_peptide_params(HS_ORG),
+                    "parameters": signal_peptide_params(HS_ORG),
                 },
             },
             "secondaryInput": {
@@ -839,7 +754,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_complement_all",
                         "displayName": "Complement Genes",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(HS_ORG, "complement"),
+                        "parameters": text_search_params(HS_ORG, "complement"),
                     },
                     "secondaryInput": {
                         "id": "complement_minus_large",
@@ -849,13 +764,15 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_complement_dup",
                             "displayName": "All Complement",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(HS_ORG, "complement"),
+                            "parameters": text_search_params(HS_ORG, "complement"),
                         },
                         "secondaryInput": {
                             "id": "leaf_large_mw",
                             "displayName": "Very Large Proteins (>500kDa)",
                             "searchName": "GenesByMolecularWeight",
-                            "parameters": _mw_params(HS_ORG, "500000", "99999999"),
+                            "parameters": mol_weight_params(
+                                HS_ORG, "500000", "99999999"
+                            ),
                         },
                     },
                 },
@@ -867,7 +784,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_phago_receptors",
                         "displayName": "Phagocytic Receptors",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(
+                        "parameters": text_search_params(
                             HS_ORG, "Fc receptor OR phagocyt*"
                         ),
                     },
@@ -879,13 +796,15 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_clec",
                             "displayName": "C-type Lectin Receptors",
                             "searchName": "GenesByText",
-                            "parameters": _text_name_search(HS_ORG, "CLEC*"),
+                            "parameters": text_search_params(
+                                HS_ORG, "CLEC*", fields=["name"]
+                            ),
                         },
                         "secondaryInput": {
                             "id": "leaf_tm_domains",
                             "displayName": "Transmembrane (>=1 domain)",
                             "searchName": "GenesByTransmembraneDomains",
-                            "parameters": _tm_domain_params(HS_ORG, "1", "99"),
+                            "parameters": transmembrane_params(HS_ORG, "1", "99"),
                         },
                     },
                 },
@@ -937,13 +856,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_ifn",
                         "displayName": "Interferons",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(HS_ORG, "interferon"),
+                        "parameters": text_search_params(HS_ORG, "interferon"),
                     },
                     "secondaryInput": {
                         "id": "leaf_protein_coding",
                         "displayName": "Protein Coding Genes",
                         "searchName": "GenesByGeneType",
-                        "parameters": _gene_type_params(HS_ORG),
+                        "parameters": gene_type_params(HS_ORG),
                     },
                 },
                 "secondaryInput": {
@@ -954,13 +873,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_il",
                         "displayName": "Interleukins",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(HS_ORG, "interleukin"),
+                        "parameters": text_search_params(HS_ORG, "interleukin"),
                     },
                     "secondaryInput": {
                         "id": "leaf_il_signal",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(HS_ORG),
+                        "parameters": signal_peptide_params(HS_ORG),
                     },
                 },
             },
@@ -976,13 +895,15 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_tnf",
                         "displayName": "TNF Superfamily",
                         "searchName": "GenesByText",
-                        "parameters": _text_name_search(HS_ORG, "TNF*"),
+                        "parameters": text_search_params(
+                            HS_ORG, "TNF*", fields=["name"]
+                        ),
                     },
                     "secondaryInput": {
                         "id": "leaf_ribosomal",
                         "displayName": "Ribosomal (noise filter)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(HS_ORG, "GO:0003735"),
+                        "parameters": go_search_params(HS_ORG, "GO:0003735"),
                     },
                 },
                 "secondaryInput": {
@@ -993,13 +914,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_chemokine",
                         "displayName": "Chemokines",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(HS_ORG, "chemokine"),
+                        "parameters": text_search_params(HS_ORG, "chemokine"),
                     },
                     "secondaryInput": {
                         "id": "leaf_chemo_signal",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(HS_ORG),
+                        "parameters": signal_peptide_params(HS_ORG),
                     },
                 },
             },
@@ -1044,13 +965,13 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_autophagy_text",
                     "displayName": "Autophagy Genes",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(HS_ORG, "autophagy"),
+                    "parameters": text_search_params(HS_ORG, "autophagy"),
                 },
                 "secondaryInput": {
                     "id": "leaf_coding_auto",
                     "displayName": "Protein Coding",
                     "searchName": "GenesByGeneType",
-                    "parameters": _gene_type_params(HS_ORG),
+                    "parameters": gene_type_params(HS_ORG),
                 },
             },
             "secondaryInput": {
@@ -1065,13 +986,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_ubiquitin",
                         "displayName": "Ubiquitin System",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(HS_ORG, "ubiquitin"),
+                        "parameters": text_search_params(HS_ORG, "ubiquitin"),
                     },
                     "secondaryInput": {
                         "id": "leaf_go_autophagy",
                         "displayName": "GO: Autophagy",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(HS_ORG, "GO:0006914"),
+                        "parameters": go_search_params(HS_ORG, "GO:0006914"),
                     },
                 },
                 "secondaryInput": {
@@ -1082,13 +1003,17 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_atg_core",
                         "displayName": "ATG Gene Family",
                         "searchName": "GenesByText",
-                        "parameters": _text_name_search(HS_ORG, "ATG*"),
+                        "parameters": text_search_params(
+                            HS_ORG, "ATG*", fields=["name"]
+                        ),
                     },
                     "secondaryInput": {
                         "id": "leaf_beclin",
                         "displayName": "Beclin Complex",
                         "searchName": "GenesByText",
-                        "parameters": _text_name_search(HS_ORG, "BECN*"),
+                        "parameters": text_search_params(
+                            HS_ORG, "BECN*", fields=["name"]
+                        ),
                     },
                 },
             },
@@ -1132,7 +1057,7 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_malaria_up",
                     "displayName": "Malaria Upregulated (2x)",
                     "searchName": "GenesByRNASeqhsapREF_Lee_Gambian_ebi_rnaSeq_RSRC",
-                    "parameters": _rnaseq_fc_params(
+                    "parameters": rnaseq_fc_params(
                         dataset_url="https://HostDB.org/a/app/record/dataset/DS_8b52ce9c69",
                         profileset="Transcriptome analysis of blood from Gambian children with malaria. -   - Sense",
                         direction="up-regulated",
@@ -1150,13 +1075,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_go_immune",
                         "displayName": "GO: Immune Response",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(HS_ORG, "GO:0006955"),
+                        "parameters": go_search_params(HS_ORG, "GO:0006955"),
                     },
                     "secondaryInput": {
                         "id": "leaf_go_defense",
                         "displayName": "GO: Defense Response",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(HS_ORG, "GO:0006952"),
+                        "parameters": go_search_params(HS_ORG, "GO:0006952"),
                     },
                 },
             },
@@ -1172,7 +1097,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_hemozoin_up",
                         "displayName": "Hemozoin Upregulated",
                         "searchName": "GenesByRNASeqhsapREF_hsap_hemazoin_shah_RNASeq_ebi_rnaSeq_RSRC",
-                        "parameters": _rnaseq_fc_params(
+                        "parameters": rnaseq_fc_params(
                             dataset_url="https://HostDB.org/a/app/record/dataset/DS_f1c4acdfd2",
                             profileset="Transcriptome of lung epithelial cells stimulated by hemozoin -   - Sense",
                             direction="up-regulated",
@@ -1186,7 +1111,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_ifn_text",
                         "displayName": "Interferon Pathway",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(HS_ORG, "interferon"),
+                        "parameters": text_search_params(HS_ORG, "interferon"),
                     },
                 },
                 "secondaryInput": {
@@ -1201,13 +1126,13 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_complement_mal",
                             "displayName": "Complement System",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(HS_ORG, "complement"),
+                            "parameters": text_search_params(HS_ORG, "complement"),
                         },
                         "secondaryInput": {
                             "id": "leaf_tlr_mal",
                             "displayName": "Toll-like Receptors",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 HS_ORG, "toll-like receptor"
                             ),
                         },
@@ -1216,7 +1141,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_malaria_down",
                         "displayName": "Malaria Downregulated",
                         "searchName": "GenesByRNASeqhsapREF_Lee_Gambian_ebi_rnaSeq_RSRC",
-                        "parameters": _rnaseq_fc_params(
+                        "parameters": rnaseq_fc_params(
                             dataset_url="https://HostDB.org/a/app/record/dataset/DS_8b52ce9c69",
                             profileset="Transcriptome analysis of blood from Gambian children with malaria. -   - Sense",
                             direction="down-regulated",
@@ -1286,7 +1211,7 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_tgondii_up",
                     "displayName": "T. gondii Upregulated",
                     "searchName": "GenesByRNASeqhsapREF_hsapREF_RNASeq_Greally_RSRC_ebi_rnaSeq_RSRC",
-                    "parameters": _rnaseq_fc_params(
+                    "parameters": rnaseq_fc_params(
                         dataset_url="https://HostDB.org/a/app/record/dataset/DS_65d43ce7fa",
                         profileset="T gondii infected human host cells vs control -   - Sense",
                         direction="up-regulated",
@@ -1300,7 +1225,7 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_tcruzi_up",
                     "displayName": "T. cruzi Upregulated (72h)",
                     "searchName": "GenesByRNASeqhsapREF_Li_Transcriptome_Remodeling_ebi_rnaSeq_RSRC",
-                    "parameters": _rnaseq_fc_params(
+                    "parameters": rnaseq_fc_params(
                         dataset_url="https://HostDB.org/a/app/record/dataset/DS_d8246ca26a",
                         profileset="Transcriptome Remodeling during Intracellular Infection -   unstranded",
                         direction="up-regulated",
@@ -1323,7 +1248,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_candida_up",
                         "displayName": "Candida Upregulated (24h)",
                         "searchName": "GenesByRNASeqhsapREF_Bruno_Immune_Response_ebi_rnaSeq_RSRC",
-                        "parameters": _rnaseq_fc_params(
+                        "parameters": rnaseq_fc_params(
                             dataset_url="https://HostDB.org/a/app/record/dataset/DS_410d99350c",
                             profileset="Host immune response against Candida auris -   - Sense",
                             direction="up-regulated",
@@ -1341,7 +1266,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_tgondii_up2",
                             "displayName": "T. gondii Up (dup)",
                             "searchName": "GenesByRNASeqhsapREF_hsapREF_RNASeq_Greally_RSRC_ebi_rnaSeq_RSRC",
-                            "parameters": _rnaseq_fc_params(
+                            "parameters": rnaseq_fc_params(
                                 dataset_url="https://HostDB.org/a/app/record/dataset/DS_65d43ce7fa",
                                 profileset="T gondii infected human host cells vs control -   - Sense",
                                 direction="up-regulated",
@@ -1355,7 +1280,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_tcruzi_up2",
                             "displayName": "T. cruzi Up (dup)",
                             "searchName": "GenesByRNASeqhsapREF_Li_Transcriptome_Remodeling_ebi_rnaSeq_RSRC",
-                            "parameters": _rnaseq_fc_params(
+                            "parameters": rnaseq_fc_params(
                                 dataset_url="https://HostDB.org/a/app/record/dataset/DS_d8246ca26a",
                                 profileset="Transcriptome Remodeling during Intracellular Infection -   unstranded",
                                 direction="up-regulated",
@@ -1383,7 +1308,7 @@ SEEDS: list[SeedDef] = [
                                 "id": "leaf_tg_up3",
                                 "displayName": "T. gondii Up",
                                 "searchName": "GenesByRNASeqhsapREF_hsapREF_RNASeq_Greally_RSRC_ebi_rnaSeq_RSRC",
-                                "parameters": _rnaseq_fc_params(
+                                "parameters": rnaseq_fc_params(
                                     dataset_url="https://HostDB.org/a/app/record/dataset/DS_65d43ce7fa",
                                     profileset="T gondii infected human host cells vs control -   - Sense",
                                     direction="up-regulated",
@@ -1397,7 +1322,7 @@ SEEDS: list[SeedDef] = [
                                 "id": "leaf_tc_up3",
                                 "displayName": "T. cruzi Up",
                                 "searchName": "GenesByRNASeqhsapREF_Li_Transcriptome_Remodeling_ebi_rnaSeq_RSRC",
-                                "parameters": _rnaseq_fc_params(
+                                "parameters": rnaseq_fc_params(
                                     dataset_url="https://HostDB.org/a/app/record/dataset/DS_d8246ca26a",
                                     profileset="Transcriptome Remodeling during Intracellular Infection -   unstranded",
                                     direction="up-regulated",
@@ -1412,7 +1337,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_go_innate",
                             "displayName": "GO: Innate Immune Response",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go_search_params(HS_ORG, "GO:0045087"),
+                            "parameters": go_search_params(HS_ORG, "GO:0045087"),
                         },
                     },
                     "secondaryInput": {
@@ -1427,7 +1352,7 @@ SEEDS: list[SeedDef] = [
                                 "id": "leaf_candida_up2",
                                 "displayName": "Candida Upregulated",
                                 "searchName": "GenesByRNASeqhsapREF_Bruno_Immune_Response_ebi_rnaSeq_RSRC",
-                                "parameters": _rnaseq_fc_params(
+                                "parameters": rnaseq_fc_params(
                                     dataset_url="https://HostDB.org/a/app/record/dataset/DS_410d99350c",
                                     profileset="Host immune response against Candida auris -   - Sense",
                                     direction="up-regulated",
@@ -1441,7 +1366,7 @@ SEEDS: list[SeedDef] = [
                                 "id": "leaf_nfkb_text",
                                 "displayName": "NF-kB Pathway",
                                 "searchName": "GenesByText",
-                                "parameters": _text_search_params(HS_ORG, "NF-kappa"),
+                                "parameters": text_search_params(HS_ORG, "NF-kappa"),
                             },
                         },
                         "secondaryInput": {
@@ -1456,7 +1381,7 @@ SEEDS: list[SeedDef] = [
                                     "id": "leaf_tg_up4",
                                     "displayName": "T. gondii Up",
                                     "searchName": "GenesByRNASeqhsapREF_hsapREF_RNASeq_Greally_RSRC_ebi_rnaSeq_RSRC",
-                                    "parameters": _rnaseq_fc_params(
+                                    "parameters": rnaseq_fc_params(
                                         dataset_url="https://HostDB.org/a/app/record/dataset/DS_65d43ce7fa",
                                         profileset="T gondii infected human host cells vs control -   - Sense",
                                         direction="up-regulated",
@@ -1470,7 +1395,7 @@ SEEDS: list[SeedDef] = [
                                     "id": "leaf_calb_up3",
                                     "displayName": "Candida Up",
                                     "searchName": "GenesByRNASeqhsapREF_Bruno_Immune_Response_ebi_rnaSeq_RSRC",
-                                    "parameters": _rnaseq_fc_params(
+                                    "parameters": rnaseq_fc_params(
                                         dataset_url="https://HostDB.org/a/app/record/dataset/DS_410d99350c",
                                         profileset="Host immune response against Candida auris -   - Sense",
                                         direction="up-regulated",
@@ -1485,7 +1410,7 @@ SEEDS: list[SeedDef] = [
                                 "id": "leaf_go_apoptosis",
                                 "displayName": "GO: Apoptotic Process",
                                 "searchName": "GenesByGoTerm",
-                                "parameters": _go_search_params(HS_ORG, "GO:0006915"),
+                                "parameters": go_search_params(HS_ORG, "GO:0006915"),
                             },
                         },
                     },

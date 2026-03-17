@@ -7,34 +7,63 @@ the HTTP API to the chat and strategy services.
 Overview
 --------
 
-- **Dependencies** — Request-scoped deps: auth, DB session, strategy loading.
+- **Dependencies** — Request-scoped deps: auth, DB session, repository injection.
   Injected into router handlers.
 - **Streaming** — SSE (Server-Sent Events) for chat. Event formatting,
   chunk encoding, stream lifecycle.
 
-Dependencies
-------------
+Application Factory
+-------------------
 
-**Purpose:** FastAPI dependencies. Provide auth context, DB session, strategy
-loading, site context. Used by chat and strategies routers.
+**Purpose:** FastAPI application entrypoint. Creates the app with middleware,
+lifecycle management (database init, Redis, Qdrant), router registration, and
+startup background tasks (RAG ingestion).
 
-**Key functions:** :py:func:`get_db_session`, :py:func:`get_current_user`,
-:py:func:`get_site_context` (or equivalent)
+**Design:** The factory pattern (``create_app()``) enables testing with different
+configurations and ensures clean setup/teardown of database connections, Redis
+pools, and Qdrant clients via FastAPI lifespan events.
 
-.. automodule:: veupath_chatbot.transport.http.deps
+.. automodule:: veupath_chatbot.main
    :members:
    :undoc-members:
    :show-inheritance:
 
-Streaming
----------
+Background Jobs
+---------------
 
-**Purpose:** SSE streaming for chat. Format events (message_start, tool_call_start,
-etc.), encode as SSE chunks, manage stream lifecycle. Used by the chat endpoint.
+**Purpose:** Background job for RAG ingestion at API startup. Incrementally
+ingests WDK catalog data and public strategies into Qdrant when
+``rag_enabled=true`` and ``OPENAI_API_KEY`` is set.
 
-**Key functions:** Event formatting, SSE response building
+.. automodule:: veupath_chatbot.jobs.rag_startup
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-.. automodule:: veupath_chatbot.transport.http.streaming
+Developer Tools
+---------------
+
+**Purpose:** Developer tooling for keeping the OpenAPI spec in sync with the
+FastAPI application. Generates ``packages/spec/openapi.yaml`` and
+``packages/shared-ts/src/openapi.generated.ts`` from the running app's schema.
+This is intentionally NOT run at runtime — it writes repo files during
+development.
+
+.. automodule:: veupath_chatbot.devtools.openapi
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Dependencies
+------------
+
+**Purpose:** FastAPI dependencies. Provide auth context, DB session, repository
+injection, and experiment ownership checks. Used by routers.
+
+**Key functions:** :py:func:`get_current_user_with_db_row`,
+:py:func:`get_experiment_owned_by_user`
+
+.. automodule:: veupath_chatbot.transport.http.deps
    :members:
    :undoc-members:
    :show-inheritance:
@@ -61,12 +90,17 @@ specific domain area.
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: veupath_chatbot.transport.http.routers.sites
+.. automodule:: veupath_chatbot.transport.http.routers.sites.catalog
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: veupath_chatbot.transport.http.routers.steps
+.. automodule:: veupath_chatbot.transport.http.routers.sites.genes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.routers.sites.params
    :members:
    :undoc-members:
    :show-inheritance:
@@ -87,6 +121,41 @@ specific domain area.
    :show-inheritance:
 
 .. automodule:: veupath_chatbot.transport.http.routers.veupathdb_auth
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.routers.dev
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.routers.exports
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.routers.gene_sets
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.routers.internal
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.routers.operations
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.routers.tools
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.routers.user_data
    :members:
    :undoc-members:
    :show-inheritance:
@@ -146,12 +215,23 @@ specific domain area.
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: veupath_chatbot.transport.http.routers.experiments.ai_assist
+.. automodule:: veupath_chatbot.transport.http.routers.experiments.chat
    :members:
    :undoc-members:
    :show-inheritance:
 
 .. automodule:: veupath_chatbot.transport.http.routers.experiments.results
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Workbench Chat
+--------------
+
+**Purpose:** Workbench chat orchestration. Mirrors the main chat orchestrator
+but scoped to (user_id, experiment_id) pairs for experiment-context conversations.
+
+.. automodule:: veupath_chatbot.services.workbench_chat.orchestrator
    :members:
    :undoc-members:
    :show-inheritance:
@@ -197,6 +277,31 @@ Pydantic request/response models (DTOs) for the HTTP API.
    :show-inheritance:
 
 .. automodule:: veupath_chatbot.transport.http.schemas.veupathdb_auth
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.schemas.gene_sets
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.schemas.workbench_chat
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.schemas.optimization
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.schemas.sse
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.transport.http.schemas.experiment_responses
    :members:
    :undoc-members:
    :show-inheritance:

@@ -15,8 +15,12 @@ Strategies model real research questions:
 All gene IDs verified against live TriTrypDB API (March 2026).
 """
 
-import json
-
+from veupath_chatbot.services.experiment.seed.helpers import (
+    go_search_params,
+    signal_peptide_params,
+    text_search_params,
+    transmembrane_params,
+)
 from veupath_chatbot.services.experiment.seed.types import ControlSetDef, SeedDef
 
 # ---------------------------------------------------------------------------
@@ -1330,52 +1334,15 @@ TB_ODC_POLYAMINE = [
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Local aliases / wrappers
 # ---------------------------------------------------------------------------
 
 
-def _org(names: list[str]) -> str:
-    """Encode organism list as WDK JSON-array string."""
-    return json.dumps(names)
-
-
-def _go_search_params(organism: str, go_id: str) -> dict[str, str]:
-    """Build GenesByGoTerm parameters."""
-    return {
-        "organism": _org([organism]),
-        "go_term_evidence": json.dumps(["Curated", "Computed"]),
-        "go_term_slim": "No",
-        "go_typeahead": json.dumps([go_id]),
-        "go_term": go_id,
-    }
-
-
-def _text_search_params(organism: str, text: str) -> dict[str, str]:
-    """Build GenesByText parameters."""
-    return {
-        "text_search_organism": _org([organism]),
-        "text_expression": text,
-        "document_type": "gene",
-        "text_fields": json.dumps(["product"]),
-    }
-
-
-def _signal_peptide_params(organism: str) -> dict[str, str]:
-    """Build GenesWithSignalPeptide parameters."""
-    return {"organism": _org([organism])}
-
-
-def _tm_params(organism: str, min_tm: str = "3", max_tm: str = "20") -> dict[str, str]:
-    """Build GenesByTransmembraneDomains parameters."""
-    return {
-        "organism": _org([organism]),
-        "min_tm": min_tm,
-        "max_tm": max_tm,
-    }
-
-
 def _glycosome_params() -> dict[str, str]:
-    """Build GenesInGlycosomeProteome parameters."""
+    """Build GenesInGlycosomeProteome parameters (TriTrypDB-specific).
+
+    Unique to TriTrypDB: no shared helper exists for glycosome proteome searches.
+    """
     return {
         "glycosome_confidence": "High",
         "min_glycosome_score": "1.0",
@@ -1420,20 +1387,20 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_kinases",
                             "displayName": "Protein Kinases (GO:0004672)",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go_search_params(LM_ORG, "GO:0004672"),
+                            "parameters": go_search_params(LM_ORG, "GO:0004672"),
                         },
                         "secondaryInput": {
                             "id": "leaf_oxidoreductases",
                             "displayName": "Oxidoreductases (GO:0016491)",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go_search_params(LM_ORG, "GO:0016491"),
+                            "parameters": go_search_params(LM_ORG, "GO:0016491"),
                         },
                     },
                     "secondaryInput": {
                         "id": "leaf_proteases",
                         "displayName": "Peptidases (GO:0008233)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(LM_ORG, "GO:0008233"),
+                        "parameters": go_search_params(LM_ORG, "GO:0008233"),
                     },
                 },
                 "secondaryInput": {
@@ -1444,13 +1411,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_signal_peptide",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(LM_ORG),
+                        "parameters": signal_peptide_params(LM_ORG),
                     },
                     "secondaryInput": {
                         "id": "leaf_transmembrane",
                         "displayName": "Transmembrane (3-20 TM)",
                         "searchName": "GenesByTransmembraneDomains",
-                        "parameters": _tm_params(LM_ORG),
+                        "parameters": transmembrane_params(LM_ORG, "3", "20"),
                     },
                 },
             },
@@ -1458,7 +1425,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_heat_shock",
                 "displayName": "Heat Shock Proteins",
                 "searchName": "GenesByText",
-                "parameters": _text_search_params(LM_ORG, "heat shock"),
+                "parameters": text_search_params(LM_ORG, "heat shock"),
             },
         },
         control_set=ControlSetDef(
@@ -1507,7 +1474,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_vsg",
                             "displayName": "Variant Surface Glycoprotein",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 TB_ORG, "variant surface glycoprotein"
                             ),
                         },
@@ -1515,28 +1482,28 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_cell_surface",
                             "displayName": "Cell Surface (GO:0009986)",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go_search_params(TB_ORG, "GO:0009986"),
+                            "parameters": go_search_params(TB_ORG, "GO:0009986"),
                         },
                     },
                     "secondaryInput": {
                         "id": "leaf_gpi_bio",
                         "displayName": "GPI Anchor Biosynthesis (GO:0006506)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(TB_ORG, "GO:0006506"),
+                        "parameters": go_search_params(TB_ORG, "GO:0006506"),
                     },
                 },
                 "secondaryInput": {
                     "id": "leaf_signal_tb",
                     "displayName": "Signal Peptide",
                     "searchName": "GenesWithSignalPeptide",
-                    "parameters": _signal_peptide_params(TB_ORG),
+                    "parameters": signal_peptide_params(TB_ORG),
                 },
             },
             "secondaryInput": {
                 "id": "leaf_transporters_tb",
                 "displayName": "Transporters (GO:0005215)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go_search_params(TB_ORG, "GO:0005215"),
+                "parameters": go_search_params(TB_ORG, "GO:0005215"),
             },
         },
         control_set=ControlSetDef(
@@ -1586,20 +1553,20 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_proteases_lm",
                             "displayName": "Peptidases (GO:0008233)",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go_search_params(LM_ORG, "GO:0008233"),
+                            "parameters": go_search_params(LM_ORG, "GO:0008233"),
                         },
                         "secondaryInput": {
                             "id": "leaf_leishmanolysin",
                             "displayName": "Leishmanolysin GP63",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(LM_ORG, "leishmanolysin"),
+                            "parameters": text_search_params(LM_ORG, "leishmanolysin"),
                         },
                     },
                     "secondaryInput": {
                         "id": "leaf_amastin",
                         "displayName": "Amastin Surface Antigens",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(LM_ORG, "amastin"),
+                        "parameters": text_search_params(LM_ORG, "amastin"),
                     },
                 },
                 "secondaryInput": {
@@ -1610,13 +1577,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_sp_lm2",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(LM_ORG),
+                        "parameters": signal_peptide_params(LM_ORG),
                     },
                     "secondaryInput": {
                         "id": "leaf_tm_lm2",
                         "displayName": "Transmembrane (3-20 TM)",
                         "searchName": "GenesByTransmembraneDomains",
-                        "parameters": _tm_params(LM_ORG),
+                        "parameters": transmembrane_params(LM_ORG, "3", "20"),
                     },
                 },
             },
@@ -1624,7 +1591,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_cytoskeleton_lm",
                 "displayName": "Cytoskeleton (GO:0005856)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go_search_params(LM_ORG, "GO:0005856"),
+                "parameters": go_search_params(LM_ORG, "GO:0005856"),
             },
         },
         control_set=ControlSetDef(
@@ -1674,7 +1641,7 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_pfr",
                             "displayName": "Paraflagellar Rod",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(
+                            "parameters": text_search_params(
                                 TB_ORG, "paraflagellar rod"
                             ),
                         },
@@ -1682,28 +1649,28 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_cyto_tb",
                             "displayName": "Cytoskeleton (GO:0005856)",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go_search_params(TB_ORG, "GO:0005856"),
+                            "parameters": go_search_params(TB_ORG, "GO:0005856"),
                         },
                     },
                     "secondaryInput": {
                         "id": "leaf_transport_flag",
                         "displayName": "Transporters (GO:0005215)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(TB_ORG, "GO:0005215"),
+                        "parameters": go_search_params(TB_ORG, "GO:0005215"),
                     },
                 },
                 "secondaryInput": {
                     "id": "leaf_cilium_tb",
                     "displayName": "Cilium (GO:0005929)",
                     "searchName": "GenesByGoTerm",
-                    "parameters": _go_search_params(TB_ORG, "GO:0005929"),
+                    "parameters": go_search_params(TB_ORG, "GO:0005929"),
                 },
             },
             "secondaryInput": {
                 "id": "leaf_mito_tb",
                 "displayName": "Mitochondrion (GO:0005739)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go_search_params(TB_ORG, "GO:0005739"),
+                "parameters": go_search_params(TB_ORG, "GO:0005739"),
             },
         },
         control_set=ControlSetDef(
@@ -1753,13 +1720,13 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_lm_glycolysis",
                             "displayName": "LmjF Glycolysis (GO:0006096)",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go_search_params(LM_ORG, "GO:0006096"),
+                            "parameters": go_search_params(LM_ORG, "GO:0006096"),
                         },
                         "secondaryInput": {
                             "id": "leaf_lm_oxidored",
                             "displayName": "LmjF Oxidoreductases (GO:0016491)",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go_search_params(LM_ORG, "GO:0016491"),
+                            "parameters": go_search_params(LM_ORG, "GO:0016491"),
                         },
                     },
                     "secondaryInput": {
@@ -1770,13 +1737,13 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_tb_glycolysis",
                             "displayName": "Tb927 Glycolysis (GO:0006096)",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go_search_params(TB_ORG, "GO:0006096"),
+                            "parameters": go_search_params(TB_ORG, "GO:0006096"),
                         },
                         "secondaryInput": {
                             "id": "leaf_tb_oxidored",
                             "displayName": "Tb927 Oxidoreductases (GO:0016491)",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go_search_params(TB_ORG, "GO:0016491"),
+                            "parameters": go_search_params(TB_ORG, "GO:0016491"),
                         },
                     },
                 },
@@ -1794,7 +1761,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_lm_glycolysis2",
                         "displayName": "LmjF Glycolysis (GO:0006096)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(LM_ORG, "GO:0006096"),
+                        "parameters": go_search_params(LM_ORG, "GO:0006096"),
                     },
                 },
             },
@@ -1802,7 +1769,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_rna_binding_exclude",
                 "displayName": "RNA Binding (GO:0003723)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go_search_params(TB_ORG, "GO:0003723"),
+                "parameters": go_search_params(TB_ORG, "GO:0003723"),
             },
         },
         control_set=ControlSetDef(
@@ -1848,27 +1815,27 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_mito_tb2",
                         "displayName": "Mitochondrion (GO:0005739)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(TB_ORG, "GO:0005739"),
+                        "parameters": go_search_params(TB_ORG, "GO:0005739"),
                     },
                     "secondaryInput": {
                         "id": "leaf_rna_binding_tb",
                         "displayName": "RNA Binding (GO:0003723)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(TB_ORG, "GO:0003723"),
+                        "parameters": go_search_params(TB_ORG, "GO:0003723"),
                     },
                 },
                 "secondaryInput": {
                     "id": "leaf_trypanothione",
                     "displayName": "Trypanothione System",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(TB_ORG, "trypanothione"),
+                    "parameters": text_search_params(TB_ORG, "trypanothione"),
                 },
             },
             "secondaryInput": {
                 "id": "leaf_kinases_exclude",
                 "displayName": "Kinases (GO:0004672)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go_search_params(TB_ORG, "GO:0004672"),
+                "parameters": go_search_params(TB_ORG, "GO:0004672"),
             },
         },
         control_set=ControlSetDef(

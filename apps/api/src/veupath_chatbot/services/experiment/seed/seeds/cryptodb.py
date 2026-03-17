@@ -1,7 +1,12 @@
 """Seed definitions for CryptoDB."""
 
-import json
-
+from veupath_chatbot.services.experiment.seed.helpers import (
+    ec_search_params,
+    go_search_params,
+    signal_peptide_params,
+    text_search_params,
+    transmembrane_params,
+)
 from veupath_chatbot.services.experiment.seed.types import ControlSetDef, SeedDef
 
 # ---------------------------------------------------------------------------
@@ -978,53 +983,16 @@ CRYPTO_OXIDOREDUCTASES = [
 # ---------------------------------------------------------------------------
 # Parameter helpers
 # ---------------------------------------------------------------------------
-def _org(names: list[str]) -> str:
-    return json.dumps(names)
-
-
-def _go(organism: str, go_id: str) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "go_term_evidence": json.dumps(["Curated", "Computed"]),
-        "go_term_slim": "No",
-        "go_typeahead": json.dumps([go_id]),
-        "go_term": go_id,
-    }
-
-
 def _ec_wildcard(organism: str, ec_sources: list[str], wildcard: str) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "ec_source": json.dumps(ec_sources),
-        "ec_number_pattern": "2.7.11.1",
-        "ec_wildcard": wildcard,
-    }
+    """Build GenesByEcNumber with hardcoded ec_number="2.7.11.1".
 
-
-def _signal_peptide(organism: str) -> dict[str, str]:
-    return {"organism": _org([organism])}
-
-
-def _transmembrane(
-    organism: str, min_tm: str = "1", max_tm: str = "99"
-) -> dict[str, str]:
-    return {
-        "organism": _org([organism]),
-        "min_tm": min_tm,
-        "max_tm": max_tm,
-    }
-
-
-def _text(
-    organism: str, expression: str, fields: list[str] | None = None
-) -> dict[str, str]:
-    default_fields = ["product"]
-    return {
-        "text_search_organism": _org([organism]),
-        "text_expression": expression,
-        "document_type": "gene",
-        "text_fields": json.dumps(fields or default_fields),
-    }
+    Unique to CryptoDB: ec_number is always "2.7.11.1" while the ec_wildcard
+    parameter carries the actual EC class pattern (e.g. "1.*.*.*").
+    Cannot be replaced by the shared ec_search_params helper.
+    """
+    return ec_search_params(
+        organism, ec_number="2.7.11.1", ec_sources=ec_sources, ec_wildcard=wildcard
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1059,7 +1027,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_signal_peptide",
                         "displayName": "Signal Peptide (Secreted)",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide(CP_ORG),
+                        "parameters": signal_peptide_params(CP_ORG),
                     },
                     "secondaryInput": {
                         "id": "enzyme_union",
@@ -1069,13 +1037,13 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_kinases",
                             "displayName": "Protein Kinase Activity",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go(CP_ORG, "GO:0004672"),
+                            "parameters": go_search_params(CP_ORG, "GO:0004672"),
                         },
                         "secondaryInput": {
                             "id": "leaf_proteases",
                             "displayName": "Peptidase Activity",
                             "searchName": "GenesByGoTerm",
-                            "parameters": _go(CP_ORG, "GO:0008233"),
+                            "parameters": go_search_params(CP_ORG, "GO:0008233"),
                         },
                     },
                 },
@@ -1083,7 +1051,7 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_tm_low",
                     "displayName": "Surface-anchored (1-3 TM domains)",
                     "searchName": "GenesByTransmembraneDomains",
-                    "parameters": _transmembrane(CP_ORG, "1", "3"),
+                    "parameters": transmembrane_params(CP_ORG, "1", "3"),
                 },
             },
             "secondaryInput": {
@@ -1094,13 +1062,13 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_trap",
                     "displayName": "Thrombospondin/TRAP Family",
                     "searchName": "GenesByText",
-                    "parameters": _text(CP_ORG, "thrombospondin"),
+                    "parameters": text_search_params(CP_ORG, "thrombospondin"),
                 },
                 "secondaryInput": {
                     "id": "leaf_surface_glyco",
                     "displayName": "Mucins + Glycoproteins + Surface Antigens",
                     "searchName": "GenesByText",
-                    "parameters": _text(
+                    "parameters": text_search_params(
                         CP_ORG,
                         "mucin OR glycoprotein OR surface antigen",
                     ),
@@ -1193,7 +1161,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_translation",
                 "displayName": "Translation Machinery (housekeeping)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go(CP_ORG, "GO:0006412"),
+                "parameters": go_search_params(CP_ORG, "GO:0006412"),
             },
         },
         control_set=ControlSetDef(
@@ -1243,7 +1211,7 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_oocyst_wall",
                     "displayName": "Oocyst Wall Proteins",
                     "searchName": "GenesByText",
-                    "parameters": _text(CP_ORG, "oocyst wall"),
+                    "parameters": text_search_params(CP_ORG, "oocyst wall"),
                 },
                 "secondaryInput": {
                     "id": "cysteine_secreted",
@@ -1253,13 +1221,15 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_cysteine",
                         "displayName": "COWP / Cysteine-rich Proteins",
                         "searchName": "GenesByText",
-                        "parameters": _text(CP_ORG, "COWP OR cysteine-rich"),
+                        "parameters": text_search_params(
+                            CP_ORG, "COWP OR cysteine-rich"
+                        ),
                     },
                     "secondaryInput": {
                         "id": "leaf_signal_oocyst",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide(CP_ORG),
+                        "parameters": signal_peptide_params(CP_ORG),
                     },
                 },
             },
@@ -1271,13 +1241,13 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_dna_binding",
                     "displayName": "DNA Binding / Transcription Factors",
                     "searchName": "GenesByGoTerm",
-                    "parameters": _go(CP_ORG, "GO:0003677"),
+                    "parameters": go_search_params(CP_ORG, "GO:0003677"),
                 },
                 "secondaryInput": {
                     "id": "leaf_heat_shock",
                     "displayName": "Heat Shock / Stress Response",
                     "searchName": "GenesByText",
-                    "parameters": _text(CP_ORG, "heat shock"),
+                    "parameters": text_search_params(CP_ORG, "heat shock"),
                 },
             },
         },
@@ -1356,7 +1326,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_transporters",
                 "displayName": "Transporter Activity",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go(CP_ORG, "GO:0005215"),
+                "parameters": go_search_params(CP_ORG, "GO:0005215"),
             },
         },
         control_set=ControlSetDef(
@@ -1404,7 +1374,7 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_signal",
                     "displayName": "Signal Peptide",
                     "searchName": "GenesWithSignalPeptide",
-                    "parameters": _signal_peptide(CP_ORG),
+                    "parameters": signal_peptide_params(CP_ORG),
                 },
                 "secondaryInput": {
                     "id": "effector_families",
@@ -1414,7 +1384,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_effector_text",
                         "displayName": "MEDLE / Insulinase / Secreted families",
                         "searchName": "GenesByText",
-                        "parameters": _text(
+                        "parameters": text_search_params(
                             CP_ORG,
                             "secreted OR MEDLE OR insulinase",
                         ),
@@ -1423,7 +1393,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_peptidase",
                         "displayName": "Peptidase Activity",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go(CP_ORG, "GO:0008233"),
+                        "parameters": go_search_params(CP_ORG, "GO:0008233"),
                     },
                 },
             },
@@ -1431,7 +1401,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_ribosomal",
                 "displayName": "Ribosomal Proteins (housekeeping)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go(CP_ORG, "GO:0003735"),
+                "parameters": go_search_params(CP_ORG, "GO:0003735"),
             },
         },
         control_set=ControlSetDef(
@@ -1470,7 +1440,7 @@ SEEDS: list[SeedDef] = [
             "id": "leaf_kinases_baseline",
             "displayName": "All Kinases (GO:0004672)",
             "searchName": "GenesByGoTerm",
-            "parameters": _go(CP_ORG, "GO:0004672"),
+            "parameters": go_search_params(CP_ORG, "GO:0004672"),
         },
         control_set=ControlSetDef(
             name="Baseline Kinase Controls",

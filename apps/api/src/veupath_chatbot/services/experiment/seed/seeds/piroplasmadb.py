@@ -13,8 +13,12 @@ Strategies model real research questions:
 All gene IDs verified against live PiroplasmaDB API (March 2026).
 """
 
-import json
-
+from veupath_chatbot.services.experiment.seed.helpers import (
+    go_search_params,
+    signal_peptide_params,
+    text_search_params,
+    transmembrane_params,
+)
 from veupath_chatbot.services.experiment.seed.types import ControlSetDef, SeedDef
 
 # ---------------------------------------------------------------------------
@@ -292,51 +296,6 @@ BB_RHOPTRY = [
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _org(names: list[str]) -> str:
-    """Encode organism list as WDK JSON-array string."""
-    return json.dumps(names)
-
-
-def _go_search_params(organism: str, go_id: str) -> dict[str, str]:
-    """Build GenesByGoTerm parameters."""
-    return {
-        "organism": _org([organism]),
-        "go_term_evidence": json.dumps(["Curated", "Computed"]),
-        "go_term_slim": "No",
-        "go_typeahead": json.dumps([go_id]),
-        "go_term": go_id,
-    }
-
-
-def _text_search_params(organism: str, text: str) -> dict[str, str]:
-    """Build GenesByText parameters."""
-    return {
-        "text_search_organism": _org([organism]),
-        "text_expression": text,
-        "document_type": "gene",
-        "text_fields": json.dumps(["product"]),
-    }
-
-
-def _signal_peptide_params(organism: str) -> dict[str, str]:
-    """Build GenesWithSignalPeptide parameters."""
-    return {"organism": _org([organism])}
-
-
-def _tm_params(organism: str, min_tm: str = "1", max_tm: str = "20") -> dict[str, str]:
-    """Build GenesByTransmembraneDomains parameters."""
-    return {
-        "organism": _org([organism]),
-        "min_tm": min_tm,
-        "max_tm": max_tm,
-    }
-
-
-# ---------------------------------------------------------------------------
 # Seeds
 # ---------------------------------------------------------------------------
 
@@ -367,7 +326,7 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_vesa_text",
                     "displayName": "VESA (text search)",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(
+                    "parameters": text_search_params(
                         BB_ORG, "variant erythrocyte surface antigen"
                     ),
                 },
@@ -375,14 +334,14 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_tm",
                     "displayName": "Transmembrane (1-20 TM)",
                     "searchName": "GenesByTransmembraneDomains",
-                    "parameters": _tm_params(BB_ORG),
+                    "parameters": transmembrane_params(BB_ORG, "1", "20"),
                 },
             },
             "secondaryInput": {
                 "id": "leaf_ribosomal",
                 "displayName": "Ribosomal (GO:0003735)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go_search_params(BB_ORG, "GO:0003735"),
+                "parameters": go_search_params(BB_ORG, "GO:0003735"),
             },
         },
         control_set=ControlSetDef(
@@ -428,13 +387,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_kinases",
                         "displayName": "Protein Kinases (GO:0004672)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(BB_ORG, "GO:0004672"),
+                        "parameters": go_search_params(BB_ORG, "GO:0004672"),
                     },
                     "secondaryInput": {
                         "id": "leaf_peptidases",
                         "displayName": "Peptidases (GO:0008233)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(BB_ORG, "GO:0008233"),
+                        "parameters": go_search_params(BB_ORG, "GO:0008233"),
                     },
                 },
                 "secondaryInput": {
@@ -445,13 +404,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_signal_peptide",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(BB_ORG),
+                        "parameters": signal_peptide_params(BB_ORG),
                     },
                     "secondaryInput": {
                         "id": "leaf_tm",
                         "displayName": "Transmembrane (1-20 TM)",
                         "searchName": "GenesByTransmembraneDomains",
-                        "parameters": _tm_params(BB_ORG),
+                        "parameters": transmembrane_params(BB_ORG, "1", "20"),
                     },
                 },
             },
@@ -459,7 +418,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_ribosomal",
                 "displayName": "Ribosomal (GO:0003735)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go_search_params(BB_ORG, "GO:0003735"),
+                "parameters": go_search_params(BB_ORG, "GO:0003735"),
             },
         },
         control_set=ControlSetDef(
@@ -504,7 +463,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_vesa",
                         "displayName": "VESA (text search)",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(
+                        "parameters": text_search_params(
                             BB_ORG, "variant erythrocyte surface antigen"
                         ),
                     },
@@ -512,21 +471,21 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_sbc",
                         "displayName": "Spherical Body (text search)",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(BB_ORG, "spherical body"),
+                        "parameters": text_search_params(BB_ORG, "spherical body"),
                     },
                 },
                 "secondaryInput": {
                     "id": "leaf_rhoptry",
                     "displayName": "Rhoptry (text search)",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(BB_ORG, "rhoptry"),
+                    "parameters": text_search_params(BB_ORG, "rhoptry"),
                 },
             },
             "secondaryInput": {
                 "id": "leaf_signal_peptide",
                 "displayName": "Signal Peptide",
                 "searchName": "GenesWithSignalPeptide",
-                "parameters": _signal_peptide_params(BB_ORG),
+                "parameters": signal_peptide_params(BB_ORG),
             },
         },
         control_set=ControlSetDef(
@@ -570,27 +529,27 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_transport",
                         "displayName": "Transport (GO:0006810)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(BB_ORG, "GO:0006810"),
+                        "parameters": go_search_params(BB_ORG, "GO:0006810"),
                     },
                     "secondaryInput": {
                         "id": "leaf_tm",
                         "displayName": "Transmembrane (1-20 TM)",
                         "searchName": "GenesByTransmembraneDomains",
-                        "parameters": _tm_params(BB_ORG),
+                        "parameters": transmembrane_params(BB_ORG, "1", "20"),
                     },
                 },
                 "secondaryInput": {
                     "id": "leaf_heat_shock",
                     "displayName": "Heat Shock (text search)",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(BB_ORG, "heat shock"),
+                    "parameters": text_search_params(BB_ORG, "heat shock"),
                 },
             },
             "secondaryInput": {
                 "id": "leaf_translation",
                 "displayName": "Translation (GO:0006412)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go_search_params(BB_ORG, "GO:0006412"),
+                "parameters": go_search_params(BB_ORG, "GO:0006412"),
             },
         },
         control_set=ControlSetDef(
@@ -631,7 +590,7 @@ SEEDS: list[SeedDef] = [
                     "id": "leaf_vesa",
                     "displayName": "VESA (text search)",
                     "searchName": "GenesByText",
-                    "parameters": _text_search_params(
+                    "parameters": text_search_params(
                         BB_ORG, "variant erythrocyte surface antigen"
                     ),
                 },
@@ -647,20 +606,20 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_signal_peptide",
                             "displayName": "Signal Peptide",
                             "searchName": "GenesWithSignalPeptide",
-                            "parameters": _signal_peptide_params(BB_ORG),
+                            "parameters": signal_peptide_params(BB_ORG),
                         },
                         "secondaryInput": {
                             "id": "leaf_tm",
                             "displayName": "Transmembrane (1-20 TM)",
                             "searchName": "GenesByTransmembraneDomains",
-                            "parameters": _tm_params(BB_ORG),
+                            "parameters": transmembrane_params(BB_ORG, "1", "20"),
                         },
                     },
                     "secondaryInput": {
                         "id": "leaf_kinases",
                         "displayName": "Kinases (GO:0004672)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(BB_ORG, "GO:0004672"),
+                        "parameters": go_search_params(BB_ORG, "GO:0004672"),
                     },
                 },
             },
@@ -668,7 +627,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_ribosomal",
                 "displayName": "Ribosomal (GO:0003735)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go_search_params(BB_ORG, "GO:0003735"),
+                "parameters": go_search_params(BB_ORG, "GO:0003735"),
             },
         },
         control_set=ControlSetDef(
@@ -713,7 +672,7 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_merozoite",
                         "displayName": "Merozoite (text search)",
                         "searchName": "GenesByText",
-                        "parameters": _text_search_params(BB_ORG, "merozoite"),
+                        "parameters": text_search_params(BB_ORG, "merozoite"),
                     },
                     "secondaryInput": {
                         "id": "rhoptry_sbc_union",
@@ -723,13 +682,13 @@ SEEDS: list[SeedDef] = [
                             "id": "leaf_rhoptry",
                             "displayName": "Rhoptry (text search)",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(BB_ORG, "rhoptry"),
+                            "parameters": text_search_params(BB_ORG, "rhoptry"),
                         },
                         "secondaryInput": {
                             "id": "leaf_sbc",
                             "displayName": "Spherical Body (text search)",
                             "searchName": "GenesByText",
-                            "parameters": _text_search_params(BB_ORG, "spherical body"),
+                            "parameters": text_search_params(BB_ORG, "spherical body"),
                         },
                     },
                 },
@@ -741,13 +700,13 @@ SEEDS: list[SeedDef] = [
                         "id": "leaf_kinases",
                         "displayName": "Kinases (GO:0004672)",
                         "searchName": "GenesByGoTerm",
-                        "parameters": _go_search_params(BB_ORG, "GO:0004672"),
+                        "parameters": go_search_params(BB_ORG, "GO:0004672"),
                     },
                     "secondaryInput": {
                         "id": "leaf_signal_peptide",
                         "displayName": "Signal Peptide",
                         "searchName": "GenesWithSignalPeptide",
-                        "parameters": _signal_peptide_params(BB_ORG),
+                        "parameters": signal_peptide_params(BB_ORG),
                     },
                 },
             },
@@ -755,7 +714,7 @@ SEEDS: list[SeedDef] = [
                 "id": "leaf_ribosomal",
                 "displayName": "Ribosomal (GO:0003735)",
                 "searchName": "GenesByGoTerm",
-                "parameters": _go_search_params(BB_ORG, "GO:0003735"),
+                "parameters": go_search_params(BB_ORG, "GO:0003735"),
             },
         },
         control_set=ControlSetDef(

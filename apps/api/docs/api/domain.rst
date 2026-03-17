@@ -7,9 +7,9 @@ I/O or framework dependencies. Used by the agent, serialization, and tools.
 Overview
 --------
 
-- **Strategy AST** — Types for plans: ``PlanStepNode``, ``StrategyPlan``,
+- **Strategy AST** — Types for plans: ``PlanStepNode``, ``StrategyAST``,
   combine operators. Recursive structure for search/transform/combine steps.
-- **Strategy Operations** — Combine, transform, path resolution on the AST.
+- **Strategy Operations** — Combine operators, colocation params, WDK operator mapping.
 - **Strategy Validation** — Validate against WDK constraints; emit field paths.
 - **Parameters** — Specs, normalization, canonicalization, vocabulary handling.
 
@@ -17,10 +17,10 @@ Strategy AST
 ------------
 
 **Purpose:** AST types for strategy plans. ``PlanStepNode`` is recursive (search,
-transform, combine). ``StrategyPlan`` wraps root + metadata. Used by the agent
+transform, combine). ``StrategyAST`` wraps root + metadata. Used by the agent
 and serialization layer.
 
-**Key types:** :py:class:`PlanStepNode`, :py:class:`StrategyPlan`
+**Key types:** :py:class:`PlanStepNode`, :py:class:`StrategyAST`
 
 .. automodule:: veupath_chatbot.domain.strategy.ast
    :members:
@@ -30,10 +30,11 @@ and serialization layer.
 Strategy Operations
 -------------------
 
-**Purpose:** Operations on the strategy AST: combine steps, resolve paths,
-build step trees. Used when building and manipulating plans.
+**Purpose:** Operations on the strategy AST: combine operators, colocation
+parameters, WDK operator mapping. Used when building and manipulating plans.
 
-**Key functions:** :py:func:`combine`, :py:func:`path_to_node`
+**Key classes:** :py:class:`CombineOp`, :py:class:`ColocationParams`
+**Key functions:** :py:func:`get_wdk_operator`, :py:func:`parse_op`
 
 .. automodule:: veupath_chatbot.domain.strategy.ops
    :members:
@@ -47,7 +48,7 @@ Strategy Validation
 search names, step structure. Emits ``ValidationError`` with field paths for
 UI display.
 
-**Key function:** :py:func:`validate_plan`
+**Key function:** :py:func:`validate_strategy`
 
 .. automodule:: veupath_chatbot.domain.strategy.validate
    :members:
@@ -84,12 +85,24 @@ flattening, canonicalization, and value decoding. Used by catalog and tools.
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: veupath_chatbot.domain.parameters.validation
+.. automodule:: veupath_chatbot.domain.parameters._value_helpers
    :members:
    :undoc-members:
    :show-inheritance:
 
 .. automodule:: veupath_chatbot.domain.parameters.vocab_utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Strategy Tree Walkers
+---------------------
+
+**Purpose:** Shared tree traversal utilities for strategy trees. Supports both
+dict-based (raw JSON) and AST-based (typed Pydantic) tree structures. Used by
+validation, compilation, and analysis.
+
+.. automodule:: veupath_chatbot.domain.strategy.tree
    :members:
    :undoc-members:
    :show-inheritance:

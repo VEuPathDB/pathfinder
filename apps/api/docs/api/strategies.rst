@@ -20,7 +20,7 @@ Plan Normalization
 to the expected types, fill defaults, resolve vocabulary terms. Called before
 save or push to VEuPathDB.
 
-**Key function:** :py:func:`normalize_plan`
+**Key function:** :py:func:`canonicalize_plan_parameters`
 
 .. automodule:: veupath_chatbot.services.strategies.plan_normalize
    :members:
@@ -40,28 +40,82 @@ search names, step structure. Returns structured validation errors with field pa
    :undoc-members:
    :show-inheritance:
 
-Serialization
--------------
+WDK Conversion
+--------------
 
-**Purpose:** Convert between domain AST and persistence format. Plan to/from
-JSON, strategy snapshots for undo and restore.
+**Purpose:** Pure WDK → AST conversion. Parses WDK strategy payloads into
+internal ``StrategyAST``, extracts field values, and normalizes parameters.
 
-**Key functions:** Plan serialization, snapshot build/restore
+.. admonition:: WDK Wire Format and Parameter Coercion
+   :class: note
 
-.. automodule:: veupath_chatbot.services.strategies.serialization
+   WDK stores multi-pick parameter values as **JSON-encoded strings** (e.g.
+   ``'["Plasmodium falciparum 3D7"]'`` rather than a native array). When
+   strategies are synced from WDK via :py:func:`fetch_and_convert`, the
+   ``ParameterNormalizer`` preserves this wire format in the stored plan.
+
+   The frontend step editor automatically coerces these JSON strings into
+   native arrays when parameter specs load, so widgets (TreeBox, Select,
+   etc.) can match values against their vocabulary options. This coercion
+   runs once per editor mount via ``coerceParametersForSpecs`` in the
+   ``useStepParameters`` hook.
+
+.. automodule:: veupath_chatbot.services.strategies.wdk_conversion
    :members:
    :undoc-members:
    :show-inheritance:
 
-WDK Snapshot
-------------
+WDK Sync
+--------
 
-**Purpose:** Build WDK-compatible step trees and strategy payloads from the
-domain plan. Used when pushing to VEuPathDB or creating strategies.
+**Purpose:** Fetch WDK strategies and sync into CQRS projections.
+Lazy detail fetching, isSaved sync, and projection upsert.
 
-**Key functions:** ``_build_snapshot_from_wdk``, ``_build_node_from_wdk``
+.. automodule:: veupath_chatbot.services.strategies.wdk_sync
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-.. automodule:: veupath_chatbot.services.strategies.wdk_snapshot
+WDK Step Counts
+---------------
+
+**Purpose:** Per-step result count computation. Uses anonymous reports
+for leaf-only strategies (fast) and temporary WDK compilation for complex
+strategies. Results are cached by plan hash.
+
+.. automodule:: veupath_chatbot.services.strategies.wdk_counts
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Strategy Build
+--------------
+
+**Purpose:** High-level strategy build orchestration. Coordinates step
+creation and graph assembly.
+
+.. automodule:: veupath_chatbot.services.strategies.build
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Step Creation
+-------------
+
+**Purpose:** Create individual strategy steps with parameter validation
+and WDK integration.
+
+.. automodule:: veupath_chatbot.services.strategies.step_creation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Auto Import
+-----------
+
+**Purpose:** Automatic import of WDK strategies into PathFinder.
+
+.. automodule:: veupath_chatbot.services.strategies.auto_import
    :members:
    :undoc-members:
    :show-inheritance:
@@ -99,17 +153,6 @@ the correct step structure for WDK API calls.
    :undoc-members:
    :show-inheritance:
 
-WDK Counts
-----------
-
-**Purpose:** Fetch step result counts from WDK. Used to populate the
-strategy graph UI with result counts per step.
-
-.. automodule:: veupath_chatbot.services.strategies.wdk_counts
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Strategy Engine
 ---------------
 
@@ -127,6 +170,26 @@ step ordering, and execution helpers.
    :show-inheritance:
 
 .. automodule:: veupath_chatbot.services.strategies.engine.helpers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.services.strategies.engine.graph_ops
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.services.strategies.engine.id_mapping
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.services.strategies.engine.step_builder
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: veupath_chatbot.services.strategies.engine.validation
    :members:
    :undoc-members:
    :show-inheritance:

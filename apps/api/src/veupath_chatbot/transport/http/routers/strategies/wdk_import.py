@@ -18,8 +18,8 @@ from veupath_chatbot.services.control_helpers import (
 from veupath_chatbot.services.strategies.auto_import import (
     background_auto_import_gene_sets,
 )
-from veupath_chatbot.services.strategies.wdk_bridge import (
-    parse_wdk_strategy_id,
+from veupath_chatbot.services.strategies.wdk_conversion import parse_wdk_strategy_id
+from veupath_chatbot.services.strategies.wdk_sync import (
     sync_to_projection,
     upsert_summary_projection,
 )

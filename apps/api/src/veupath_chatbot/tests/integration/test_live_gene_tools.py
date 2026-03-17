@@ -12,6 +12,7 @@ Skip with::
     pytest -m "not live_wdk"
 """
 
+import contextlib
 from collections.abc import AsyncGenerator
 
 import pytest
@@ -40,19 +41,17 @@ class _LiveTools(GeneToolsMixin):
 
 @pytest.fixture(autouse=True)
 async def _close_clients() -> AsyncGenerator[None]:
-    await close_site_search_client()
-    try:
+    with contextlib.suppress(Exception):
+        await close_site_search_client()
+    with contextlib.suppress(Exception):
         router = get_site_router()
         await router.close_all()
-    except Exception:
-        pass
     yield
-    await close_site_search_client()
-    try:
+    with contextlib.suppress(Exception):
+        await close_site_search_client()
+    with contextlib.suppress(Exception):
         router = get_site_router()
         await router.close_all()
-    except Exception:
-        pass
 
 
 # ===================================================================
