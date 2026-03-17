@@ -87,11 +87,13 @@ async def resolve_controls_param_type(
             if isinstance(p, dict) and p.get("name") == controls_param_name:
                 ptype = p.get("type")
                 return str(ptype) if ptype else None
-    except Exception:
-        logger.debug(
+    except Exception as exc:
+        logger.warning(
             "Could not resolve param type for controls",
             search=controls_search_name,
             param=controls_param_name,
+            record_type=record_type,
+            error=str(exc),
         )
     return None
 

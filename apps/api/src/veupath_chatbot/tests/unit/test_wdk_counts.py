@@ -21,11 +21,11 @@ def _simple_ast() -> StrategyAST:
 @pytest.fixture(autouse=True)
 def _clear_cache():
     """Clear the module-level cache before each test."""
-    from veupath_chatbot.services.strategies import wdk_bridge
+    from veupath_chatbot.services.strategies import wdk_counts
 
-    wdk_bridge._STEP_COUNTS_CACHE.clear()
+    wdk_counts._STEP_COUNTS_CACHE.clear()
     yield
-    wdk_bridge._STEP_COUNTS_CACHE.clear()
+    wdk_counts._STEP_COUNTS_CACHE.clear()
 
 
 @pytest.mark.asyncio
@@ -39,7 +39,7 @@ async def test_all_none_results_are_cached():
     For leaf-only strategies, the function now uses anonymous reports
     (not compilation), so we mock ``client.run_search_report``.
     """
-    from veupath_chatbot.services.strategies.wdk_bridge import (
+    from veupath_chatbot.services.strategies.wdk_counts import (
         _STEP_COUNTS_CACHE,
         compute_step_counts_for_plan,
     )
@@ -55,7 +55,7 @@ async def test_all_none_results_are_cached():
     mock_api.client = mock_client
 
     with patch(
-        "veupath_chatbot.services.strategies.wdk_bridge.get_strategy_api",
+        "veupath_chatbot.services.strategies.wdk_counts.get_strategy_api",
         return_value=mock_api,
     ):
         # First call — should hit the API

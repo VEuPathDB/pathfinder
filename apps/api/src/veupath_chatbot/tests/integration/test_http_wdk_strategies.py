@@ -267,7 +267,7 @@ async def test_step_counts_uses_anonymous_reports_for_leaf_only(
     base = "https://plasmodb.org/plasmo/service"
 
     # Clear the module-level cache to avoid stale results
-    from veupath_chatbot.services.strategies.wdk_bridge import _STEP_COUNTS_CACHE
+    from veupath_chatbot.services.strategies.wdk_counts import _STEP_COUNTS_CACHE
 
     _STEP_COUNTS_CACHE.clear()
 

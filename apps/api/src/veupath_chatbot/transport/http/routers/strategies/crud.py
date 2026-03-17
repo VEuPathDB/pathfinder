@@ -11,7 +11,7 @@ from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.redis import get_redis
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.strategies.plan_validation import validate_plan_or_raise
-from veupath_chatbot.services.strategies.wdk_bridge import (
+from veupath_chatbot.services.strategies.wdk_sync import (
     fetch_and_convert,
     plan_needs_detail_fetch,
 )
