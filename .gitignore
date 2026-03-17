@@ -81,6 +81,9 @@ apps/api/ingest_reports/
 *.db
 *.sqlite3
 
+# Quadlet drop-in overrides (local per deployment)
+quadlets/*.d/
+
 # Secrets
 *.pem
 *.key

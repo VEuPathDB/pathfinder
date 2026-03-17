@@ -46,9 +46,18 @@ cp .env ~/.config/pathfinder/.env
 
 ## 3. Install the quadlet files
 
+Symlink the quadlet files (and any local drop-in directories) into the
+systemd user directory:
+
 ```bash
 mkdir -p ~/.config/containers/systemd
-cp quadlets/* ~/.config/containers/systemd/
+ln -sf "$PWD"/quadlets/*.{container,volume,network} ~/.config/containers/systemd/
+
+# Also link any drop-in override directories you've created (see §8)
+for d in quadlets/*.d; do
+  [ -d "$d" ] && ln -sfn "$PWD/$d" ~/.config/containers/systemd/
+done
+
 systemctl --user daemon-reload
 ```
 
@@ -92,18 +101,50 @@ With linger enabled, services with `WantedBy=default.target` start at boot:
 systemctl --user enable pathfinder-db pathfinder-redis pathfinder-qdrant pathfinder-api pathfinder-web
 ```
 
-## 8. Changing ports
+## 8. Local overrides (drop-in directories)
 
-Edit the `PublishPort=` line in the relevant `.container` file under
-`~/.config/containers/systemd/`, then reload:
+Use systemd-style drop-in directories to override settings without editing
+the version-controlled quadlet files. Create a `.d` directory named after
+the quadlet file, with a `.conf` file inside:
 
 ```bash
-# Example: change web port to 8080
-# Edit ~/.config/containers/systemd/pathfinder-web.container
-#   PublishPort=8080:3000
-systemctl --user daemon-reload
-systemctl --user restart pathfinder-web
+# Example: change the web published port to 8080
+mkdir -p quadlets/pathfinder-web.container.d
+cat > quadlets/pathfinder-web.container.d/override.conf << 'EOF'
+[Container]
+PublishPort=
+PublishPort=8080:3000
+EOF
 ```
+
+```bash
+# Example: change the API published port to 9000
+mkdir -p quadlets/pathfinder-api.container.d
+cat > quadlets/pathfinder-api.container.d/override.conf << 'EOF'
+[Container]
+PublishPort=
+PublishPort=9000:8000
+EOF
+```
+
+Then link the drop-in directories and reload:
+
+```bash
+for d in quadlets/*.d; do
+  [ -d "$d" ] && ln -sfn "$PWD/$d" ~/.config/containers/systemd/
+done
+systemctl --user daemon-reload
+systemctl --user restart pathfinder-web pathfinder-api
+```
+
+The drop-in `.d` directories are gitignored, so overrides stay local to
+each deployment. Any `[Container]`, `[Service]`, or `[Unit]` directive can
+be overridden this way.
+
+**Note:** For list-type directives like `PublishPort` or `Environment`, the
+override *adds* to the base values. To replace a value, first clear it with
+an empty assignment (`PublishPort=`), then set the new value on the next
+line.
 
 ## 9. Rebuild images after code changes
 
