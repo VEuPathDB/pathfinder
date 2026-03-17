@@ -19,6 +19,10 @@
     <img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker" />
     <img src="https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL" />
     <img src="https://img.shields.io/badge/Qdrant-FF4F7B?logo=qdrant&logoColor=white" alt="Qdrant" />
+    <img src="https://img.shields.io/badge/OpenAI-412991?logo=openai&logoColor=white" alt="OpenAI" />
+    <img src="https://img.shields.io/badge/Anthropic-191919?logo=anthropic&logoColor=white" alt="Anthropic" />
+    <img src="https://img.shields.io/badge/Gemini-8E75B2?logo=google-gemini&logoColor=white" alt="Google Gemini" />
+    <img src="https://img.shields.io/badge/Ollama-000000?logo=ollama&logoColor=white" alt="Ollama" />
   </p>
   <img src="assets/pathfinder.png" alt="PathFinder" width="100%" />  <p>
     <img src="https://img.shields.io/github/stars/ahmedOmuharram/pathfinder?style=social" alt="GitHub stars" />
@@ -52,11 +56,11 @@ This repo is organized as:
 
 The API also includes: gene set management, evaluation engine (metrics, cross-validation, enrichment), export tools, model catalog with token metrics, and workbench chat.
 
-## How it works (high level)
+## How it works
 
 ### Unified agent
 
-PathFinder uses a **single unified agent** that has access to all tools -- research, planning, and execution -- and decides which to invoke on each turn. There is no separate “plan mode” or “execute mode”; the model uses its judgment to:
+PathFinder uses a **single unified agent** that has access to all tools (research, planning, and execution) and decides which to invoke on each turn. The model uses its judgment to:
 
 - **Research**: explore the catalog, clarify ambiguous goals, discover record types / searches / parameters
 - **Plan**: save planning artifacts (markdown summaries, assumptions, parameter choices), reason about strategy structure
@@ -124,7 +128,11 @@ Docker Compose will pick up variables from a repo-root `.env` file (if present) 
 
 - **API**
   - `API_SECRET_KEY` (32+ chars)
-  - `OPENAI_API_KEY` (required for the default agent model + RAG embeddings; or set `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` and change provider/model in config)
+  - At least one LLM provider key:
+    - `OPENAI_API_KEY` — default provider (`gpt-4.1`); also required for RAG embeddings (`text-embedding-3-small`)
+    - `ANTHROPIC_API_KEY` — use with `chat_provider=anthropic` (default model: `claude-sonnet-4-6`)
+    - `GEMINI_API_KEY` — use with `chat_provider=gemini` (default model: `gemini-2.5-pro`)
+    - Ollama (local) — no key needed; set `OLLAMA_BASE_URL` and add models to `ollama_models.yaml`
 - **Web**
   - `NEXT_PUBLIC_API_URL=http://localhost:8000`
 - **Optional / common**
@@ -283,17 +291,13 @@ npm run generate:openapi
 
 The web app also uses path-based imports for shared TS types (see `apps/web/tsconfig.json`) and Next transpilation settings (`apps/web/next.config.js`).
 
-## Roadmap / what’s missing (by design, for now)
+## Roadmap / what’s missing
 
 PathFinder is a research-driven prototype. These are the biggest gaps you should expect today:
 
-- **CD (deployment pipelines)**: CI exists (`.github/workflows/ci.yml`) but there is no continuous deployment pipeline yet.
-- **License**: no `LICENSE` file yet (important for a truly open-source distribution).
+- **CD (deployment pipelines)**: CI (`.github/workflows/ci.yml`) and a security scan workflow exist, but there is no continuous deployment pipeline yet.
 - **Contribution docs**: no `CONTRIBUTING.md`, no governance/release process.
-- **Production hardening**
-  - readiness endpoint notes missing DB/Redis checks (`/health/ready` TODO)
-  - no documented deployment path (containers, reverse proxy, secrets management)
-  - limited auth story (VEuPathDB auth integration is evolving)
+- **Production hardening**: no documented deployment path (containers, reverse proxy, secrets management)
 - **Database migrations**: Alembic is set up with 4 migrations, but schema creation still relies on SQLAlchemy `create_all`; Alembic is not yet used as the primary migration workflow.
 - **Evaluation** (thesis): an evaluation framework exists in `thesis/eval/` (gold strategies, prompts, analysis scripts), but reproducible experiment packaging and benchmarks are still in progress.
 
@@ -306,11 +310,6 @@ PathFinder is built around the idea that ambiguous or underspecified requests ar
 - **validation and error shaping** (turn tool failures into actionable, structured feedback)
 - **decomposition + delegation** (break complex goals into smaller strategy subproblems)
 
-## Security & privacy notes (current state)
-
-- Do not commit secrets: `.env` is gitignored.
-- Model provider keys are read from env/TOML settings.
-- Strategy/chat content may be persisted in the configured DB; treat logs and DB contents accordingly.
 
 ## Acknowledgements
 
