@@ -6,12 +6,10 @@ or AI tool.
 
 Rate limiting
 -------------
-WDK enrichment APIs are rate-sensitive — concurrent analysis requests
-cause 500 errors or extreme latency.  A process-level semaphore
-(``_WDK_ENRICHMENT_SEMAPHORE``) limits how many enrichment analyses
-can run in parallel across the entire application.  Within a single
-``run_batch`` call, analyses are executed sequentially (one at a time)
-to avoid overloading a single WDK site.
+A process-level semaphore (``_WDK_ENRICHMENT_SEMAPHORE``) limits how
+many ``run_batch`` calls can execute concurrently across the entire
+application.  Within a single batch, analyses run in parallel via
+``asyncio.gather`` to keep total wall-clock time within proxy timeouts.
 """
 
 import asyncio
@@ -146,20 +144,20 @@ class EnrichmentService:
         analysis_types: list[EnrichmentAnalysisType],
         errors: list[str],
     ) -> tuple[list[EnrichmentResult], list[str]]:
-        """Run multiple analysis types on a single step sequentially.
+        """Run multiple analysis types on a single step concurrently.
 
-        Analyses are run one at a time to avoid overloading WDK's step
-        analysis API.  A process-level semaphore further limits how many
-        ``run_batch`` calls can execute analyses concurrently across
-        different requests (e.g. parallel E2E test workers).
+        Analyses run in parallel to keep total wall-clock time under
+        proxy timeouts (~30s instead of ~90s sequential).  A process-level
+        semaphore still limits how many ``run_batch`` calls execute
+        concurrently across different requests.
         """
         api = get_strategy_api(site_id)
-        results: list[EnrichmentResult] = []
 
-        for analysis_type in analysis_types:
+        async def _run_one(
+            analysis_type: EnrichmentAnalysisType,
+        ) -> EnrichmentResult:
             try:
-                result = await _execute_analysis(api, step_id, analysis_type)
-                results.append(result)
+                return await _execute_analysis(api, step_id, analysis_type)
             except Exception as exc:
                 logger.warning(
                     "Enrichment failed",
@@ -168,14 +166,13 @@ class EnrichmentService:
                 )
                 error_msg = str(exc)
                 errors.append(f"{analysis_type}: {error_msg}")
-                results.append(
-                    EnrichmentResult(
-                        analysis_type=analysis_type,
-                        terms=[],
-                        total_genes_analyzed=0,
-                        background_size=0,
-                        error=error_msg,
-                    )
+                return EnrichmentResult(
+                    analysis_type=analysis_type,
+                    terms=[],
+                    total_genes_analyzed=0,
+                    background_size=0,
+                    error=error_msg,
                 )
 
+        results = list(await asyncio.gather(*[_run_one(t) for t in analysis_types]))
         return results, errors
