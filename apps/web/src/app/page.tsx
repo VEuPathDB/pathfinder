@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { Suspense, useCallback, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { usePrevious } from "@/lib/hooks/usePrevious";
 import { UnifiedChatPanel } from "@/features/chat/components/UnifiedChatPanel";
 import { ConversationSidebar } from "@/features/sidebar/components/ConversationSidebar";
@@ -12,6 +13,7 @@ import { ToastContainer } from "@/app/components/ToastContainer";
 import { LoginModal } from "@/app/components/LoginModal";
 import { TopBar } from "@/app/components/TopBar";
 import { TopBarActions } from "@/app/components/TopBarActions";
+import { EmbeddedToolbar } from "@/app/components/EmbeddedToolbar";
 import { GraphEditorModal } from "@/app/components/GraphEditorModal";
 import { LoadingScreen } from "@/app/components/LoadingScreen";
 import { ApiErrorScreen } from "@/app/components/ApiErrorScreen";
@@ -30,6 +32,18 @@ import { useSiteTheme } from "@/features/sites/hooks/useSiteTheme";
 import { useStableGraph } from "@/app/hooks/useStableGraph";
 
 export default function HomePage() {
+  return (
+    <Suspense>
+      <HomePageInner />
+    </Suspense>
+  );
+}
+
+function HomePageInner() {
+  const searchParams = useSearchParams();
+  const embedded = searchParams.get("embedded") === "true";
+  const siteIdParam = searchParams.get("siteId");
+
   const { selectedSite, setSelectedSite } = useSessionStore();
   const setStrategyId = useSessionStore((state) => state.setStrategyId);
   const selectedSiteDisplayName = useSessionStore(
@@ -55,6 +69,13 @@ export default function HomePage() {
   const setPendingAskNode = useSessionStore((state) => state.setPendingAskNode);
 
   const prevSite = usePrevious(selectedSite);
+
+  // Lock to a specific site when embedded with a siteId param
+  useEffect(() => {
+    if (siteIdParam && siteIdParam !== selectedSite) {
+      setSelectedSite(siteIdParam);
+    }
+  }, [siteIdParam, selectedSite, setSelectedSite]);
 
   useEffect(() => {
     if (prevSite && prevSite !== selectedSite) {
@@ -101,18 +122,24 @@ export default function HomePage() {
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
-      <LoginModal
-        open={!veupathdbSignedIn}
-        selectedSite={selectedSite}
-        onSiteChange={handleSiteChange}
-      />
+      {!embedded && (
+        <LoginModal
+          open={!veupathdbSignedIn}
+          selectedSite={selectedSite}
+          onSiteChange={handleSiteChange}
+        />
+      )}
       <ToastContainer toasts={toasts} durationMs={durationMs} onDismiss={removeToast} />
 
-      <TopBar
-        selectedSite={selectedSite}
-        onSiteChange={handleSiteChange}
-        actions={<TopBarActions onOpenSettings={modals.openSettings} />}
-      />
+      {embedded ? (
+        <EmbeddedToolbar onOpenSettings={modals.openSettings} />
+      ) : (
+        <TopBar
+          selectedSite={selectedSite}
+          onSiteChange={handleSiteChange}
+          actions={<TopBarActions onOpenSettings={modals.openSettings} />}
+        />
+      )}
 
       <div ref={layoutRef} className="flex min-h-0 flex-1 overflow-hidden">
         <div
