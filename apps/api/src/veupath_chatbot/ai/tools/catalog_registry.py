@@ -143,33 +143,43 @@ class CatalogToolsMixin:
         query: Annotated[
             str,
             AIParam(
-                desc="Semantic query to find relevant searches. Must include 2+ specific keywords; one-word/vague queries are rejected."
+                desc=(
+                    "Descriptive natural language query about what you're looking for. "
+                    "Example: 'gametocyte stage RNA-Seq expression percentile data'"
+                )
             ),
         ],
+        keywords: Annotated[
+            list[str] | None,
+            AIParam(
+                desc=(
+                    "Optional exact identifiers to match against search names (urlSegment) "
+                    "for massive score boost. Use when you know fragments of the search name. "
+                    "Example: ['Su_strand_specific', 'Percentile']"
+                )
+            ),
+        ] = None,
         record_type: Annotated[
             str | None, AIParam(desc="Optional record type to restrict the search")
         ] = None,
         limit: Annotated[int, AIParam(desc="Max number of results to return")] = 20,
-    ) -> JSONObject:
-        """Find searches matching a query term (returns both RAG and live WDK)."""
-        err = search_query_error(query)
+    ) -> list[dict[str, str]]:
+        """Find WDK searches by description and/or keywords — returns a single ranked list.
+
+        Results include name, displayName, description, category (e.g. percentile,
+        fold_change), and what record type the search returns (genes, SNPs, etc.).
+        Chooser/routing searches (zero-param menu entries) are automatically filtered out.
+        """
+        kw = keywords or []
+        err = search_query_error(query, has_keywords=bool(kw))
         if err is not None:
-            return combined_result(
-                rag=[],
-                wdk=[],
-                rag_note=f"Rejected vague query: {err.get('message')}",
-                wdk_note="Skipped live WDK search to avoid large irrelevant output; refine the query.",
-            )
-        rag = await self.catalog_rag_tools.rag_search_for_searches(
-            query, record_type, limit
+            return []
+        results: list[dict[str, str]] = await self.catalog_tools.search_for_searches(
+            self.site_id,
+            query,
+            keywords=kw,
         )
-        wdk = await self.catalog_tools.search_for_searches(self.site_id, query)
-        return combined_result(
-            rag=rag,
-            wdk=wdk,
-            rag_note="Qdrant semantic retrieval (fast, may be stale; results include score and are thresholded).",
-            wdk_note="Live WDK-backed keyword-ish search across catalog (authoritative).",
-        )
+        return results
 
     @ai_function()
     async def lookup_phyletic_codes(
@@ -188,11 +198,12 @@ class CatalogToolsMixin:
             str, AIParam(desc="Record type (usually 'transcript')")
         ] = "transcript",
     ) -> JSONObject:
-        """Look up phyletic species codes by name for GenesByOrthologPattern.
+        """Look up phyletic species/group codes by name for GenesByOrthologPattern.
 
-        Returns {code, label} pairs. Use the codes in profile_pattern:
-        CODE>=1T (include) or CODE=0T (exclude).
-        Example: lookup 'falciparum' -> pfal, then use 'pfal>=1T' in profile_pattern.
+        Returns {code, label, leaf} triples. Use codes in profile_pattern:
+        %CODE:Y% (include) or %CODE:N% (exclude).
+        Group codes (leaf=false) with :N are auto-expanded to all leaf descendants.
+        Example: lookup 'mammal' -> MAMM (leaf=false), use '%MAMM:N%pfal:Y%'.
         """
         result: JSONObject = await self.catalog_tools.lookup_phyletic_codes(
             self.site_id, record_type, query

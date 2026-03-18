@@ -56,20 +56,24 @@ def record_type_query_error(query: str) -> JSONObject | None:
     return None
 
 
-def search_query_error(query: str) -> JSONObject | None:
+def search_query_error(query: str, *, has_keywords: bool = False) -> JSONObject | None:
     """Return a validation error object if the query is invalid; otherwise None.
 
+    When ``has_keywords`` is True, short/vague queries are allowed because
+    the keywords provide the specificity.
+
     :param query: User query string.
+    :param has_keywords: Whether the caller also provided keyword hints.
     :returns: Error dict if query is invalid or too vague, otherwise None.
     """
     q = (query or "").strip()
-    if not q:
+    if not q and not has_keywords:
         return {
             "error": "query_required",
             "message": "search_for_searches(query=...) requires a non-empty query.",
         }
     tokens = tokenize_query(q)
-    if len(tokens) < 2:
+    if len(tokens) < 2 and not has_keywords:
         return {
             "error": "query_too_vague",
             "message": "search_for_searches(query=...) requires 2+ specific keywords; one-word/vague queries are rejected.",

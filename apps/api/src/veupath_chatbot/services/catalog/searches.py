@@ -1,6 +1,8 @@
 """Search listing and searching functions."""
 
+import math
 import re
+from collections import Counter
 
 from veupath_chatbot.domain.strategy.ast import PlanStepNode
 from veupath_chatbot.domain.strategy.compile import ResolveRecordType
@@ -12,9 +14,115 @@ from veupath_chatbot.integrations.veupathdb.site_search import (
     strip_html_tags,
 )
 from veupath_chatbot.platform.logging import get_logger
-from veupath_chatbot.platform.types import JSONArray, JSONValue
+from veupath_chatbot.platform.types import JSONArray, JSONObject
 
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Scoring constants
+# ---------------------------------------------------------------------------
+
+_WEIGHT_SEARCH_NAME = 5.0
+_WEIGHT_DISPLAY_NAME = 3.0
+_WEIGHT_DESCRIPTION = 1.0
+_KEYWORD_BOOST = 20.0
+_MIN_TERM_LEN = 3
+
+_RECORD_CLASS_LABELS = {
+    "transcript": "genes/transcripts",
+    "gene": "genes",
+    "snp": "SNPs",
+    "popsetsequence": "popset sequences",
+    "est": "ESTs",
+    "compound": "compounds",
+    "pathway": "pathways",
+}
+
+
+# ---------------------------------------------------------------------------
+# Scoring, filtering, annotation
+# ---------------------------------------------------------------------------
+
+
+def score_search(
+    *,
+    query_terms: list[str],
+    keywords: list[str],
+    search_name: str,
+    display_name: str,
+    description: str,
+    corpus_doc_count: int = 1,
+    corpus_term_counts: dict[str, int] | None = None,
+) -> float:
+    """Score a search against query terms and keywords.
+
+    1. Keywords matched against searchName via substring → ``+KEYWORD_BOOST`` each.
+    2. Query terms matched per field with field weight × IDF.
+    3. Short terms (< ``_MIN_TERM_LEN`` chars) ignored in query matching.
+    """
+    score = 0.0
+    name_lower = search_name.lower()
+    display_lower = display_name.lower()
+    desc_lower = description.lower()
+
+    for kw in keywords:
+        if kw.lower() in name_lower:
+            score += _KEYWORD_BOOST
+
+    term_counts = corpus_term_counts or {}
+    n = max(corpus_doc_count, 1)
+
+    for term in query_terms:
+        if len(term) < _MIN_TERM_LEN:
+            continue
+        term_lower = term.lower()
+        df = term_counts.get(term_lower, 1)
+        idf = math.log(n / (1 + df)) + 1.0
+
+        if term_lower in name_lower:
+            score += _WEIGHT_SEARCH_NAME * idf
+        if term_lower in display_lower:
+            score += _WEIGHT_DISPLAY_NAME * idf
+        if term_lower in desc_lower:
+            score += _WEIGHT_DESCRIPTION * idf
+
+    return score
+
+
+def is_chooser_search(search: JSONObject) -> bool:
+    """Return True if this is a routing/chooser search (no real params).
+
+    Chooser searches have ``websiteProperties: ["hideOperation"]`` and/or
+    empty ``paramNames``.  The search list endpoint returns ``paramNames``
+    (list of strings), not full ``parameters`` objects.
+    """
+    props = search.get("properties", {})
+    if not isinstance(props, dict):
+        return False
+    ws_props = props.get("websiteProperties", [])
+    if isinstance(ws_props, list) and "hideOperation" in ws_props:
+        return True
+    # paramNames is the list of param name strings from the search list endpoint.
+    param_names = search.get("paramNames")
+    return isinstance(param_names, list) and len(param_names) == 0
+
+
+def annotate_search(search: JSONObject) -> dict[str, str]:
+    """Add ``category`` and ``returns`` fields to a search result dict."""
+    result: dict[str, str] = {}
+    props = search.get("properties", {})
+    if isinstance(props, dict):
+        dc = props.get("displayCategory", [])
+        if isinstance(dc, list) and dc:
+            result["category"] = str(dc[0])
+    rc = search.get("recordClassName") or search.get("outputRecordClassName", "")
+    if isinstance(rc, str):
+        rc_lower = rc.lower()
+        for key, label in _RECORD_CLASS_LABELS.items():
+            if key in rc_lower:
+                result["returns"] = label
+                break
+    return result
 
 
 async def get_raw_record_types(site_id: str) -> JSONArray:
@@ -209,15 +317,20 @@ async def search_for_searches(
     site_id: str,
     record_type: str | list[str] | None,
     query: str,
+    *,
+    keywords: list[str] | None = None,
+    limit: int = 20,
 ) -> list[dict[str, str]]:
-    """Find searches matching a query term (name/description and sometimes detail text)."""
+    """Find searches matching a query and/or keywords.
+
+    Uses field-weighted scoring with IDF, keyword boosting against search
+    names, chooser filtering, and result annotation. Site-search results
+    are merged in when available.
+    """
+    kw_list = keywords or []
     discovery = get_discovery_service()
-    # Prefer the same mechanism the web UI uses when no record type filter is provided.
-    # This is higher-recall and returns canonical (searchName, recordType) pairs.
-    if record_type is None:
-        site_search_results = await _search_for_searches_via_site_search(site_id, query)
-        if site_search_results:
-            return site_search_results
+
+    # --- Resolve record types ---
     record_types: list[str] = []
     if isinstance(record_type, list):
         record_types = [str(rt) for rt in record_type if rt]
@@ -230,123 +343,109 @@ async def search_for_searches(
             name for rt in record_types_raw if (name := wdk_entity_name(rt))
         ]
 
-    raw_terms = re.findall(r"[A-Za-z0-9]+", query or "")
+    # --- Collect all candidate searches ---
+    raw_terms = re.findall(r"[A-Za-z0-9_]+", query or "")
     terms = [t.lower() for t in raw_terms if t]
-    query_lower = query.lower() if query else ""
-    matches: JSONArray = []
 
-    def term_variants(term: str) -> list[str]:
-        # Very small, cheap normalization for common user phrasing.
-        # This is intentionally conservative (no heavy NLP deps).
-        variants = {term}
-        if len(term) > 3 and term.endswith("s"):
-            variants.add(term[:-1])
-        if len(term) > 4 and term.endswith("ed"):
-            variants.add(term[:-2])
-        if len(term) > 5 and term.endswith("ing"):
-            variants.add(term[:-3])
-        return list(variants)
-
-    def add_matches(searches: JSONArray, rt_name: str) -> None:
-        for search in searches:
-            if not isinstance(search, dict):
-                continue
-            is_internal_raw = search.get("isInternal")
-            if isinstance(is_internal_raw, bool) and is_internal_raw:
-                continue
-            canonical_name = wdk_entity_name(search)
-            display_name_raw = search.get("displayName")
-            display_name = (
-                display_name_raw if isinstance(display_name_raw, str) else ""
-            ) or canonical_name
-            desc_raw = search.get("description")
-            desc = desc_raw if isinstance(desc_raw, str) else ""
-            internal_name_raw = search.get("name")
-            internal_name = (
-                internal_name_raw if isinstance(internal_name_raw, str) else ""
-            )
-            haystack = f"{display_name} {desc} {canonical_name} {internal_name}".lower()
-            score = 0
-            if terms:
-                score = sum(
-                    1
-                    for term in terms
-                    if any(v in haystack for v in term_variants(term))
-                )
-            else:
-                if query_lower and (
-                    query_lower in display_name.lower()
-                    or query_lower in desc.lower()
-                    or query_lower in canonical_name.lower()
-                ):
-                    score = 1
-            if score > 0:
-                matches.append(
-                    {
-                        "name": canonical_name,
-                        "displayName": display_name,
-                        "description": desc,
-                        "recordType": rt_name,
-                        "score": str(score),
-                    }
-                )
-
+    candidates: list[tuple[JSONObject, str]] = []  # (raw_search, record_type)
     for rt_name in record_types:
         searches = await discovery.get_searches(site_id, rt_name)
-        add_matches(searches, rt_name)
+        for s in searches:
+            if not isinstance(s, dict):
+                continue
+            is_internal = s.get("isInternal")
+            if isinstance(is_internal, bool) and is_internal:
+                continue
+            if is_chooser_search(s):
+                continue
+            candidates.append((s, rt_name))
 
-    def get_score(item: JSONValue) -> int:
-        if not isinstance(item, dict):
-            return 0
-        score_raw = item.get("score")
-        if isinstance(score_raw, str):
-            try:
-                return int(score_raw)
-            except ValueError:
-                return 0
-        return 0
+    # --- Build corpus term counts for IDF ---
+    corpus_counts: Counter[str] = Counter()
+    for s, _ in candidates:
+        name = wdk_entity_name(s)
+        display = s.get("displayName", "")
+        desc = s.get("description", "")
+        haystack = f"{name} {display} {desc}".lower()
+        for term in terms:
+            if len(term) >= _MIN_TERM_LEN and term in haystack:
+                corpus_counts[term] += 1
 
-    def get_display_name(item: JSONValue) -> str:
-        if not isinstance(item, dict):
-            return ""
-        display_name_raw = item.get("displayName")
-        return display_name_raw if isinstance(display_name_raw, str) else ""
+    doc_count = len(candidates)
 
-    def get_rt_priority(item: JSONValue) -> int:
-        if not isinstance(item, dict):
-            return 100
-        rt_raw = item.get("recordType")
-        return _record_type_priority(rt_raw if isinstance(rt_raw, str) else "")
+    # --- Score each candidate ---
+    scored: list[tuple[float, dict[str, str]]] = []
+    for s, rt_name in candidates:
+        canonical_name = wdk_entity_name(s)
+        display_raw = s.get("displayName")
+        display = display_raw if isinstance(display_raw, str) else canonical_name
+        desc_raw = s.get("description")
+        desc = desc_raw if isinstance(desc_raw, str) else ""
 
-    matches.sort(
+        sc = score_search(
+            query_terms=terms,
+            keywords=kw_list,
+            search_name=canonical_name,
+            display_name=display,
+            description=desc,
+            corpus_doc_count=doc_count,
+            corpus_term_counts=dict(corpus_counts),
+        )
+        if sc <= 0:
+            continue
+
+        annotations = annotate_search(s)
+        entry: dict[str, str] = {
+            "name": canonical_name,
+            "displayName": display,
+            "description": desc,
+            "recordType": rt_name,
+        }
+        entry.update(annotations)
+        scored.append((sc, entry))
+
+    # --- Merge site-search results (supplementary boost) ---
+    # Only boost entries that already scored > 0 on keyword matching.
+    # Don't add new entries from site-search that didn't match our scoring.
+    try:
+        site_results = await _search_for_searches_via_site_search(
+            site_id, query, limit=limit
+        )
+        site_bonus: dict[str, float] = {}
+        for rank, sr in enumerate(site_results):
+            name = sr.get("name", "")
+            if name and name not in site_bonus:
+                site_bonus[name] = 5.0 / (1 + rank)
+
+        for i, (sc, entry) in enumerate(scored):
+            bonus = site_bonus.get(entry["name"], 0.0)
+            if bonus > 0:
+                scored[i] = (sc + bonus, entry)
+    except Exception:
+        logger.debug("Site-search merge failed (non-fatal)")
+
+    # --- Sort by score desc, then record type priority ---
+    scored.sort(
         key=lambda item: (
-            -get_score(item),
-            get_rt_priority(item),
-            get_display_name(item),
+            -item[0],
+            _record_type_priority(item[1].get("recordType", "")),
+            item[1].get("displayName", ""),
         )
     )
+
+    # --- Deduplicate and cap ---
+    seen: set[str] = set()
     result: list[dict[str, str]] = []
-    for item in matches:
-        if not isinstance(item, dict):
+    for _, entry in scored:
+        name = entry.get("name", "")
+        if name in seen:
             continue
-        item.pop("score", None)
-        name_raw = item.get("name")
-        display_name_raw = item.get("displayName")
-        description_raw = item.get("description")
-        record_type_raw = item.get("recordType")
-        name = name_raw if isinstance(name_raw, str) else ""
-        display_name = display_name_raw if isinstance(display_name_raw, str) else ""
-        description = description_raw if isinstance(description_raw, str) else ""
-        record_type = record_type_raw if isinstance(record_type_raw, str) else ""
-        result.append(
-            {
-                "name": name,
-                "displayName": display_name,
-                "description": description,
-                "recordType": record_type,
-            }
-        )
-    return result[:20]
+        seen.add(name)
+        result.append(entry)
+        if len(result) >= limit:
+            break
+
+    return result
 
 
 async def find_record_type_for_search(

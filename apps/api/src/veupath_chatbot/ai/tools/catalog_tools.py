@@ -32,18 +32,43 @@ class CatalogTools:
     async def search_for_searches(
         self,
         site_id: Annotated[str, AIParam(desc="Site ID")],
-        query: Annotated[str, AIParam(desc="Search term to find relevant searches")],
+        query: Annotated[
+            str,
+            AIParam(
+                desc=(
+                    "Descriptive natural language query about what you're looking for. "
+                    "Example: 'gametocyte RNA-Seq expression percentile data'"
+                )
+            ),
+        ],
+        keywords: Annotated[
+            list[str] | None,
+            AIParam(
+                desc=(
+                    "Optional exact identifiers to match against search names (urlSegment). "
+                    "These get massive score boost. Extract from dataset names, search "
+                    "name fragments, or organism codes mentioned in the user's request. "
+                    "Example: ['Su_strand_specific', 'Percentile', 'pfal3D7']"
+                )
+            ),
+        ] = None,
     ) -> list[dict[str, str]]:
-        """Find searches by keyword — returns names, display names, AND descriptions.
+        """Find WDK searches by description and/or keywords.
 
-        This is the PRIMARY search discovery tool. Always try this FIRST to find
-        the right search. Returns up to 20 targeted results with full descriptions
-        to help you pick the right search.
+        Returns a ranked list with name, displayName, description, category,
+        and what the search returns (genes, SNPs, etc.).
 
-        Only fall back to list_searches if this returns no results.
+        The query is matched against display names and descriptions.
+        Keywords are matched against the internal search name (urlSegment)
+        with heavy boosting — use these when you know part of the search
+        identifier.
         """
-        # Search broadly across record types for better recall.
-        return await catalog.search_for_searches(site_id, record_type=None, query=query)
+        return await catalog.search_for_searches(
+            site_id,
+            record_type=None,
+            query=query,
+            keywords=keywords or [],
+        )
 
     @ai_function()
     async def list_transforms(
@@ -114,10 +139,11 @@ class CatalogTools:
             ),
         ],
     ) -> JSONObject:
-        """Look up phyletic species codes by name for GenesByOrthologPattern.
+        """Look up phyletic species/group codes by name for GenesByOrthologPattern.
 
-        Returns {code, label} pairs. Use the codes in profile_pattern:
-        CODE>=1T (include) or CODE=0T (exclude).
-        Example: lookup 'falciparum' → pfal, then use 'pfal>=1T' in profile_pattern.
+        Returns {code, label, leaf} triples. Use codes in profile_pattern:
+        %CODE:Y% (include) or %CODE:N% (exclude).
+        Group codes (leaf=false) with :N are auto-expanded to all leaf descendants.
+        Example: lookup 'mammal' → MAMM (leaf=false), use '%MAMM:N%pfal:Y%'.
         """
         return await catalog.lookup_phyletic_codes(site_id, record_type, query)
