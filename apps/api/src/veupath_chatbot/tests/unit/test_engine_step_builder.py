@@ -117,35 +117,6 @@ class TestExtractVocabOptions:
         assert options == []
 
 
-# ── _vocab_contains_value ─────────────────────────────────────────────
-
-
-class TestVocabContainsValue:
-    def test_finds_display_value(self) -> None:
-        mixin = _make_mixin()
-        assert mixin._vocab_contains_value(_make_vocab_tree(), "Plasmodium") is True
-
-    def test_finds_raw_value(self) -> None:
-        mixin = _make_mixin()
-        assert mixin._vocab_contains_value(_make_vocab_tree(), "pf3d7") is True
-
-    def test_missing_value(self) -> None:
-        mixin = _make_mixin()
-        assert mixin._vocab_contains_value(_make_vocab_tree(), "nonexistent") is False
-
-    def test_empty_value(self) -> None:
-        mixin = _make_mixin()
-        assert mixin._vocab_contains_value(_make_vocab_tree(), "") is False
-
-    def test_whitespace_stripped(self) -> None:
-        mixin = _make_mixin()
-        assert mixin._vocab_contains_value(_make_vocab_tree(), "  Plasmodium  ") is True
-
-    def test_empty_vocab(self) -> None:
-        mixin = _make_mixin()
-        assert mixin._vocab_contains_value({}, "anything") is False
-
-
 # ── _match_vocab_value ────────────────────────────────────────────────
 
 

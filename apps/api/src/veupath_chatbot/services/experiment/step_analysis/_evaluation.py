@@ -11,6 +11,7 @@ from veupath_chatbot.services.control_tests import (
     _extract_intersection_data,
     resolve_controls_param_type,
 )
+from veupath_chatbot.services.experiment.helpers import safe_int
 from veupath_chatbot.services.experiment.metrics import (
     compute_confusion_matrix,
     compute_metrics,
@@ -67,7 +68,9 @@ async def run_controls_against_tree(
         label: str,
     ) -> JSONObject:
         """Materialise the tree, intersect with one control set, clean up."""
-        root_tree = await _materialize_step_tree(api, tree, record_type)
+        root_tree = await _materialize_step_tree(
+            api, tree, record_type, site_id=site_id
+        )
 
         param_type = await resolve_controls_param_type(
             api,
@@ -177,60 +180,6 @@ async def run_controls_against_tree(
     return result
 
 
-async def _evaluate_tree_against_controls(
-    *,
-    site_id: str,
-    record_type: str,
-    tree: JSONObject,
-    controls_search_name: str,
-    controls_param_name: str,
-    controls_value_format: ControlValueFormat,
-    positive_controls: list[str],
-    negative_controls: list[str],
-) -> JSONObject:
-    """Internal alias for :func:`run_controls_against_tree`."""
-    return await run_controls_against_tree(
-        site_id=site_id,
-        record_type=record_type,
-        tree=tree,
-        controls_search_name=controls_search_name,
-        controls_param_name=controls_param_name,
-        controls_value_format=controls_value_format,
-        positive_controls=positive_controls or None,
-        negative_controls=negative_controls or None,
-    )
-
-
-async def _evaluate_single_step(
-    *,
-    site_id: str,
-    record_type: str,
-    search_name: str,
-    parameters: JSONObject,
-    controls_search_name: str,
-    controls_param_name: str,
-    controls_value_format: ControlValueFormat,
-    positive_controls: list[str],
-    negative_controls: list[str],
-) -> JSONObject:
-    """Evaluate a single leaf search against controls."""
-    from veupath_chatbot.services.control_tests import (
-        run_positive_negative_controls,
-    )
-
-    return await run_positive_negative_controls(
-        site_id=site_id,
-        record_type=record_type,
-        target_search_name=search_name,
-        target_parameters=parameters,
-        controls_search_name=controls_search_name,
-        controls_param_name=controls_param_name,
-        positive_controls=positive_controls or None,
-        negative_controls=negative_controls or None,
-        controls_value_format=controls_value_format,
-    )
-
-
 @dataclass
 class _EvalCounts:
     """Structured result from extracting control-test counts."""
@@ -249,8 +198,6 @@ def _extract_eval_counts(result: JSONObject) -> _EvalCounts:
     pos = result.get("positive") or {}
     neg = result.get("negative") or {}
     tgt = result.get("target") or {}
-
-    from veupath_chatbot.services.experiment.helpers import safe_int
 
     pos_data = pos if isinstance(pos, dict) else {}
     neg_data = neg if isinstance(neg, dict) else {}

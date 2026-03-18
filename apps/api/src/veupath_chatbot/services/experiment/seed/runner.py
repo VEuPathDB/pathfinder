@@ -87,7 +87,7 @@ async def run_seed(
 
                 # 1. Materialize step tree into real WDK steps
                 root_tree = await _materialize_step_tree(
-                    api, seed.step_tree, seed.record_type
+                    api, seed.step_tree, seed.record_type, site_id=seed.site_id
                 )
 
                 # 2. Create the WDK strategy (visible, not internal)

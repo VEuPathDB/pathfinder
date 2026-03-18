@@ -315,6 +315,24 @@ async def _validate_leaf_step(
         )
     except ValidationError as exc:
         return validation_error_payload(exc)
+
+    # Guard: fold-change searches with identical ref and comp samples produce
+    # meaningless results. Catch this early so the model can fix it.
+    ref = parameters.get("samples_fc_ref_generic") or parameters.get(
+        "samples_percentile_generic"
+    )
+    comp = parameters.get("samples_fc_comp_generic")
+    if ref and comp and str(ref) == str(comp):
+        return tool_error(
+            ErrorCode.VALIDATION_ERROR,
+            "Reference and comparison samples are identical — this will produce "
+            "meaningless fold-change results. Set different samples for reference "
+            "vs comparison.",
+            searchName=search_name,
+            ref=ref,
+            comp=comp,
+        )
+
     return None
 
 
@@ -377,11 +395,12 @@ async def _validate_transform_step(
     if not input_param:
         return tool_error(
             ErrorCode.INVALID_STRATEGY,
-            f"Search '{search_name}' cannot be used as a transform: it does not accept an input step.",
+            f"Search '{search_name}' cannot be used as a transform: it does not accept an input step. "
+            f"Call list_transforms(record_type='{rt}') to see available transforms (e.g. GenesByOrthologs for ortholog conversion).",
             recordType=rt,
             searchName=search_name,
             suggestedFix={
-                "message": "Create this as a leaf step (no primary input) and then combine with the upstream step using INTERSECT/UNION/MINUS.",
+                "message": "Call list_transforms() to find the correct transform search, or create this as a leaf step and combine with INTERSECT/UNION/MINUS.",
                 "asLeaf": {"searchName": search_name, "recordType": rt},
             },
         )
@@ -438,14 +457,6 @@ async def create_step(
     :returns: StepCreationResult with either step/step_id or error.
     """
     parameters = parameters or {}
-
-    # Auto-expand organism for GenesByOrthologPattern: the search requires ALL
-    # leaf organisms to be selected, but the model typically passes only one.
-    # Fetch the full vocabulary tree and populate all leaves automatically.
-    if search_name == "GenesByOrthologPattern":
-        parameters = await _auto_expand_organism_param(
-            site_id, record_type or "transcript", parameters
-        )
 
     # WDK compatibility: if caller encoded a boolean combine as WDK boolean-question
     # parameters, translate it into structural inputs.

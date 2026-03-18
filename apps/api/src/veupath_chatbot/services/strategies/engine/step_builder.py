@@ -82,32 +82,6 @@ class StepBuilderMixin(StrategyToolsBase):
                 return raw_value
         return target
 
-    def _vocab_contains_value(self, vocabulary: JSONObject, value: str) -> bool:
-        """Check if a vocabulary tree contains the value (display or value field).
-
-        :param vocabulary: Vocabulary tree from catalog.
-        :param value: Value to search for.
-        :returns: True if value is found.
-        """
-        target = value.strip()
-        if not target or not vocabulary:
-            return False
-
-        def walk(node: JSONObject) -> bool:
-            data_raw = node.get("data")
-            data = data_raw if isinstance(data_raw, dict) else {}
-            display_raw = data.get("display")
-            display = display_raw if isinstance(display_raw, str) else None
-            value_raw = data.get("value")
-            raw_value = value_raw if isinstance(value_raw, str) else None
-            if target in (display, raw_value):
-                return True
-            children_raw = node.get("children")
-            children = children_raw if isinstance(children_raw, list) else []
-            return any(isinstance(child, dict) and walk(child) for child in children)
-
-        return walk(vocabulary)
-
     def _get_vocab_node_value(self, node: JSONObject) -> str:
         data_raw = node.get("data")
         data = data_raw if isinstance(data_raw, dict) else {}

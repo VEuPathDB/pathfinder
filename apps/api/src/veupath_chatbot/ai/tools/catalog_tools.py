@@ -29,6 +29,44 @@ class CatalogTools:
         return await catalog.get_record_types(site_id)
 
     @ai_function()
+    async def search_for_searches(
+        self,
+        site_id: Annotated[str, AIParam(desc="Site ID")],
+        query: Annotated[str, AIParam(desc="Search term to find relevant searches")],
+    ) -> list[dict[str, str]]:
+        """Find searches by keyword — returns names, display names, AND descriptions.
+
+        This is the PRIMARY search discovery tool. Always try this FIRST to find
+        the right search. Returns up to 20 targeted results with full descriptions
+        to help you pick the right search.
+
+        Only fall back to list_searches if this returns no results.
+        """
+        # Search broadly across record types for better recall.
+        return await catalog.search_for_searches(site_id, record_type=None, query=query)
+
+    @ai_function()
+    async def list_transforms(
+        self,
+        site_id: Annotated[
+            str,
+            AIParam(desc="Site ID (e.g., 'plasmodb')"),
+        ],
+        record_type: Annotated[
+            str,
+            AIParam(desc="Record type (e.g., 'transcript')"),
+        ],
+    ) -> list[dict[str, str]]:
+        """List available transform and combine operations (with descriptions).
+
+        Returns searches that chain onto a previous step's results — such as
+        ortholog transforms, weight filters, span logic, and boolean combines.
+        Use this when you need to transform or combine step results. Always call
+        this before attempting to use a transform search in create_step.
+        """
+        return await catalog.list_transforms(site_id, record_type)
+
+    @ai_function()
     async def list_searches(
         self,
         site_id: Annotated[
@@ -40,6 +78,12 @@ class CatalogTools:
             AIParam(desc="Record type (e.g., 'gene', 'transcript')"),
         ],
     ) -> list[dict[str, str]]:
+        """List all search names for a record type (names only, no descriptions).
+
+        Returns a lightweight index of search names. Use search_for_searches first
+        for targeted discovery with descriptions. Use get_search_parameters to get
+        full details (description + parameters) for a specific search.
+        """
         return await catalog.list_searches(site_id, record_type)
 
     @ai_function()
@@ -49,18 +93,10 @@ class CatalogTools:
         record_type: Annotated[str, AIParam(desc="Record type")],
         search_name: Annotated[str, AIParam(desc="Search name")],
     ) -> JSONObject:
+        """Get full details for a specific search: description, parameters, and valid values."""
         return await catalog.get_search_parameters_tool(
             site_id, record_type, search_name
         )
-
-    @ai_function()
-    async def search_for_searches(
-        self,
-        site_id: Annotated[str, AIParam(desc="Site ID")],
-        query: Annotated[str, AIParam(desc="Search term to find relevant searches")],
-    ) -> list[dict[str, str]]:
-        # Search broadly across record types for better recall.
-        return await catalog.search_for_searches(site_id, record_type=None, query=query)
 
     @ai_function()
     async def lookup_phyletic_codes(

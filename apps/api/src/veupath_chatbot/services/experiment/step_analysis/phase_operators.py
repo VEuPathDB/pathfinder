@@ -7,9 +7,9 @@ from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONObject
 from veupath_chatbot.services.experiment.helpers import ProgressCallback
 from veupath_chatbot.services.experiment.step_analysis._evaluation import (
-    _evaluate_tree_against_controls,
     _extract_eval_counts,
     _f1_from_counts,
+    run_controls_against_tree,
 )
 from veupath_chatbot.services.experiment.step_analysis._tree_utils import (
     _build_subtree_with_operator,
@@ -83,7 +83,7 @@ async def compare_operators(
             subtree = _build_subtree_with_operator(_cnode, op)
             try:
                 async with sem:
-                    raw = await _evaluate_tree_against_controls(
+                    raw = await run_controls_against_tree(
                         site_id=site_id,
                         record_type=record_type,
                         tree=subtree,

@@ -23,6 +23,8 @@ async def _materialize_step_tree(
     api: StrategyAPI,
     node: JSONObject,
     record_type: str,
+    *,
+    site_id: str = "",
 ) -> StepTreeNode:
     """Recursively create WDK steps from a ``PlanStepNode`` dict.
 
@@ -32,6 +34,7 @@ async def _materialize_step_tree(
     :param api: Strategy API instance.
     :param node: ``PlanStepNode``-shaped dict.
     :param record_type: WDK record type for all steps.
+    :param site_id: VEuPathDB site identifier (for param auto-expansion).
     :returns: :class:`StepTreeNode` ready for strategy creation.
     """
     primary_node = node.get("primaryInput")
@@ -41,9 +44,13 @@ async def _materialize_step_tree(
     secondary_tree: StepTreeNode | None = None
 
     if isinstance(primary_node, dict):
-        primary_tree = await _materialize_step_tree(api, primary_node, record_type)
+        primary_tree = await _materialize_step_tree(
+            api, primary_node, record_type, site_id=site_id
+        )
     if isinstance(secondary_node, dict):
-        secondary_tree = await _materialize_step_tree(api, secondary_node, record_type)
+        secondary_tree = await _materialize_step_tree(
+            api, secondary_node, record_type, site_id=site_id
+        )
 
     search_name = str(node.get("searchName", ""))
     raw_params = node.get("parameters")
@@ -52,13 +59,50 @@ async def _materialize_step_tree(
 
     if primary_tree is not None and secondary_tree is not None:
         operator = str(node.get("operator", DEFAULT_COMBINE_OPERATOR.value))
-        step = await api.create_combined_step(
-            primary_step_id=primary_tree.step_id,
-            secondary_step_id=secondary_tree.step_id,
-            boolean_operator=operator,
-            record_type=record_type,
-            custom_name=display_name,
-        )
+        if operator == "COLOCATE":
+            # Colocation uses GenesBySpanLogic — two input-step params
+            # (span_a, span_b) wired via stepTree at strategy creation.
+            coloc_raw = node.get("colocationParams")
+            upstream = "0"
+            downstream = "0"
+            if isinstance(coloc_raw, dict):
+                upstream = str(coloc_raw.get("upstream", 0))
+                downstream = str(coloc_raw.get("downstream", 0))
+            coloc_params: JSONObject = {
+                "span_sentence": "sentence",
+                "span_operation": "overlap",
+                "span_strand": "Both strands",
+                "span_output": "a",
+                "region_a": "upstream",
+                "region_b": "exact",
+                "span_begin_a": "start",
+                "span_begin_direction_a": "-",
+                "span_begin_offset_a": upstream,
+                "span_end_a": "start",
+                "span_end_direction_a": "-",
+                "span_end_offset_a": downstream,
+                "span_begin_b": "start",
+                "span_begin_direction_b": "-",
+                "span_begin_offset_b": "0",
+                "span_end_b": "stop",
+                "span_end_direction_b": "-",
+                "span_end_offset_b": "0",
+            }
+            step = await api.create_transform_step(
+                input_step_id=primary_tree.step_id,
+                transform_name="GenesBySpanLogic",
+                parameters=coloc_params,
+                record_type=record_type,
+                custom_name=display_name,
+            )
+        else:
+            step = await api.create_combined_step(
+                primary_step_id=primary_tree.step_id,
+                secondary_step_id=secondary_tree.step_id,
+                boolean_operator=operator,
+                record_type=record_type,
+                custom_name=display_name,
+            )
         step_id = coerce_step_id(step)
         return StepTreeNode(
             step_id, primary_input=primary_tree, secondary_input=secondary_tree
@@ -115,7 +159,7 @@ async def _persist_experiment_strategy(
     )
     if mode in ("multi-step", "import") and isinstance(effective_tree, dict):
         root_tree = await _materialize_step_tree(
-            api, effective_tree, config.record_type
+            api, effective_tree, config.record_type, site_id=config.site_id
         )
     else:
         step_payload = await api.create_step(

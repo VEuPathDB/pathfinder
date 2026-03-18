@@ -40,12 +40,49 @@ async def get_raw_searches(site_id: str, record_type: str) -> JSONArray:
 
 
 async def list_searches(site_id: str, record_type: str) -> list[dict[str, str]]:
-    """List searches for a specific record type."""
+    """List searches for a specific record type.
+
+    Returns **name + displayName only** to keep the payload small (VEuPathDB
+    has 2000+ searches; descriptions alone add ~3 MB).  The model should use
+    ``search_for_searches`` for targeted discovery with descriptions, or
+    ``get_search_parameters`` for full details on a specific search.
+    """
     discovery = get_discovery_service()
     searches = await discovery.get_searches(site_id, record_type)
     result: list[dict[str, str]] = []
     for s in searches:
         if not isinstance(s, dict):
+            continue
+        is_internal_raw = s.get("isInternal")
+        if isinstance(is_internal_raw, bool) and is_internal_raw:
+            continue
+        search_name = wdk_entity_name(s)
+        display_name_raw = s.get("displayName")
+        display_name = display_name_raw if isinstance(display_name_raw, str) else ""
+        result.append(
+            {
+                "name": search_name,
+                "displayName": display_name,
+            }
+        )
+    return result
+
+
+async def list_transforms(site_id: str, record_type: str) -> list[dict[str, str]]:
+    """List transform/combine searches (with descriptions).
+
+    Returns only searches that accept an input step — these are used to chain
+    steps together (ortholog transform, weight filter, span logic, boolean
+    combine, etc.).  Typically 5-7 per site, so descriptions are included.
+    """
+    discovery = get_discovery_service()
+    searches = await discovery.get_searches(site_id, record_type)
+    result: list[dict[str, str]] = []
+    for s in searches:
+        if not isinstance(s, dict):
+            continue
+        allowed = s.get("allowedPrimaryInputRecordClassNames")
+        if not isinstance(allowed, list) or not allowed:
             continue
         is_internal_raw = s.get("isInternal")
         if isinstance(is_internal_raw, bool) and is_internal_raw:
@@ -140,7 +177,32 @@ async def _search_for_searches_via_site_search(
             }
         )
 
-    return results[:limit]
+    # Boost transcript/gene results to the top — the model almost always
+    # builds gene strategies, so EST/Popset/compound matches are noise.
+    results.sort(key=lambda r: _record_type_priority(r.get("recordType", "")))
+
+    # Deduplicate: same search can appear for multiple record types;
+    # keep only the highest-priority (lowest sort key) occurrence.
+    seen: set[str] = set()
+    deduped: list[dict[str, str]] = []
+    for r in results:
+        if r["name"] not in seen:
+            seen.add(r["name"])
+            deduped.append(r)
+    return deduped[:limit]
+
+
+# Record types the model cares about most, in priority order.
+_PREFERRED_RECORD_TYPES = ("transcript", "gene")
+
+
+def _record_type_priority(record_type: str) -> int:
+    """Lower = higher priority.  Transcript/gene first, everything else after."""
+    rt = record_type.lower()
+    for i, preferred in enumerate(_PREFERRED_RECORD_TYPES):
+        if preferred in rt:
+            return i
+    return 100
 
 
 async def search_for_searches(
@@ -250,7 +312,19 @@ async def search_for_searches(
         display_name_raw = item.get("displayName")
         return display_name_raw if isinstance(display_name_raw, str) else ""
 
-    matches.sort(key=lambda item: (-get_score(item), get_display_name(item)))
+    def get_rt_priority(item: JSONValue) -> int:
+        if not isinstance(item, dict):
+            return 100
+        rt_raw = item.get("recordType")
+        return _record_type_priority(rt_raw if isinstance(rt_raw, str) else "")
+
+    matches.sort(
+        key=lambda item: (
+            -get_score(item),
+            get_rt_priority(item),
+            get_display_name(item),
+        )
+    )
     result: list[dict[str, str]] = []
     for item in matches:
         if not isinstance(item, dict):
