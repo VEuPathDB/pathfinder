@@ -124,7 +124,25 @@ class VEuPathDBClient:
                         "Content-Type": "application/json",
                     },
                 )
+                await self._init_wdk_session(self._client)
             return self._client
+
+    async def _init_wdk_session(self, client: httpx.AsyncClient) -> None:
+        """Initialize a server-side WDK session (JSESSIONID).
+
+        WDK process queries (e.g. GenesByOrthologPattern) require a Tomcat
+        ``JSESSIONID`` established through the webapp.  Without it, process
+        queries silently return 0 results.
+        """
+        webapp_url = self.base_url.replace("/service", "/app")
+        try:
+            await client.get(webapp_url, timeout=10)
+            logger.debug(
+                "WDK session initialized",
+                jsessionid=bool(client.cookies.get("JSESSIONID")),
+            )
+        except Exception:
+            logger.debug("Failed to initialize WDK session (non-fatal)")
 
     async def close(self) -> None:
         """Close HTTP client."""

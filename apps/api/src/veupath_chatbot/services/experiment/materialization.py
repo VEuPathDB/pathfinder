@@ -57,14 +57,6 @@ async def _materialize_step_tree(
     parameters: JSONObject = raw_params if isinstance(raw_params, dict) else {}
     display_name = str(node.get("displayName", search_name))
 
-    # GenesByOrthologPattern requires ALL leaf organisms to be selected.
-    if search_name == "GenesByOrthologPattern" and site_id:
-        from veupath_chatbot.services.strategies.step_creation import (
-            _auto_expand_organism_param,
-        )
-
-        parameters = await _auto_expand_organism_param(site_id, record_type, parameters)
-
     if primary_tree is not None and secondary_tree is not None:
         operator = str(node.get("operator", DEFAULT_COMBINE_OPERATOR.value))
         if operator == "COLOCATE":

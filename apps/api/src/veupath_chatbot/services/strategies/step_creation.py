@@ -458,14 +458,6 @@ async def create_step(
     """
     parameters = parameters or {}
 
-    # Auto-expand organism for GenesByOrthologPattern: the search requires ALL
-    # leaf organisms to be selected, but the model typically passes only one.
-    # Fetch the full vocabulary tree and populate all leaves automatically.
-    if search_name == "GenesByOrthologPattern":
-        parameters = await _auto_expand_organism_param(
-            site_id, record_type or "transcript", parameters
-        )
-
     # WDK compatibility: if caller encoded a boolean combine as WDK boolean-question
     # parameters, translate it into structural inputs.
     if not primary_input_step_id and not secondary_input_step_id and not operator:
