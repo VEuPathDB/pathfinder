@@ -52,13 +52,32 @@ async def _materialize_step_tree(
 
     if primary_tree is not None and secondary_tree is not None:
         operator = str(node.get("operator", DEFAULT_COMBINE_OPERATOR.value))
-        step = await api.create_combined_step(
-            primary_step_id=primary_tree.step_id,
-            secondary_step_id=secondary_tree.step_id,
-            boolean_operator=operator,
-            record_type=record_type,
-            custom_name=display_name,
-        )
+        if operator == "COLOCATE":
+            # Colocation uses GenesByLocation transform, not a boolean operator.
+            coloc_params: JSONObject = {
+                "gene_result": str(primary_tree.step_id),
+                "span_result": str(secondary_tree.step_id),
+            }
+            coloc_raw = node.get("colocationParams")
+            if isinstance(coloc_raw, dict):
+                coloc_params["upstream"] = str(coloc_raw.get("upstream", 0))
+                coloc_params["downstream"] = str(coloc_raw.get("downstream", 0))
+                coloc_params["strand"] = str(coloc_raw.get("strand", "both"))
+            step = await api.create_transform_step(
+                input_step_id=primary_tree.step_id,
+                transform_name="GenesByLocation",
+                parameters=coloc_params,
+                record_type=record_type,
+                custom_name=display_name,
+            )
+        else:
+            step = await api.create_combined_step(
+                primary_step_id=primary_tree.step_id,
+                secondary_step_id=secondary_tree.step_id,
+                boolean_operator=operator,
+                record_type=record_type,
+                custom_name=display_name,
+            )
         step_id = coerce_step_id(step)
         return StepTreeNode(
             step_id, primary_input=primary_tree, secondary_input=secondary_tree
