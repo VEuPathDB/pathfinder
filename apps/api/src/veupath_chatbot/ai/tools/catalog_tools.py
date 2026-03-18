@@ -46,6 +46,27 @@ class CatalogTools:
         return await catalog.search_for_searches(site_id, record_type=None, query=query)
 
     @ai_function()
+    async def list_transforms(
+        self,
+        site_id: Annotated[
+            str,
+            AIParam(desc="Site ID (e.g., 'plasmodb')"),
+        ],
+        record_type: Annotated[
+            str,
+            AIParam(desc="Record type (e.g., 'transcript')"),
+        ],
+    ) -> list[dict[str, str]]:
+        """List available transform and combine operations (with descriptions).
+
+        Returns searches that chain onto a previous step's results — such as
+        ortholog transforms, weight filters, span logic, and boolean combines.
+        Use this when you need to transform or combine step results. Always call
+        this before attempting to use a transform search in create_step.
+        """
+        return await catalog.list_transforms(site_id, record_type)
+
+    @ai_function()
     async def list_searches(
         self,
         site_id: Annotated[

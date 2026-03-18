@@ -18,6 +18,7 @@ from veupath_chatbot.services.catalog.searches import (
     get_raw_record_types,
     get_raw_searches,
     list_searches,
+    list_transforms,
     search_for_searches,
 )
 from veupath_chatbot.services.catalog.sites import (
@@ -37,6 +38,7 @@ __all__ = [
     "lookup_phyletic_codes",
     "list_searches",
     "list_sites",
+    "list_transforms",
     "search_for_searches",
     "validate_search_params",
 ]

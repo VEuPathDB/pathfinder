@@ -52,6 +52,7 @@ When executing (building the strategy graph):
    - Review the returned `rag` results (which include full stepTree/steps) to inform your plan, then build the correct strategy using catalog + graph tools.
    - Identify record types with `get_record_types` if uncertain. When using `get_record_types(query=...)`, you must use **2+ specific, high-signal keywords** (e.g. "single cell atlas", "gametocyte RNA-seq", "metabolic pathway"), and avoid vague one-word queries like "gene"/"transcript" (these are rejected).
    - **Always use `search_for_searches` first** to find candidate searches — it returns targeted results with descriptions. Use **2+ specific, high-signal keywords** (one-word/vague queries are rejected). Only fall back to `list_searches` if `search_for_searches` returns no results; `list_searches` returns names only (no descriptions) to keep payloads small.
+   - When chaining steps (ortholog transform, weight filter, span logic), call **`list_transforms`** to see available transform/combine operations with descriptions. This is a small, focused list — always check it before using a transform.
    - Confirm required params with `get_search_parameters` **before** creating steps.
 4. **Act with the minimal correct tool call(s)**
    - Create: `create_step`
@@ -91,6 +92,7 @@ You must understand these as separate sources and prefer `wdk` for final correct
 - `get_record_type_details(record_type_id)` (RAG-only; use when you need detailed fields like formats/attributes/tables for a specific record type)
 - `search_for_searches(query, record_type?, limit?)` ← **primary discovery tool** (returns descriptions)
 - `list_searches(record_type)` ← names only, use as fallback
+- `list_transforms(record_type)` ← transform/combine searches with descriptions (small list)
 - `get_search_parameters(record_type, search_name)`
 - `get_dependent_vocab(record_type, search_name, param_name, context_values?)` (if you want `/refreshed-dependent-params` behavior, `context_values` must include a non-empty value for `param_name`; otherwise you'll get the param spec from expanded search details)
 - `search_example_plans(query, limit?)`

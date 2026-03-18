@@ -68,6 +68,40 @@ async def list_searches(site_id: str, record_type: str) -> list[dict[str, str]]:
     return result
 
 
+async def list_transforms(site_id: str, record_type: str) -> list[dict[str, str]]:
+    """List transform/combine searches (with descriptions).
+
+    Returns only searches that accept an input step — these are used to chain
+    steps together (ortholog transform, weight filter, span logic, boolean
+    combine, etc.).  Typically 5-7 per site, so descriptions are included.
+    """
+    discovery = get_discovery_service()
+    searches = await discovery.get_searches(site_id, record_type)
+    result: list[dict[str, str]] = []
+    for s in searches:
+        if not isinstance(s, dict):
+            continue
+        allowed = s.get("allowedPrimaryInputRecordClassNames")
+        if not isinstance(allowed, list) or not allowed:
+            continue
+        is_internal_raw = s.get("isInternal")
+        if isinstance(is_internal_raw, bool) and is_internal_raw:
+            continue
+        search_name = wdk_entity_name(s)
+        display_name_raw = s.get("displayName")
+        display_name = display_name_raw if isinstance(display_name_raw, str) else ""
+        description_raw = s.get("description")
+        description = description_raw if isinstance(description_raw, str) else ""
+        result.append(
+            {
+                "name": search_name,
+                "displayName": display_name,
+                "description": description,
+            }
+        )
+    return result
+
+
 async def _search_for_searches_via_site_search(
     site_id: str,
     query: str,
