@@ -23,6 +23,8 @@ async def _materialize_step_tree(
     api: StrategyAPI,
     node: JSONObject,
     record_type: str,
+    *,
+    site_id: str = "",
 ) -> StepTreeNode:
     """Recursively create WDK steps from a ``PlanStepNode`` dict.
 
@@ -32,6 +34,7 @@ async def _materialize_step_tree(
     :param api: Strategy API instance.
     :param node: ``PlanStepNode``-shaped dict.
     :param record_type: WDK record type for all steps.
+    :param site_id: VEuPathDB site identifier (for param auto-expansion).
     :returns: :class:`StepTreeNode` ready for strategy creation.
     """
     primary_node = node.get("primaryInput")
@@ -41,14 +44,26 @@ async def _materialize_step_tree(
     secondary_tree: StepTreeNode | None = None
 
     if isinstance(primary_node, dict):
-        primary_tree = await _materialize_step_tree(api, primary_node, record_type)
+        primary_tree = await _materialize_step_tree(
+            api, primary_node, record_type, site_id=site_id
+        )
     if isinstance(secondary_node, dict):
-        secondary_tree = await _materialize_step_tree(api, secondary_node, record_type)
+        secondary_tree = await _materialize_step_tree(
+            api, secondary_node, record_type, site_id=site_id
+        )
 
     search_name = str(node.get("searchName", ""))
     raw_params = node.get("parameters")
     parameters: JSONObject = raw_params if isinstance(raw_params, dict) else {}
     display_name = str(node.get("displayName", search_name))
+
+    # GenesByOrthologPattern requires ALL leaf organisms to be selected.
+    if search_name == "GenesByOrthologPattern" and site_id:
+        from veupath_chatbot.services.strategies.step_creation import (
+            _auto_expand_organism_param,
+        )
+
+        parameters = await _auto_expand_organism_param(site_id, record_type, parameters)
 
     if primary_tree is not None and secondary_tree is not None:
         operator = str(node.get("operator", DEFAULT_COMBINE_OPERATOR.value))
@@ -152,7 +167,7 @@ async def _persist_experiment_strategy(
     )
     if mode in ("multi-step", "import") and isinstance(effective_tree, dict):
         root_tree = await _materialize_step_tree(
-            api, effective_tree, config.record_type
+            api, effective_tree, config.record_type, site_id=config.site_id
         )
     else:
         step_payload = await api.create_step(
