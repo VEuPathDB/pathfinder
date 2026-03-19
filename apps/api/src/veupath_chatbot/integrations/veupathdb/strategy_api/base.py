@@ -98,6 +98,107 @@ class StrategyAPIBase:
                 self.user_id = resolved
         self._session_initialized = True
 
+    async def _expand_tree_params_to_leaves(
+        self,
+        record_type: str,
+        search_name: str,
+        params: dict[str, str],
+    ) -> dict[str, str]:
+        """Expand parent tree nodes to leaf descendants for multi-pick-vocabulary params.
+
+        WDK tree params with ``countOnlyLeaves=true`` (like organism) silently
+        return 0 results when given a parent node.  The WDK frontend's
+        CheckboxTree auto-selects all leaf descendants when a parent is clicked.
+        We replicate that: fetch the search's param specs, find tree params
+        with ``countOnlyLeaves``, and expand any parent values to their leaves.
+        """
+        import json as _json
+
+        from veupath_chatbot.domain.parameters.vocab_utils import (
+            collect_leaf_terms,
+            find_vocab_node,
+        )
+
+        try:
+            search_def = await self.client.get(
+                f"/record-types/{record_type}/searches/{search_name}",
+                params={"expandParams": "true"},
+            )
+            if not isinstance(search_def, dict):
+                return params
+
+            search_data = search_def.get("searchData", search_def)
+            if not isinstance(search_data, dict):
+                return params
+
+            raw_specs = search_data.get("parameters", [])
+            if not isinstance(raw_specs, list):
+                return params
+
+            result = dict(params)
+            for spec in raw_specs:
+                if not isinstance(spec, dict):
+                    continue
+                name = str(spec.get("name", ""))
+                if name not in result:
+                    continue
+                # Only expand multi-pick tree vocabs with countOnlyLeaves
+                if spec.get("type") != "multi-pick-vocabulary":
+                    continue
+                if not spec.get("countOnlyLeaves"):
+                    continue
+                vocab = spec.get("vocabulary")
+                if not isinstance(vocab, dict):
+                    continue
+
+                # Parse current value
+                raw = result[name]
+                try:
+                    values = _json.loads(raw) if isinstance(raw, str) else raw
+                except _json.JSONDecodeError:
+                    values = [raw] if raw else []
+                if not isinstance(values, list):
+                    continue
+
+                # Expand each value: if it's a parent node, replace with leaves
+                expanded: list[str] = []
+                seen: set[str] = set()
+                for val in values:
+                    val_str = str(val)
+                    node = find_vocab_node(vocab, val_str)
+                    if node is None:
+                        # Unknown value — pass through
+                        if val_str not in seen:
+                            expanded.append(val_str)
+                            seen.add(val_str)
+                        continue
+                    leaves = collect_leaf_terms(node)
+                    if not leaves:
+                        # Already a leaf or empty
+                        if val_str not in seen:
+                            expanded.append(val_str)
+                            seen.add(val_str)
+                    else:
+                        for leaf in leaves:
+                            if leaf not in seen:
+                                expanded.append(leaf)
+                                seen.add(leaf)
+
+                if expanded != [str(v) for v in values]:
+                    logger.info(
+                        "Expanded tree param to leaves",
+                        param=name,
+                        search=search_name,
+                        original_count=len(values),
+                        expanded_count=len(expanded),
+                    )
+                    result[name] = _json.dumps(expanded)
+
+            return result
+        except Exception:
+            logger.debug("Failed to expand tree params (non-fatal)")
+            return params
+
     async def _expand_profile_pattern_groups(
         self,
         record_type: str,

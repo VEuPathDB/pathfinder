@@ -66,6 +66,7 @@ When executing (building the strategy graph):
      - `GenesByRNASeqEvidence` — genes with RNA-Seq expression evidence (any dataset).
      - `GenesByMassSpec` — genes with mass spectrometry evidence (any dataset).
      - Dataset-specific searches have long names like `GenesByRNASeq{organism}_{author}_{dataset}_RSRC`. Use `search_for_searches` with the author name or dataset keyword to find them. **Important**: datasets come in two variants — `_RSRC` (fold-change: compare reference vs comparison samples) and `_RSRCPercentile` (percentile: top-N% expressed). Use fold-change when comparing conditions (e.g. infected vs control), use percentile when filtering by expression level.
+   - **Tree-vocabulary parameters (organism, ms_assay, etc.)**: When a search has a tree-vocabulary parameter like `organism`, you can pass a **parent node name** and it will be auto-expanded to all leaf descendants. For example, passing `["Plasmodium falciparum"]` as the organism will auto-select all P. falciparum strains (3D7, Dd2, HB3, etc.). This is the correct way to select "all strains of species X" — do NOT hardcode individual strain names from memory. Always prefer the parent node unless the user specifically asks for a single strain.
 4. **Act with the minimal correct tool call(s)**
    - Create: `create_step`
    - Edit: `update_step`, `rename_step`, `delete_step`, `undo_last_change`

@@ -93,6 +93,41 @@ _PROFILE_PATTERN_HELP = (
 )
 
 
+def _render_vocab_tree(
+    node: JSONObject,
+    *,
+    max_lines: int = 80,
+    _depth: int = 0,
+    _lines: list[str] | None = None,
+) -> list[str]:
+    """Render a WDK tree vocabulary as indented text lines.
+
+    Each line is ``"  " * depth + term``.  Stops after *max_lines* to avoid
+    blowing up the tool response for huge trees.
+    """
+    if _lines is None:
+        _lines = []
+    if len(_lines) >= max_lines:
+        return _lines
+
+    from veupath_chatbot.domain.parameters.vocab_utils import (
+        get_node_term,
+        get_vocab_children,
+    )
+
+    term = get_node_term(node)
+    if term and term != "@@fake@@":
+        _lines.append(f"{'  ' * _depth}{term}")
+
+    for child in get_vocab_children(node):
+        if len(_lines) >= max_lines:
+            _lines.append("  ... (truncated)")
+            break
+        _render_vocab_tree(child, max_lines=max_lines, _depth=_depth + 1, _lines=_lines)
+
+    return _lines
+
+
 def _format_param_info(param_specs: JSONArray) -> JSONArray:
     """Build a formatted parameter info array from raw WDK param specs.
 
@@ -107,6 +142,22 @@ def _format_param_info(param_specs: JSONArray) -> JSONArray:
     :param param_specs: Raw parameter spec dicts from WDK.
     :returns: Formatted parameter info array.
     """
+    # Build reverse dependency map: dependent_param → [parent_params]
+    depends_on: dict[str, list[str]] = {}
+    controls: dict[str, list[str]] = {}
+    for spec in param_specs:
+        if not isinstance(spec, dict):
+            continue
+        parent_name_raw = spec.get("name")
+        parent_name = str(parent_name_raw) if parent_name_raw else ""
+        dep_params_raw = spec.get("dependentParams")
+        dep_params = dep_params_raw if isinstance(dep_params_raw, list) else []
+        if dep_params and parent_name:
+            dep_strs = [str(d) for d in dep_params]
+            controls[parent_name] = dep_strs
+            for dep_str in dep_strs:
+                depends_on.setdefault(dep_str, []).append(parent_name)
+
     param_info: JSONArray = []
     for spec in param_specs:
         if not isinstance(spec, dict):
@@ -149,9 +200,22 @@ def _format_param_info(param_specs: JSONArray) -> JSONArray:
         vocabulary = (
             vocabulary_raw if isinstance(vocabulary_raw, (dict, list)) else None
         )
-        allowed_entries = _allowed_values(vocabulary)
-        if allowed_entries:
-            info["allowedValues"] = cast(JSONValue, allowed_entries)
+
+        # For tree-vocabulary params, render as indented tree so the model
+        # can see parent/child relationships and use parent nodes for
+        # auto-expansion.
+        if param_type == "multi-pick-vocabulary" and isinstance(vocabulary, dict):
+            tree_lines = _render_vocab_tree(vocabulary, max_lines=80)
+            if tree_lines:
+                info["allowedValues_tree"] = cast(
+                    JSONValue,
+                    "\n".join(tree_lines)
+                    + "\n(Pass a parent node to auto-select all its children)",
+                )
+        else:
+            allowed_entries = _allowed_values(vocabulary)
+            if allowed_entries:
+                info["allowedValues"] = cast(JSONValue, allowed_entries)
 
         initial_display_raw = spec.get("initialDisplayValue")
         if initial_display_raw is not None:
@@ -159,6 +223,20 @@ def _format_param_info(param_specs: JSONArray) -> JSONArray:
         default_value_raw = spec.get("defaultValue")
         if default_value_raw is not None and "defaultValue" not in info:
             info["defaultValue"] = default_value_raw
+
+        # Annotate dependency relationships
+        if name in controls:
+            info["controlsVocabOf"] = cast(JSONValue, controls[name])
+        if name in depends_on:
+            parents = depends_on[name]
+            info["vocabDependsOn"] = cast(JSONValue, parents)
+            info["note"] = (
+                f"The allowed values for this param change based on the value of "
+                f"{', '.join(parents)}. The values shown here are for the default "
+                f"context only. Use get_dependent_vocab(search_name, param_name='{name}', "
+                f"context_values={{'{parents[0]}': '<your chosen value>'}}) to see "
+                f"the full vocabulary after setting {parents[0]}."
+            )
 
         param_info.append(info)
     return param_info

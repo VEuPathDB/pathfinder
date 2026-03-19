@@ -160,9 +160,6 @@ class StepsMixin(StrategyAPIBase):
         normalized_params = self._normalize_parameters(parameters)
 
         # Expand group codes in profile_pattern for GenesByOrthologPattern.
-        # WDK profile_pattern uses SQL LIKE against leaf-only profile strings;
-        # group codes (e.g. MAMM) never appear in the DB and return 0 results.
-        # The WDK frontend expands group → leaf automatically; we must too.
         if (
             search_name == "GenesByOrthologPattern"
             and "profile_pattern" in normalized_params
@@ -173,6 +170,16 @@ class StepsMixin(StrategyAPIBase):
                 record_type,
                 normalized_params["profile_pattern"],
             )
+
+        # Expand parent tree nodes to leaves for multi-pick-vocabulary params
+        # with countOnlyLeaves=true (e.g., organism).  WDK silently returns 0
+        # genes for parent nodes — the frontend's CheckboxTree auto-selects
+        # leaf descendants, and we must replicate that behaviour.
+        normalized_params = await self._expand_tree_params_to_leaves(
+            record_type,
+            search_name,
+            normalized_params,
+        )
 
         search_config: JSONObject = {
             "parameters": cast(JSONObject, normalized_params),

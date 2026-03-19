@@ -41,9 +41,10 @@ class ParameterNormalizer(ParameterValueMixin):
         for name, value in (parameters or {}).items():
             spec = self.specs.get(name)
             if not spec:
+                available = sorted(self.specs.keys())
                 raise ValidationError(
                     title="Unknown parameter",
-                    detail=f"Parameter '{name}' does not exist for this search.",
+                    detail=f"Parameter '{name}' does not exist for this search. Available parameters: {', '.join(available)}",
                     errors=[{"param": name, "value": value}],
                 )
             if spec.param_type == "input-step":

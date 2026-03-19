@@ -63,10 +63,10 @@ class StrategyStepOps(StrategyToolsHelpers):
     ) -> JSONObject:
         """Create a new strategy step.
 
-        This is the single step-construction API. Step kind is inferred from structure:
+        Step kind is inferred from structure:
         - leaf step: no inputs
         - unary step: primary_input_step_id only
-        - binary step: primary_input_step_id + secondary_input_step_id (+ operator)
+        - binary step: primary + secondary input (+ operator)
         """
         graph = self._get_graph(graph_id)
         if not graph:

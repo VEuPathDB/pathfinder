@@ -261,13 +261,16 @@ class CatalogToolsMixin:
             }
 
         ctx = context_values or {}
-        changed_value = ctx.get(param_name)
-        if changed_value is None or changed_value == "":
+        # The model passes parent param values (e.g. regulated_dir) in
+        # context_values to refresh a dependent param (e.g. min_max_avg_ref).
+        # Find any non-empty value in context — that's the changed param.
+        has_context = any(v is not None and v != "" for v in ctx.values())
+        if not has_context:
             wdk_fallback = await _fallback_from_search_details()
             return combined_result(
                 rag=None,
                 wdk=wdk_fallback,
-                rag_note="Skipped dependent vocab cache: missing changed param value in context_values.",
+                rag_note="Skipped dependent vocab: no context values provided.",
                 wdk_note="Fetched expanded search details and extracted the requested param spec (often contains vocabulary).",
             )
 

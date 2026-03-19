@@ -153,17 +153,6 @@ class StrategyEditOps(StrategyToolsHelpers):
             substantive_change = True
 
         if parameters is not None:
-            # Auto-expand organism for GenesByOrthologPattern (needs all leaves).
-            if step.search_name == "GenesByOrthologPattern":
-                from veupath_chatbot.services.strategies.step_creation import (
-                    _auto_expand_organism_param,
-                )
-
-                record_type = graph.record_type or "transcript"
-                parameters = await _auto_expand_organism_param(
-                    self.session.site_id, record_type, parameters
-                )
-
             # Validate parameters for leaf steps (no inputs) and transform
             # steps (primary_input set, no secondary_input).  Binary combine
             # steps are structurally defined and have no WDK params to check.

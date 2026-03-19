@@ -117,15 +117,25 @@ class StrategyGraphOps(StrategyToolsHelpers):
         self,
         graph_id: Annotated[str | None, AIParam(desc="Graph ID to repair")] = None,
         operator: Annotated[
-            str, AIParam(desc="Combine operator to use (default UNION)")
-        ] = "UNION",
+            str,
+            AIParam(
+                desc=(
+                    "Combine operator to merge orphan roots. Default INTERSECT "
+                    "because most strategies are filter chains where each step "
+                    "narrows the result. Use UNION only when you intentionally "
+                    "want to broaden results (e.g., combining alternative "
+                    "identification methods like text search + GO term)."
+                )
+            ),
+        ] = "INTERSECT",
         display_name: Annotated[
             str | None, AIParam(desc="Optional display name for the final combine")
         ] = None,
     ) -> JSONObject:
-        """Ensure the graph has exactly one output by combining roots (default UNION).
+        """Ensure the graph has exactly one output by combining orphan roots.
 
-        If multiple roots exist, this chains combines until one root remains.
+        If multiple roots exist, chains combines until one root remains.
+        Default operator is INTERSECT (most strategies are filter chains).
         """
         graph = self._get_graph(graph_id)
         if not graph:
