@@ -1,0 +1,18 @@
+[Unit]
+Description=Pathfinder web frontend
+After=pathfinder-api.service
+Requires=pathfinder-api.service
+
+[Container]
+ContainerName=pathfinder-web
+Image=localhost/pathfinder-web:latest
+Network=pathfinder.network
+# Change the host port (left side) to use a different port
+PublishPort=3000:3000
+Environment=NEXT_PUBLIC_API_URL=http://pathfinder-api:8000
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
