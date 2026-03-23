@@ -176,6 +176,33 @@ systemctl --user stop pathfinder-web pathfinder-api pathfinder-qdrant pathfinder
 podman volume rm pathfinder-postgres-data pathfinder-redis-data pathfinder-qdrant-data
 ```
 
+## 12. Re-index Qdrant (RAG ingestion)
+
+By default, the API runs incremental ingestion automatically at startup when
+`rag_enabled=true` and `OPENAI_API_KEY` is set. Manual re-indexing is only
+needed when you want to **reset and fully rebuild** the Qdrant collections.
+
+Requires `pathfinder-qdrant` to be running. Run from the project root so the
+report output path resolves correctly:
+
+```bash
+mkdir -p apps/api/ingest_reports
+
+podman run --rm \
+  --network pathfinder \
+  --env-file ~/.config/pathfinder/.env \
+  -e DATABASE_URL=postgresql+asyncpg://postgres:postgres@pathfinder-db:5432/pathfinder \
+  -e QDRANT_URL=http://pathfinder-qdrant:6333 \
+  -v "$PWD/apps/api/ingest_reports:/reports:Z" \
+  -w /app/apps/api \
+  localhost/pathfinder-api:latest \
+  /bin/sh -lc "uv run python -m veupath_chatbot.services.vectorstore.ingest.wdk_catalog --sites all --reset && \
+               uv run python -m veupath_chatbot.services.vectorstore.ingest.public_strategies --sites all --reset --report-path /reports/ingest_public_strategies_report.jsonl"
+```
+
+Both jobs require `OPENAI_API_KEY` (used for embeddings). The second job writes
+a JSONL report to `apps/api/ingest_reports/` (gitignored).
+
 ## Services overview
 
 | Service | Image | Published port | Depends on |
