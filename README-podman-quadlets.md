@@ -6,12 +6,16 @@ Deploy the Pathfinder stack as rootless Podman containers managed by
 ## Prerequisites
 
 - **Podman 4.4+** (quadlet support)
+- **Node.js 24+** with Corepack enabled
 - **systemd user session** active
 - **loginctl enable-linger** (for services to survive logout / start at boot)
 
 ```bash
 # Check Podman version
 podman --version
+
+# Enable Corepack so the correct Yarn version is used (one-time)
+corepack enable
 
 # Enable linger so user services persist after logout
 loginctl enable-linger $USER
@@ -25,6 +29,9 @@ From the project root:
 # Podman's Buildah doesn't support Docker-style glob COPY fallbacks,
 # so ensure this optional config file exists (empty is fine)
 touch ollama_models.yaml
+
+# Install JS dependencies (required by the web image build context)
+yarn
 
 podman build -t pathfinder-api:latest -f apps/api/Dockerfile .
 
