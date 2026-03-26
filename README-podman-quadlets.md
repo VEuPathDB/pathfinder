@@ -209,6 +209,21 @@ podman run --rm \
 Both jobs require `OPENAI_API_KEY` (used for embeddings). The second job writes
 a JSONL report to `apps/api/ingest_reports/` (gitignored).
 
+**Beta sites:** if your `VEUPATHDB_SITES_CONFIG` points at `beta-sites.yaml`,
+many WDK endpoints require authentication. Add both variables to
+`~/.config/pathfinder/.env`:
+
+```bash
+# Note: path is inside the container, not on the host
+VEUPATHDB_SITES_CONFIG=/app/apps/api/src/veupath_chatbot/integrations/veupathdb/beta-sites.yaml
+VEUPATHDB_AUTH_TOKEN=your_api_key_here
+```
+
+Logged-in users can find their API key at their VEuPathDB profile page under
+**Service Access** — for example:
+`https://beta.plasmodb.org/plasmo.beta/app/user/profile#serviceAccess`
+(any component site works).
+
 ## Services overview
 
 | Service | Image | Published port | Depends on |
