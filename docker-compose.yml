@@ -138,7 +138,7 @@ services:
       [
         "/bin/sh",
         "-lc",
-        "uv run python -m veupath_chatbot.services.vectorstore.ingest.wdk_catalog --sites all --reset && uv run python -m veupath_chatbot.services.vectorstore.ingest.public_strategies --sites all --reset --report-path /reports/ingest_public_strategies_report.jsonl"
+        "uv run python -m veupath_chatbot.integrations.vectorstore.ingest.wdk_catalog --sites all --reset && uv run python -m veupath_chatbot.integrations.vectorstore.ingest.public_strategies --sites all --reset --report-path /reports/ingest_public_strategies_report.jsonl"
       ]
     restart: "no"
 

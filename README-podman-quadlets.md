@@ -184,8 +184,14 @@ needed when you want to **reset and fully rebuild** the Qdrant collections.
 
 Requires `pathfinder-qdrant` to be running. Run from the project root so the
 report output path resolves correctly:
+```bash
+systemctl --user status pathfinder-qdrant
+# if required:
+systemctl --user start pathfinder-qdrant
+```
 
 ```bash
+# make sure this is user-owned, not root:
 mkdir -p apps/api/ingest_reports
 
 podman run --rm \
@@ -196,8 +202,8 @@ podman run --rm \
   -v "$PWD/apps/api/ingest_reports:/reports:Z" \
   -w /app/apps/api \
   localhost/pathfinder-api:latest \
-  /bin/sh -lc "uv run python -m veupath_chatbot.services.vectorstore.ingest.wdk_catalog --sites all --reset && \
-               uv run python -m veupath_chatbot.services.vectorstore.ingest.public_strategies --sites all --reset --report-path /reports/ingest_public_strategies_report.jsonl"
+  /bin/sh -lc "uv run python -m veupath_chatbot.integrations.vectorstore.ingest.wdk_catalog --sites all --reset && \
+               uv run python -m veupath_chatbot.integrations.vectorstore.ingest.public_strategies --sites all --reset --report-path /reports/ingest_public_strategies_report.jsonl"
 ```
 
 Both jobs require `OPENAI_API_KEY` (used for embeddings). The second job writes
