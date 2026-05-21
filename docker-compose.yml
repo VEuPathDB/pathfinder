@@ -5,145 +5,90 @@ services:
       dockerfile: apps/api/Dockerfile
     ports:
       - "${API_PORT:-8000}:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    env_file:
-      - path: ./.env
-        required: false
     environment:
-      # Container-friendly defaults; override as needed.
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/pathfinder
-      QDRANT_URL: http://qdrant:6333
-      REDIS_URL: redis://redis:6379/0
-      DEFAULT_MODEL_ID: ${DEFAULT_MODEL_ID:-openai/gpt-4.1}
-      DEFAULT_REASONING_EFFORT: ${DEFAULT_REASONING_EFFORT:-medium}
-      # "default" = real LLM chat (requires an API key).
-      # Set PATHFINDER_CHAT_PROVIDER=mock in .env for fake chat (E2E / offline dev).
-      PATHFINDER_CHAT_PROVIDER: ${PATHFINDER_CHAT_PROVIDER:-default}
-      # Ollama: inside Docker, reach the host machine via host.docker.internal.
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
-    develop:
-      watch:
-        - action: sync+restart
-          path: ./apps/api/src
-          target: /app/apps/api/src
-        - action: rebuild
-          path: ./apps/api/pyproject.toml
-        - action: rebuild
-          path: ./apps/api/uv.lock
+      API_ENV: ${API_ENV:-production}
+      API_SECRET_KEY: ${API_SECRET_KEY:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+      PATHFINDER_CHAT_PROVIDER: ${PATHFINDER_CHAT_PROVIDER:?Set PATHFINDER_CHAT_PROVIDER=default for real providers or use the test overlay for mock mode}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      DEFAULT_PROVIDER: ${DEFAULT_PROVIDER:-anthropic}
+      DEFAULT_TIER: ${DEFAULT_TIER:-balanced}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
+      S2_API_KEY: ${S2_API_KEY:-}
+      VEUPATHDB_SITES_CONFIG: ${VEUPATHDB_SITES_CONFIG:-}
+      VEUPATHDB_AUTH_TOKEN: ${VEUPATHDB_AUTH_TOKEN:-}
+      VEUPATHDB_OAUTH_URL: ${VEUPATHDB_OAUTH_URL:-}
+      VEUPATHDB_OAUTH_CLIENT_ID: ${VEUPATHDB_OAUTH_CLIENT_ID:-}
+      LOG_LEVEL: ${LOG_LEVEL:-}
+      LOG_FORMAT: ${LOG_FORMAT:-}
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: .venv/bin/python -m pathfinder.jobs.worker
+    # Worker shares the API image (and its curl-based FastAPI healthcheck).
+    # The worker process does not serve HTTP, so override with a no-op probe —
+    # Procrastinate's own crash-on-error handling restarts the container via
+    # ``restart: always`` if the worker loop dies.
+    healthcheck:
+      disable: true
+    environment:
+      API_ENV: ${API_ENV:-production}
+      API_SECRET_KEY: ${API_SECRET_KEY:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+      PATHFINDER_CHAT_PROVIDER: ${PATHFINDER_CHAT_PROVIDER:?Set PATHFINDER_CHAT_PROVIDER=default for real providers or use the test overlay for mock mode}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      DEFAULT_PROVIDER: ${DEFAULT_PROVIDER:-anthropic}
+      DEFAULT_TIER: ${DEFAULT_TIER:-balanced}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
+      S2_API_KEY: ${S2_API_KEY:-}
+      VEUPATHDB_SITES_CONFIG: ${VEUPATHDB_SITES_CONFIG:-}
+      VEUPATHDB_AUTH_TOKEN: ${VEUPATHDB_AUTH_TOKEN:-}
+      VEUPATHDB_OAUTH_URL: ${VEUPATHDB_OAUTH_URL:-}
+      VEUPATHDB_OAUTH_CLIENT_ID: ${VEUPATHDB_OAUTH_CLIENT_ID:-}
+      LOG_LEVEL: ${LOG_LEVEL:-}
+      LOG_FORMAT: ${LOG_FORMAT:-}
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        # Rewrites in next.config.js are compiled at build time; point them at
-        # the Docker-internal API hostname so the proxy works at runtime.
-        NEXT_PUBLIC_API_URL: http://api:8000
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
       api:
         condition: service_healthy
     environment:
-      # Runtime env read by next.config.js rewrites (standalone server re-reads
-      # the config at startup) and by SSR code.
-      NEXT_PUBLIC_API_URL: http://api:8000
-    develop:
-      watch:
-        - action: rebuild
-          path: ./apps/web/src
-        - action: rebuild
-          path: ./apps/web/package.json
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
 
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: pathfinder
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-pathfinder}
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes --appendfsync everysec
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "${QDRANT_PORT:-6333}:6333"
-    volumes:
-      - qdrant_data:/qdrant/storage
-
-  # Type codegen: fetches OpenAPI spec from API → generates TypeScript types.
-  # Run with: docker compose --profile dev up -d
-  codegen:
-    profiles: ["dev"]
-    image: node:22-slim
-    depends_on:
-      api:
-        condition: service_healthy
-    volumes:
-      - .:/app
-    working_dir: /app
-    command: >
-      sh -c "apt-get update -qq && apt-get install -y -qq curl > /dev/null 2>&1 &&
-             cd /app && corepack enable && yarn install > /dev/null 2>&1 &&
-             cd /app && sh scripts/sync-api-types.sh"
-    restart: "no"
-
-  # Optional manual re-index job (run on demand).
-  #
-  # By default, the API runs incremental ingestion in the background at startup
-  # when `rag_enabled=true` and `OPENAI_API_KEY` is set. This job is only needed
-  # when you want to *reset* and fully rebuild the Qdrant collections.
-  #
-  # Run with:
-  #   docker compose --profile ingest run --rm rag_reindex
-  rag_reindex:
-    profiles: ["ingest"]
-    image: pathfinder-api
-    working_dir: /app/apps/api
-    depends_on:
-      - qdrant
-    env_file:
-      - path: ./.env
-        required: false
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/pathfinder
-      QDRANT_URL: http://qdrant:6333
-    volumes:
-      - ./apps/api/ingest_reports:/reports
-    command:
-      [
-        "/bin/sh",
-        "-lc",
-        "uv run python -m veupath_chatbot.integrations.vectorstore.ingest.wdk_catalog --sites all --reset && uv run python -m veupath_chatbot.integrations.vectorstore.ingest.public_strategies --sites all --reset --report-path /reports/ingest_public_strategies_report.jsonl"
-      ]
-    restart: "no"
 
 volumes:
   postgres_data:
-  redis_data:
-  qdrant_data:
-

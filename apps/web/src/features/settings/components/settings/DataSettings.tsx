@@ -10,9 +10,10 @@
  * - Clear ALL data + WDK (everything locally + delete from VEuPathDB, requires "delete my data")
  */
 
-import { useState, useCallback } from "react";
-import { requestJson } from "@/lib/api/http";
-import { listStrategies, deleteStrategy } from "@/lib/api/strategies";
+import { useState } from "react";
+import { requestVoid } from "@/lib/api/http";
+import { listStrategies } from "@pathfinder/shared/generated/hooks/useListStrategies";
+import { deleteStrategy } from "@pathfinder/shared/generated/hooks/useDeleteStrategy";
 import { useAsyncAction } from "@/lib/utils/asyncAction";
 import { Loader2, Trash2, AlertTriangle } from "lucide-react";
 import { Input } from "@/lib/components/ui/Input";
@@ -27,21 +28,21 @@ export function DataSettings({ siteId }: DataSettingsProps) {
   const [wdkConfirmText, setWdkConfirmText] = useState("");
   const { run, error } = useAsyncAction();
 
-  const clearStrategies = useCallback(async () => {
+  const clearStrategies = async () => {
     setClearing("strategies");
     await run(async () => {
-      const all = await listStrategies(siteId);
+      const all = await listStrategies({ siteId });
       await Promise.allSettled(all.map((s) => deleteStrategy(s.id)));
       window.location.reload();
     });
     setClearing(null);
     setConfirmAction(null);
-  }, [siteId, run]);
+  };
 
-  const clearSiteData = useCallback(async () => {
+  const clearSiteData = async () => {
     setClearing("site");
     await run(async () => {
-      await requestJson<unknown>("/api/v1/user/data", {
+      await requestVoid("/api/v1/user/data", {
         method: "DELETE",
         query: { siteId, deleteWdk: "false" },
       });
@@ -49,12 +50,12 @@ export function DataSettings({ siteId }: DataSettingsProps) {
     });
     setClearing(null);
     setConfirmAction(null);
-  }, [siteId, run]);
+  };
 
-  const clearAllLocal = useCallback(async () => {
+  const clearAllLocal = async () => {
     setClearing("all-local");
     await run(async () => {
-      await requestJson<unknown>("/api/v1/user/data", {
+      await requestVoid("/api/v1/user/data", {
         method: "DELETE",
         query: { deleteWdk: "false" },
       });
@@ -62,12 +63,12 @@ export function DataSettings({ siteId }: DataSettingsProps) {
     });
     setClearing(null);
     setConfirmAction(null);
-  }, [run]);
+  };
 
-  const clearAllWithWdk = useCallback(async () => {
+  const clearAllWithWdk = async () => {
     setClearing("all-wdk");
     await run(async () => {
-      await requestJson<unknown>("/api/v1/user/data", {
+      await requestVoid("/api/v1/user/data", {
         method: "DELETE",
         query: { deleteWdk: "true" },
       });
@@ -76,11 +77,11 @@ export function DataSettings({ siteId }: DataSettingsProps) {
     setClearing(null);
     setConfirmAction(null);
     setWdkConfirmText("");
-  }, [run]);
+  };
 
   return (
     <div className="space-y-4">
-      {error && (
+      {error != null && (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {error}
         </div>
@@ -92,7 +93,9 @@ export function DataSettings({ siteId }: DataSettingsProps) {
         loading={clearing === "strategies"}
         confirmed={confirmAction === "strategies"}
         onConfirm={() => setConfirmAction("strategies")}
-        onExecute={clearStrategies}
+        onExecute={() => {
+          void clearStrategies();
+        }}
         onCancel={() => setConfirmAction(null)}
       />
 
@@ -102,7 +105,9 @@ export function DataSettings({ siteId }: DataSettingsProps) {
         loading={clearing === "site"}
         confirmed={confirmAction === "site"}
         onConfirm={() => setConfirmAction("site")}
-        onExecute={clearSiteData}
+        onExecute={() => {
+          void clearSiteData();
+        }}
         onCancel={() => setConfirmAction(null)}
       />
 
@@ -112,7 +117,9 @@ export function DataSettings({ siteId }: DataSettingsProps) {
         loading={clearing === "all-local"}
         confirmed={confirmAction === "all-local"}
         onConfirm={() => setConfirmAction("all-local")}
-        onExecute={clearAllLocal}
+        onExecute={() => {
+          void clearAllLocal();
+        }}
         onCancel={() => setConfirmAction(null)}
       />
 
@@ -143,7 +150,9 @@ export function DataSettings({ siteId }: DataSettingsProps) {
               </button>
               <button
                 type="button"
-                onClick={clearAllWithWdk}
+                onClick={() => {
+                  void clearAllWithWdk();
+                }}
                 disabled={
                   clearing === "all-wdk" ||
                   wdkConfirmText.trim().toLowerCase() !== "delete my data"

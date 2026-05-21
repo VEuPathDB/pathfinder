@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useOnClickOutside } from "usehooks-ts";
 import { ChevronDown, Loader2, X } from "lucide-react";
 
 interface OrganismFilterProps {
@@ -25,16 +26,9 @@ export function OrganismFilter({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  useOnClickOutside(dropdownRef as React.RefObject<HTMLElement>, () =>
+    setOpen(false),
+  );
 
   if (organisms.length === 0) {
     return (
@@ -47,7 +41,7 @@ export function OrganismFilter({
 
   return (
     <div ref={dropdownRef} className="relative">
-      {selectedOrganism ? (
+      {selectedOrganism != null && selectedOrganism !== "" ? (
         <div className="flex h-7 w-full items-center justify-between rounded-md border border-input bg-background px-2.5 text-xs text-foreground">
           <span className="truncate italic">{selectedOrganism}</span>
           <button

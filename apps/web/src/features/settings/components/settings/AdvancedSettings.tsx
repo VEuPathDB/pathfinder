@@ -4,17 +4,40 @@
  * AdvancedSettings -- debug toggles.
  */
 
-import { useSettingsStore } from "@/state/useSettingsStore";
+import { useShallow } from "zustand/react/shallow";
+import {
+  resetAllPersistedSettings,
+  useSettingsStore,
+} from "@/state/useSettingsStore";
 import { SettingsField } from "./SettingsField";
 
 export function AdvancedSettings() {
-  const showRawToolCalls = useSettingsStore((s) => s.showRawToolCalls);
-  const setShowRawToolCalls = useSettingsStore((s) => s.setShowRawToolCalls);
-  const showTokenUsage = useSettingsStore((s) => s.showTokenUsage);
-  const setShowTokenUsage = useSettingsStore((s) => s.setShowTokenUsage);
-  const deleteFromWdk = useSettingsStore((s) => s.deleteFromWdk);
-  const setDeleteFromWdk = useSettingsStore((s) => s.setDeleteFromWdk);
-  const resetToDefaults = useSettingsStore((s) => s.resetToDefaults);
+  const {
+    showRawToolCalls,
+    setShowRawToolCalls,
+    showTokenUsage,
+    setShowTokenUsage,
+    deleteFromWdk,
+    setDeleteFromWdk,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      showRawToolCalls: s.showRawToolCalls,
+      setShowRawToolCalls: s.setShowRawToolCalls,
+      showTokenUsage: s.showTokenUsage,
+      setShowTokenUsage: s.setShowTokenUsage,
+      deleteFromWdk: s.deleteFromWdk,
+      setDeleteFromWdk: s.setDeleteFromWdk,
+    })),
+  );
+
+  function handleResetAll() {
+    const confirmed = window.confirm(
+      "Reset all local settings? This clears your engine, sidebar, and app preferences and reloads the page.",
+    );
+    if (!confirmed) return;
+    resetAllPersistedSettings();
+    window.location.reload();
+  }
 
   return (
     <div className="space-y-5">
@@ -62,14 +85,19 @@ export function AdvancedSettings() {
         </label>
       </SettingsField>
 
-      <div className="border-t border-border pt-4">
+      <div className="space-y-2 border-t border-border pt-4">
         <button
           type="button"
-          onClick={resetToDefaults}
-          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted"
+          onClick={handleResetAll}
+          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive"
         >
-          Reset all settings to defaults
+          Reset all local settings
         </button>
+        <p className="text-[11px] text-muted-foreground">
+          Clears engine, sidebar, and app preferences stored in this browser.
+          Your server-side preferences (orchestrator model, quota) are
+          unaffected.
+        </p>
       </div>
     </div>
   );

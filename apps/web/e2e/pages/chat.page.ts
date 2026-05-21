@@ -6,13 +6,26 @@ export class ChatPage {
   readonly sendButton: Locator;
   readonly stopButton: Locator;
   readonly newChatButton: Locator;
+  readonly refreshConversationsButton: Locator;
+  readonly planArtifact: Locator;
+  readonly decisionPresented: Locator;
+  readonly approvePlanButton: Locator;
 
   constructor(private page: Page) {
     this.composer = page.getByTestId("message-composer");
     this.messageInput = page.getByTestId("message-input");
     this.sendButton = page.getByTestId("send-button");
     this.stopButton = page.getByTestId("stop-button");
-    this.newChatButton = page.getByRole("button", { name: "New Chat" });
+    this.newChatButton = page.getByRole("button", { name: "New chat" });
+    this.refreshConversationsButton = page.getByTestId("conversations-refresh-button");
+    // Post-overhaul: planning emits a `data-plan-artifact` part inline in the
+    // assistant message stream; approval is a `data-decision-presented` part
+    // with option buttons (label "approve" continues to execution).
+    this.planArtifact = page.getByTestId("data-plan-artifact");
+    this.decisionPresented = page.getByTestId("data-decision-presented");
+    this.approvePlanButton = this.decisionPresented.getByRole("button", {
+      name: /approve/i,
+    });
   }
 
   async goto() {
@@ -25,25 +38,47 @@ export class ChatPage {
 
   /** Start a fresh conversation so the test is isolated from prior state. */
   async newChat() {
-    // Wait for the POST that creates the new strategy to complete.
-    // Set up the response listener BEFORE clicking (per Playwright docs).
-    const strategyCreated = this.page.waitForResponse(
-      (resp) =>
-        resp.url().includes("/strategies/open") &&
-        resp.request().method() === "POST" &&
-        resp.ok(),
+    const baseUrl = new URL(this.page.url()).origin;
+    // The site picker testid was removed in the chat overhaul; default to
+    // veupathdb (portal site) which all tests use.
+    const selectedSite = "veupathdb";
+
+    const strategyCreated = await this.page.context().request.post(
+      `${baseUrl}/api/v1/conversations/open`,
+      {
+        data: { siteId: selectedSite },
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+      },
     );
-    await this.newChatButton.click();
-    const resp = await strategyCreated;
-    // Capture the strategy ID from the response for test isolation.
-    try {
-      const body = await resp.json();
-      this.lastStrategyId = body?.strategyId ?? body?.id ?? null;
-    } catch {
-      this.lastStrategyId = null;
+
+    if (!strategyCreated.ok()) {
+      const failureBody = await strategyCreated.text().catch(() => "");
+      throw new Error(
+        `openStrategy failed: ${strategyCreated.status()} ${failureBody}`.trim(),
+      );
     }
-    // Now the new conversation exists — wait for the UI to settle.
-    await expect(this.sendButton).toBeVisible({ timeout: 10_000 });
+
+    const body = (await strategyCreated.json()) as {
+      conversationId?: string;
+      strategyId?: string;
+      id?: string;
+    };
+    const strategyId =
+      body.conversationId ?? body.strategyId ?? body.id ?? null;
+    if (strategyId == null || strategyId === "") {
+      throw new Error("openStrategy returned no conversationId");
+    }
+    this.lastStrategyId = strategyId;
+
+    await this.refreshConversationsButton.click();
+    const conversationItem = this.page.locator(
+      `[data-conversation-id="${strategyId}"]`,
+    ).first();
+    await expect(conversationItem).toBeVisible({ timeout: 10_000 });
+    await conversationItem.click();
+
+    await expect(this.composer).toBeVisible({ timeout: 10_000 });
+    await expect(this.userMessages).toHaveCount(0, { timeout: 10_000 });
     await expect(this.assistantMessages).toHaveCount(0, { timeout: 10_000 });
   }
 
@@ -59,6 +94,10 @@ export class ChatPage {
 
   async stopStreaming() {
     await this.stopButton.click();
+  }
+
+  async approvePlan() {
+    await this.approvePlanButton.click();
   }
 
   /** Get all assistant message bubbles. */
@@ -78,13 +117,16 @@ export class ChatPage {
 
   // ── Assertions ──────────────────────────────────────────────────
 
-  async expectIdle() {
-    await expect(this.sendButton).toBeVisible({ timeout: 15_000 });
-    await expect(this.stopButton).not.toBeVisible();
+  async expectIdle(timeout = 60_000) {
+    // Post-overhaul: there's no explicit stop button on the composer; idle
+    // is signified by the Send button being enabled.
+    await expect(this.sendButton).toBeVisible({ timeout });
+    await expect(this.sendButton).toBeEnabled({ timeout });
   }
 
   async expectStreaming() {
-    await expect(this.stopButton).toBeVisible({ timeout: 10_000 });
+    // While streaming the Send button is disabled.
+    await expect(this.sendButton).toBeDisabled({ timeout: 10_000 });
   }
 
   /**
@@ -114,6 +156,14 @@ export class ChatPage {
     await expect(this.assistantMessages).toHaveCount(count);
   }
 
+  /** Text content of the most recently rendered assistant message. */
+  async lastAssistantMessageText(): Promise<string> {
+    return this.assistantMessages.evaluateAll((els) => {
+      const last = els[els.length - 1];
+      return last?.textContent ?? "";
+    });
+  }
+
   async expectDelegationDraft() {
     await expect(this.page.getByTestId("delegation-draft-details")).toBeVisible({
       timeout: 30_000,
@@ -121,20 +171,16 @@ export class ChatPage {
   }
 
   async expectPlanningArtifact() {
-    // Planning artifacts show "Apply to strategy" buttons.
-    await expect(
-      this.page.getByRole("button", { name: /apply to strategy/i }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(this.planArtifact).toBeVisible({ timeout: 60_000 });
+    await expect(this.approvePlanButton).toBeVisible({ timeout: 60_000 });
   }
 
+
+  /** Compatibility alias for the rail-based step list (replaces compact view). */
   async expectCompactStrategyView() {
-    // Compact strategy view renders step pills inside a border-t container.
-    // Matches either real step names (e.g. "All ... genes") or mock labels.
-    await expect(
-      this.page
-        .locator("[data-testid='compact-strategy-view'], [data-testid='step-pill']")
-        .first(),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(this.page.getByTestId("compact-strategy-view")).toBeVisible({
+      timeout: 30_000,
+    });
   }
 
   async expectSendDisabled() {

@@ -1,0 +1,16 @@
+# Observability wiring for production/staging deployments.
+#
+# This overlay does not start local observability infrastructure. It only
+# passes external SigNoz / Langfuse settings into the API container.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+
+services:
+  api:
+    environment:
+      SIGNOZ_OTEL_ENDPOINT: ${SIGNOZ_OTEL_ENDPOINT:-}
+      SIGNOZ_TRACE_OTEL_HTTP_ENDPOINT: ${SIGNOZ_TRACE_OTEL_HTTP_ENDPOINT:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}

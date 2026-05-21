@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { userEvent } from "@testing-library/user-event";
 import { CheckboxParam } from "./CheckboxParam";
-import type { ParamWidgetProps } from "./types";
+import type { ParamSpec } from "@pathfinder/shared";
+import { WidgetTestForm } from "./testUtils";
 
 afterEach(cleanup);
 
@@ -13,137 +15,111 @@ const sampleOptions = [
   { label: "Delta", value: "d" },
 ];
 
-function makeProps(overrides: Partial<ParamWidgetProps> = {}): ParamWidgetProps {
+function makeSpec(overrides: Partial<ParamSpec> = {}): ParamSpec {
   return {
-    spec: { name: "test-param" },
-    value: undefined,
-    multi: false,
-    multiValue: [],
-    options: sampleOptions,
-    vocabTree: null,
-    onChangeSingle: vi.fn(),
-    onChangeMulti: vi.fn(),
+    name: "test_param",
+    type: "string",
+    displayName: "Test",
+    displayType: "",
+    allowEmptyValue: true,
+    isVisible: true,
+    isNumber: false,
+    countOnlyLeaves: false,
     ...overrides,
-  };
+  } as ParamSpec;
 }
 
-describe("CheckboxParam — single-pick (radios)", () => {
-  it("renders radio buttons for each option", () => {
-    render(<CheckboxParam {...makeProps()} />);
+describe("CheckboxParam — single-pick (shadcn RadioGroup)", () => {
+  it("renders one RadioGroupItem per option", () => {
+    const spec = makeSpec();
+    render(
+      <WidgetTestForm name="test_param" defaultValue="">
+        {(field) => <CheckboxParam spec={spec} name="test_param" options={sampleOptions} vocabTree={null} field={field} />}
+      </WidgetTestForm>,
+    );
     const radios = screen.getAllByRole("radio");
     expect(radios.length).toBe(4);
   });
 
-  it("checks the radio matching the current value", () => {
-    render(<CheckboxParam {...makeProps({ value: "b" })} />);
-    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
-    expect(radios[0].checked).toBe(false); // Alpha
-    expect(radios[1].checked).toBe(true); // Beta
-    expect(radios[2].checked).toBe(false); // Gamma
-    expect(radios[3].checked).toBe(false); // Delta
-  });
-
-  it("calls onChangeSingle when a radio is clicked", () => {
-    const onChangeSingle = vi.fn();
-    render(<CheckboxParam {...makeProps({ onChangeSingle })} />);
-    fireEvent.click(screen.getByText("Gamma"));
-    expect(onChangeSingle).toHaveBeenCalledWith("c");
-  });
-
-  it("applies fieldBorderClass", () => {
-    const { container } = render(
-      <CheckboxParam {...makeProps({ fieldBorderClass: "border-red-500" })} />,
+  it("checks the radio matching the current form value", () => {
+    const spec = makeSpec();
+    render(
+      <WidgetTestForm name="test_param" defaultValue="b">
+        {(field) => <CheckboxParam spec={spec} name="test_param" options={sampleOptions} vocabTree={null} field={field} />}
+      </WidgetTestForm>,
     );
-    expect(container.firstElementChild?.className).toContain("border-red-500");
+    const beta = screen.getByLabelText("Beta");
+    expect(beta.getAttribute("data-state")).toBe("checked");
   });
 
-  it("uses default border class when fieldBorderClass is not provided", () => {
-    const { container } = render(<CheckboxParam {...makeProps()} />);
-    expect(container.firstElementChild?.className).toContain("border-border");
+  it("clicking a radio selects it", async () => {
+    const user = userEvent.setup();
+    const spec = makeSpec();
+    render(
+      <WidgetTestForm name="test_param" defaultValue="">
+        {(field) => <CheckboxParam spec={spec} name="test_param" options={sampleOptions} vocabTree={null} field={field} />}
+      </WidgetTestForm>,
+    );
+    await user.click(screen.getByLabelText("Gamma"));
+    expect(screen.getByLabelText("Gamma").getAttribute("data-state")).toBe("checked");
   });
 });
 
-describe("CheckboxParam — multi-pick (checkboxes)", () => {
-  it("renders checkboxes instead of radios", () => {
-    render(<CheckboxParam {...makeProps({ multi: true, multiValue: [] })} />);
-    expect(screen.queryByRole("radio")).toBeNull();
-    const checkboxes = screen.getAllByRole("checkbox");
-    // 4 option checkboxes + 1 "Select all" (since options.length > 3)
-    expect(checkboxes.length).toBe(5);
-  });
+describe("CheckboxParam — multi-pick (shadcn Checkbox stack)", () => {
+  const spec = makeSpec({ multiPick: true });
 
-  it("shows 'Select all' toggle when options > 3", () => {
-    render(<CheckboxParam {...makeProps({ multi: true, multiValue: [] })} />);
-    expect(screen.getByText(/Select all/)).toBeTruthy();
+  it("renders one Checkbox per option (plus 'Select all' when count > 3)", () => {
+    render(
+      <WidgetTestForm name="test_param" defaultValue={[]}>
+        {(field) => <CheckboxParam spec={spec} name="test_param" options={sampleOptions} vocabTree={null} field={field} />}
+      </WidgetTestForm>,
+    );
+    expect(screen.getAllByRole("checkbox").length).toBe(5);
   });
 
   it("does not show 'Select all' when options <= 3", () => {
-    const fewOptions = sampleOptions.slice(0, 3);
     render(
-      <CheckboxParam
-        {...makeProps({ multi: true, multiValue: [], options: fewOptions })}
-      />,
+      <WidgetTestForm name="test_param" defaultValue={[]}>
+        {(field) => <CheckboxParam spec={spec} name="test_param" options={sampleOptions.slice(0, 3)} vocabTree={null} field={field} />}
+      </WidgetTestForm>,
     );
     expect(screen.queryByText(/Select all/)).toBeNull();
   });
 
-  it("checks selected values", () => {
-    render(<CheckboxParam {...makeProps({ multi: true, multiValue: ["a", "d"] })} />);
-    const checkboxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    // [selectAll, a, b, c, d]
-    expect(checkboxes[1].checked).toBe(true); // Alpha
-    expect(checkboxes[2].checked).toBe(false); // Beta
-    expect(checkboxes[3].checked).toBe(false); // Gamma
-    expect(checkboxes[4].checked).toBe(true); // Delta
+  it("toggles a value via the checkbox", async () => {
+    const user = userEvent.setup();
+    render(
+      <WidgetTestForm name="test_param" defaultValue={["a"]}>
+        {(field) => <CheckboxParam spec={spec} name="test_param" options={sampleOptions} vocabTree={null} field={field} />}
+      </WidgetTestForm>,
+    );
+    await user.click(screen.getByLabelText("Beta"));
+    expect(screen.getByLabelText("Beta").getAttribute("data-state")).toBe("checked");
   });
 
-  it("toggles individual checkbox on", () => {
-    const onChangeMulti = vi.fn();
+  it("'Select all' selects all options", async () => {
+    const user = userEvent.setup();
     render(
-      <CheckboxParam
-        {...makeProps({ multi: true, multiValue: ["a"], onChangeMulti })}
-      />,
+      <WidgetTestForm name="test_param" defaultValue={[]}>
+        {(field) => <CheckboxParam spec={spec} name="test_param" options={sampleOptions} vocabTree={null} field={field} />}
+      </WidgetTestForm>,
     );
-    fireEvent.click(screen.getByText("Beta"));
-    expect(onChangeMulti).toHaveBeenCalledWith(["a", "b"]);
+    await user.click(screen.getByLabelText("Select all"));
+    for (const opt of sampleOptions) {
+      expect(screen.getByLabelText(opt.label).getAttribute("data-state")).toBe("checked");
+    }
   });
 
-  it("toggles individual checkbox off", () => {
-    const onChangeMulti = vi.fn();
+  it("'Select all' deselects when all are already selected", async () => {
+    const user = userEvent.setup();
     render(
-      <CheckboxParam
-        {...makeProps({
-          multi: true,
-          multiValue: ["a", "b"],
-          onChangeMulti,
-        })}
-      />,
+      <WidgetTestForm name="test_param" defaultValue={["a", "b", "c", "d"]}>
+        {(field) => <CheckboxParam spec={spec} name="test_param" options={sampleOptions} vocabTree={null} field={field} />}
+      </WidgetTestForm>,
     );
-    fireEvent.click(screen.getByText("Alpha"));
-    expect(onChangeMulti).toHaveBeenCalledWith(["b"]);
-  });
-
-  it("'Select all' selects all values", () => {
-    const onChangeMulti = vi.fn();
-    render(
-      <CheckboxParam {...makeProps({ multi: true, multiValue: [], onChangeMulti })} />,
-    );
-    fireEvent.click(screen.getByText(/Select all/));
-    expect(onChangeMulti).toHaveBeenCalledWith(["a", "b", "c", "d"]);
-  });
-
-  it("'Select all' deselects all when all are selected", () => {
-    const onChangeMulti = vi.fn();
-    render(
-      <CheckboxParam
-        {...makeProps({
-          multi: true,
-          multiValue: ["a", "b", "c", "d"],
-          onChangeMulti,
-        })}
-      />,
-    );
-    fireEvent.click(screen.getByText(/Select all/));
-    expect(onChangeMulti).toHaveBeenCalledWith([]);
+    await user.click(screen.getByLabelText("Select all"));
+    for (const opt of sampleOptions) {
+      expect(screen.getByLabelText(opt.label).getAttribute("data-state")).toBe("unchecked");
+    }
   });
 });

@@ -11,7 +11,7 @@ This folder contains the OpenAPI specification for the Pathfinder API.
 The spec covers these endpoint groups:
 
 - **Chat** (`/api/v1/chat`) -- SSE streaming chat endpoint
-- **Strategies** (`/api/v1/strategies/`) -- CRUD, plan management, WDK import, counts
+- **Conversations** (`/api/v1/conversations/`) -- CRUD, plan management, WDK import, counts, checkpoints, labels, fork, tasks
 - **Steps** (`/api/v1/steps/`) -- Step-level operations
 - **Sites** (`/api/v1/sites/`) -- VEuPathDB site catalog and search metadata, including sub-routes for catalog, genes, and parameters
 - **Models** (`/api/v1/models/`) -- Available LLM model list
@@ -33,7 +33,7 @@ From repo root:
 
 ```bash
 cd apps/api
-uv run python -m veupath_chatbot.devtools.openapi generate
+uv run python -m pathfinder.devtools.openapi generate
 ```
 
 ### Generate TypeScript types from the spec

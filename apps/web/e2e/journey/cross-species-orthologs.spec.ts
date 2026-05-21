@@ -1,4 +1,4 @@
-import { test, expect } from "../fixtures/test";
+import { test, expect } from "../fixtures/a11y";
 
 /**
  * Journey: Cross-Species Ortholog Comparison — PlasmoDB → ToxoDB
@@ -20,8 +20,12 @@ test.describe("Cross-Species Orthologs Journey", () => {
     workbenchSidebarPage,
     workbenchMainPage,
   }) => {
-    const plasmoGenes = seedData.siteData.plasmodb.geneIds;
-    const toxoGenes = seedData.siteData.toxodb.geneIds;
+    const plasmoSiteData = seedData.siteData["plasmodb"];
+    if (plasmoSiteData === undefined) throw new Error("plasmodb seed data missing");
+    const plasmoGenes = plasmoSiteData.geneIds;
+    const toxoSiteData = seedData.siteData["toxodb"];
+    if (toxoSiteData === undefined) throw new Error("toxodb seed data missing");
+    const toxoGenes = toxoSiteData.geneIds;
 
     // ── Setup: Clean stale gene sets for both sites ──────────────
     const cleanupSites = ["plasmodb", "toxodb"];

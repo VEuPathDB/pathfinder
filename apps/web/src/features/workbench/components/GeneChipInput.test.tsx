@@ -6,20 +6,29 @@ import type { GeneSet } from "@pathfinder/shared";
 const storeState: Record<string, unknown> = {
   geneSets: [] as GeneSet[],
 };
-vi.mock("../store", () => ({
-  useWorkbenchStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(storeState),
+
+vi.mock("@/state/useSessionStore", () => ({
+  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      selectedSite: "PlasmoDB",
+    }),
 }));
-vi.mock("../store/useWorkbenchStore", () => ({
-  useWorkbenchStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(storeState),
+
+vi.mock("@/lib/query/hooks/useGeneSetsQuery", () => ({
+  useGeneSetsQuery: () => ({
+    data: storeState["geneSets"] as GeneSet[],
+    isPending: false,
+  }),
 }));
 
 const mockSearchGenes = vi.fn();
 const mockResolveGeneIds = vi.fn();
-vi.mock("@/lib/api/genes", () => ({
+vi.mock("@pathfinder/shared/generated/hooks/useSearchGenes", () => ({
   searchGenes: (...args: unknown[]) => mockSearchGenes(...args),
-  resolveGeneIds: (...args: unknown[]) => mockResolveGeneIds(...args),
+}));
+
+vi.mock("@pathfinder/shared/generated/hooks/useResolveGenes", () => ({
+  resolveGenes: (...args: unknown[]) => mockResolveGeneIds(...args),
 }));
 
 import { GeneChipInput } from "./GeneChipInput";
@@ -135,17 +144,16 @@ describe("GeneChipInput", () => {
     // Auto-verification fires after debounce
     await waitFor(
       () => {
-        expect(mockResolveGeneIds).toHaveBeenCalledWith("PlasmoDB", [
-          "PF3D7_0100100",
-          "INVALID_001",
-        ]);
+        expect(mockResolveGeneIds).toHaveBeenCalledWith("PlasmoDB", {
+          geneIds: ["PF3D7_0100100", "INVALID_001"],
+        });
       },
       { timeout: 2000 },
     );
   });
 
   it("shows gene count", () => {
-    render(
+    const { container } = render(
       <GeneChipInput
         siteId="PlasmoDB"
         value={["PF3D7_0100100", "PF3D7_0200200", "PF3D7_0300300"]}
@@ -153,6 +161,6 @@ describe("GeneChipInput", () => {
         label="Controls"
       />,
     );
-    expect(screen.getByText("3 genes")).toBeTruthy();
+    expect(container.querySelectorAll("[data-gene-chip]")).toHaveLength(3);
   });
 });

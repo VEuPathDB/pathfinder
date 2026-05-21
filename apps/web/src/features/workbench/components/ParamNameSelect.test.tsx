@@ -8,7 +8,7 @@ const mockParamSpecs: ParamSpec[] = [];
 let mockLoading = false;
 
 vi.mock("@/lib/hooks/useParamSpecs", () => ({
-  useParamSpecs: () => ({ paramSpecs: mockParamSpecs, isLoading: mockLoading }),
+  useParamSpecs: () => ({ paramSpecs: mockParamSpecs, isLoading: mockLoading, error: null }),
 }));
 
 import { ParamNameSelect } from "./ParamNameSelect";
@@ -98,7 +98,7 @@ describe("ParamNameSelect", () => {
         placeholder="Choose parameter"
       />,
     );
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    const select = screen.getByRole<HTMLSelectElement>("combobox");
     expect(select.value).toBe("");
   });
 

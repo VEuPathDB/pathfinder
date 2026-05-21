@@ -34,7 +34,7 @@ type WorkerFixtures = {
   workerStorageState: string;
 };
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
+const BASE_URL = process.env["PLAYWRIGHT_BASE_URL"] ?? "http://localhost:3000";
 
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   // ── Worker-scoped ──────────────────────────────────────────────
@@ -55,34 +55,36 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       // Always re-authenticate to ensure a clean session.
       fs.mkdirSync(dir, { recursive: true });
 
-      const page = await browser.newPage({ storageState: undefined });
+      const page = await browser.newPage();
       await page.goto(BASE_URL);
 
       const resp = await page
         .context()
-        .request.post(`${BASE_URL}/api/v1/dev/login?user_id=worker-${id}`);
+        .request.post(`${BASE_URL}/api/v1/dev/login?user_id=worker-${id}`, {
+          headers: { "X-Requested-With": "XMLHttpRequest" },
+        });
       if (!resp.ok()) {
         throw new Error(`dev-login failed for worker-${id}: ${resp.status()}`);
       }
 
       // Clean up stale data from previous runs for THIS worker's user.
       const req = page.context().request;
-      const strategiesResp = await req.get(`${BASE_URL}/api/v1/strategies`);
+      const strategiesResp = await req.get(`${BASE_URL}/api/v1/conversations`);
       if (strategiesResp.ok()) {
         const strategies = (await strategiesResp.json()) as { id: string }[];
         await Promise.all(
           strategies.map((s) =>
-            req.delete(`${BASE_URL}/api/v1/strategies/${s.id}?deleteFromWdk=true`),
+            req.delete(`${BASE_URL}/api/v1/conversations/${s.id}?deleteFromWdk=true`),
           ),
         );
       }
       // Also purge dismissed (soft-deleted) strategies from prior runs.
-      const dismissedResp = await req.get(`${BASE_URL}/api/v1/strategies/dismissed`);
+      const dismissedResp = await req.get(`${BASE_URL}/api/v1/conversations/dismissed`);
       if (dismissedResp.ok()) {
         const dismissed = (await dismissedResp.json()) as { id: string }[];
         await Promise.all(
           dismissed.map((d) =>
-            req.delete(`${BASE_URL}/api/v1/strategies/${d.id}?deleteFromWdk=true`),
+            req.delete(`${BASE_URL}/api/v1/conversations/${d.id}?deleteFromWdk=true`),
           ),
         );
       }
@@ -163,22 +165,22 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       );
       // Force hard-delete (deleteFromWdk=true) so WDK-linked strategies
       // don't get soft-deleted and accumulate in the dismissed list.
-      const strategiesResp = await req.get(`${BASE_URL}/api/v1/strategies`);
+      const strategiesResp = await req.get(`${BASE_URL}/api/v1/conversations`);
       if (strategiesResp.ok()) {
         const strategies = (await strategiesResp.json()) as { id: string }[];
         await Promise.all(
           strategies.map((s) =>
-            req.delete(`${BASE_URL}/api/v1/strategies/${s.id}?deleteFromWdk=true`),
+            req.delete(`${BASE_URL}/api/v1/conversations/${s.id}?deleteFromWdk=true`),
           ),
         );
       }
       // Purge dismissed (soft-deleted) strategies from prior tests/retries.
-      const dismissedResp = await req.get(`${BASE_URL}/api/v1/strategies/dismissed`);
+      const dismissedResp = await req.get(`${BASE_URL}/api/v1/conversations/dismissed`);
       if (dismissedResp.ok()) {
         const dismissed = (await dismissedResp.json()) as { id: string }[];
         await Promise.all(
           dismissed.map((d) =>
-            req.delete(`${BASE_URL}/api/v1/strategies/${d.id}?deleteFromWdk=true`),
+            req.delete(`${BASE_URL}/api/v1/conversations/${d.id}?deleteFromWdk=true`),
           ),
         );
       }

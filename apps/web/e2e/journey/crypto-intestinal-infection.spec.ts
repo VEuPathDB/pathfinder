@@ -1,4 +1,5 @@
-import { test, expect } from "../fixtures/test";
+import { test, expect } from "../fixtures/a11y";
+import { MOCK_PLAN_PROMPT } from "../fixtures/mock-prompts";
 
 /**
  * Journey: Cryptosporidium Intestinal Infection — CryptoDB
@@ -22,7 +23,9 @@ test.describe("Crypto Intestinal Infection Journey", () => {
     workbenchSidebarPage,
     workbenchMainPage,
   }) => {
-    const cryptoGenes = seedData.siteData.cryptodb.geneIds;
+    const cryptoSiteData = seedData.siteData["cryptodb"];
+    if (cryptoSiteData === undefined) throw new Error("cryptodb seed data missing");
+    const cryptoGenes = cryptoSiteData.geneIds;
     const fullCount = cryptoGenes.length;
     const subsetGenes = cryptoGenes.slice(0, 2);
     const subsetCount = subsetGenes.length;
@@ -59,11 +62,11 @@ test.describe("Crypto Intestinal Infection Journey", () => {
 
     // ── Phase 2: Strategy Creation ───────────────────────────────
 
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
-    await graphPage.expectCompactView();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
     await chatPage.expectIdle();
 
     // ── Phase 3: Workbench — Gene Sets ───────────────────────────

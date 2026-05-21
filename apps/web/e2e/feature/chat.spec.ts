@@ -1,4 +1,8 @@
 import { test, expect } from "../fixtures/test";
+import {
+  MOCK_DELEGATION_DRAFT_PROMPT,
+  MOCK_PLAN_PROMPT,
+} from "../fixtures/mock-prompts";
 
 /**
  * Feature: Chat — real event pipeline through Redis + PostgreSQL.
@@ -18,14 +22,14 @@ test.describe("Chat", () => {
     chatPage,
     apiClient,
   }) => {
-    await chatPage.send("find chloroquine resistance genes");
+    await chatPage.send("hello persistence");
     await chatPage.expectAssistantMessage(/\[mock\]/);
     await chatPage.expectIdle();
 
     // Fetch full strategy — verify messages stored (use captured ID)
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
-    const fullResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const fullResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(fullResp.ok()).toBeTruthy();
     const full = await fullResp.json();
     expect(full.messages).toBeDefined();
@@ -38,38 +42,81 @@ test.describe("Chat", () => {
 
   test("artifact graph stores strategy plan with real WDK search names", async ({
     chatPage,
-    page,
     apiClient,
   }) => {
-    await chatPage.send("artifact graph");
-    await chatPage.expectAssistantMessage(/\[mock\]/);
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
     await chatPage.expectIdle();
 
-    // Apply the plan
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
+    await chatPage.approvePlan();
+    await chatPage.expectIdle();
 
-    // Wait for strategy update
-    await page.waitForTimeout(2_000);
+    // Wait for strategy update — at least one assistant message rendered.
+    await expect(chatPage.assistantMessages).not.toHaveCount(0, { timeout: 15_000 });
 
     // Fetch full strategy — verify steps were created from the plan
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
-    const fullResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const fullResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(fullResp.ok()).toBeTruthy();
     const full = await fullResp.json();
     expect(full.steps.length).toBeGreaterThan(0);
   });
 
+  test("planning flow presents a preview plan and waits for approval before execution", async ({
+    chatPage,
+    graphPage,
+    page,
+  }) => {
+    await chatPage.send(MOCK_PLAN_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.expectIdle();
+
+    await expect(page.getByText("presented", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await graphPage.expectRailPanel();
+    const previewPillCount = await graphPage.railStepRows.count();
+    expect(previewPillCount).toBeGreaterThan(0);
+  });
+
+  test("approving a presented plan executes via structured route without chat pollution", async ({
+    chatPage,
+    apiClient,
+    graphPage,
+  }) => {
+    await chatPage.send(MOCK_PLAN_PROMPT);
+    await chatPage.expectPlanningArtifact();
+
+    await chatPage.approvePlan();
+    await chatPage.expectIdle();
+    await graphPage.expectRailPanel();
+
+    const strategyId = chatPage.lastStrategyId;
+    expect(strategyId).toBeTruthy();
+    const fullResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
+    expect(fullResp.ok()).toBeTruthy();
+    const full = await fullResp.json();
+
+    expect(full.steps.length).toBeGreaterThan(0);
+    expect(
+      full.messages.some(
+        (message: { role: string; content: string }) =>
+          message.role === "user" &&
+          message.content.includes("[Plan interaction:"),
+      ),
+    ).toBe(false);
+  });
+
   test("delegation draft stores event data", async ({ chatPage, apiClient }) => {
-    await chatPage.send("delegation draft");
+    await chatPage.send(MOCK_DELEGATION_DRAFT_PROMPT);
     await chatPage.expectAssistantMessage(/\[mock\]/);
     await chatPage.expectIdle();
 
     // Fetch full conversation — messages should be stored (use captured ID)
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
-    const fullResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const fullResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(fullResp.ok()).toBeTruthy();
     const full = await fullResp.json();
     expect(full.messages.length).toBeGreaterThan(0);
@@ -80,6 +127,42 @@ test.describe("Chat", () => {
     await chatPage.expectStreaming();
     await chatPage.stopStreaming();
     await chatPage.expectIdle();
+  });
+
+  test("stop posts a server cancel that records a cancellation row", async ({
+    chatPage,
+    page,
+  }) => {
+    // Hold the chat SSE open so the stop button stays visible long enough
+    // to click. We never let the stream complete; cancellation is the test.
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/api/v1/chat", async (route) => {
+      await held;
+      await route.continue();
+    });
+
+    const cancelRequest = page.waitForRequest(
+      (r) =>
+        r.method() === "POST" &&
+        /\/api\/v1\/conversations\/[^/]+\/cancel$/.test(r.url()),
+      { timeout: 30_000 },
+    );
+
+    await chatPage.send("hello cancel");
+    await expect(page.getByTestId("stop-button")).toBeVisible({
+      timeout: 15_000,
+    });
+    await chatPage.stopStreaming();
+
+    const req = await cancelRequest;
+    const resp = await req.response();
+    expect(resp).not.toBeNull();
+    expect(resp?.status()).toBe(204);
+
+    release();
   });
 
   test("multiple messages stored sequentially in conversation", async ({
@@ -97,7 +180,7 @@ test.describe("Chat", () => {
     // Verify both messages persisted (use captured ID)
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
-    const fullResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const fullResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     const full = await fullResp.json();
     const userMsgs = full.messages.filter((m: { role: string }) => m.role === "user");
     const assistantMsgs = full.messages.filter(
@@ -111,7 +194,7 @@ test.describe("Chat", () => {
     await chatPage.send("hello world");
     await chatPage.expectAssistantMessage(/\[mock\]/);
 
-    await expect(sidebarPage.items.first()).toBeVisible({ timeout: 15_000 });
+    await sidebarPage.expectAtLeastOneConversation();
 
     // Strategy ID was captured during newChat
     expect(chatPage.lastStrategyId).toBeTruthy();
@@ -135,7 +218,7 @@ test.describe("Chat", () => {
     });
 
     // Strategy still exists after reload
-    const afterResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const afterResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(afterResp.ok()).toBeTruthy();
   });
 });

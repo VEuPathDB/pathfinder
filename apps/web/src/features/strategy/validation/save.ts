@@ -2,7 +2,7 @@ import type { Step, Strategy } from "@pathfinder/shared";
 import { validateSearchParams } from "@/lib/api/sites";
 import { toUserMessage } from "@/lib/api/errors";
 import { formatSearchValidationResponse } from "./format";
-import { getRootSteps, validateStrategySteps } from "@/lib/strategyGraph";
+import { validateStrategySteps } from "@/lib/strategyGraph";
 import { normalizeRecordType } from "@/lib/utils/normalizeRecordType";
 import { inferStepKind } from "@/lib/strategyGraph";
 
@@ -19,27 +19,12 @@ export async function validateStepsForSave(args: {
 
   if (steps.length === 0) return { errorsByStepId, hasErrors: false };
 
-  const structuralErrors = validateStrategySteps(steps);
+  const structuralErrors = validateStrategySteps(steps).filter(
+    (e) => e.severity === "error",
+  );
   for (const issue of structuralErrors) {
-    if (issue.stepId) {
+    if (issue.stepId != null && issue.stepId !== "") {
       errorsByStepId[issue.stepId] = `Cannot be saved: ${issue.message}`;
-      continue;
-    }
-
-    // Some structural errors are graph-level (no specific stepId). Assign them to
-    // relevant steps so the UI can surface the issue and saving is blocked.
-    if (issue.code === "MULTIPLE_ROOTS") {
-      const roots = getRootSteps(steps);
-      for (const root of roots) {
-        errorsByStepId[root.id] = `Cannot be saved: ${issue.message}`;
-      }
-      continue;
-    }
-    if (issue.code === "ORPHAN_STEP") {
-      for (const step of steps) {
-        errorsByStepId[step.id] = `Cannot be saved: ${issue.message}`;
-      }
-      continue;
     }
   }
 
@@ -48,17 +33,19 @@ export async function validateStepsForSave(args: {
       if (inferStepKind(step) !== "search") {
         // Preserve structural errors already set (MISSING_INPUT, MISSING_OPERATOR, etc.).
         // Only clear when there is no structural issue.
-        if (!errorsByStepId[step.id]) {
-          errorsByStepId[step.id] = undefined;
-        }
         return;
       }
 
-      const rawRecordType = step.recordType || strategy?.recordType || undefined;
+      const rawRecordType = step.recordType ?? strategy?.recordType ?? null;
       const recordType = normalizeRecordType(rawRecordType);
       const searchName = step.searchName;
 
-      if (!recordType || !searchName) {
+      if (
+        recordType == null ||
+        recordType === "" ||
+        searchName == null ||
+        searchName === ""
+      ) {
         errorsByStepId[step.id] =
           "Cannot be saved: search name or record type missing.";
         return;
@@ -69,17 +56,13 @@ export async function validateStepsForSave(args: {
           siteId,
           recordType,
           searchName,
-          step.parameters || {},
+          step.parameters ?? {},
         );
         const formatted = formatSearchValidationResponse(response);
-        if (!errorsByStepId[step.id]) {
-          errorsByStepId[step.id] = formatted.message || undefined;
-        }
+        errorsByStepId[step.id] ??= formatted.message ?? undefined;
       } catch (err) {
-        if (!errorsByStepId[step.id]) {
-          errorsByStepId[step.id] =
-            `Cannot be saved: ${toUserMessage(err, "validation failed.")}`;
-        }
+        errorsByStepId[step.id] ??=
+          `Cannot be saved: ${toUserMessage(err, "validation failed.")}`;
       }
     }),
   );

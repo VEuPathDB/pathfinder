@@ -1,15 +1,19 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const isCI = Boolean(process.env.CI);
+const isCI = Boolean(process.env["CI"]);
 
 /**
  * Playwright E2E test configuration.
  *
  * ## Running locally
  *
- * 1. Start Docker services with mock mode:
+ * 1. Start Docker services with the explicit development overlays:
  *
- *      docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+ *      docker compose --env-file .env.test \
+ *        -f docker-compose.yml \
+ *        -f docker-compose.dev.yml \
+ *        -f docker-compose.e2e.yml \
+ *        up -d --build api web
  *
  * 2. Run the tests:
  *
@@ -40,7 +44,7 @@ export default defineConfig({
     : [["list"], ["html", { open: "on-failure" }]],
 
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000",
+    baseURL: process.env["PLAYWRIGHT_BASE_URL"] ?? "http://localhost:3000",
     trace: isCI ? "on-first-retry" : "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -51,6 +55,7 @@ export default defineConfig({
     {
       name: "feature",
       testDir: "./e2e/feature",
+      timeout: 120_000,
     },
     {
       name: "cross-feature",
@@ -72,8 +77,8 @@ export default defineConfig({
   ],
 
   // Both local and CI: the Docker web container on port 3000 serves the
-  // production build (no HMR).  The Docker API on port 8000 must be running
-  // with PATHFINDER_CHAT_PROVIDER=mock.
+  // production build (no HMR). The Docker API on port 8000 must be running
+  // with PATHFINDER_CHAT_PROVIDER=mock via the dedicated test overlay.
   //
-  // Start services:  docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build api web
+  // Start services: docker compose --env-file .env.test -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml up -d --build api web
 });

@@ -1,13 +1,32 @@
-import type { Strategy } from "@pathfinder/shared";
-
-export type ConversationKind = "strategy";
+import type { ConversationResponse } from "@pathfinder/shared/generated/types/ConversationResponse";
 
 export interface ConversationItem {
   id: string;
-  kind: ConversationKind;
   title: string;
   updatedAt: string;
-  siteId?: string;
-  stepCount?: number;
-  strategyItem?: Strategy;
+  siteId: string;
+  isDismissed: boolean;
+  isSaved: boolean;
+  stepCount: number;
+  experimentId: string | null;
+  parentConversationId: string | null;
+  parentMessageId: string | null;
+  /** Full backend payload — kept so downstream handlers can inspect server state. */
+  chat: ConversationResponse;
+}
+
+export function chatToConversationItem(chat: ConversationResponse): ConversationItem {
+  return {
+    id: chat.id,
+    title: chat.name.trim() === "" ? "New conversation" : chat.name,
+    updatedAt: chat.updatedAt,
+    siteId: chat.siteId,
+    isDismissed: chat.dismissedAt != null,
+    isSaved: chat.isSaved ?? false,
+    stepCount: chat.stepCount ?? 0,
+    experimentId: chat.experimentId ?? null,
+    parentConversationId: chat.parentConversationId ?? null,
+    parentMessageId: chat.parentMessageId ?? null,
+    chat,
+  };
 }

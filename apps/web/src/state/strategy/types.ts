@@ -1,56 +1,59 @@
-/**
- * Shared types for the strategy store slices.
- */
+import type { Patch } from "immer";
+import type { Strategy } from "@pathfinder/shared";
+import type { GraphOperation } from "@/features/strategy/operations";
+import type {
+  StepLifecycleSeed,
+  StepMachineEvent,
+  StepMachineSnapshot,
+} from "./stepMachine";
 
-import type { StrategyPlan, Step, Strategy } from "@pathfinder/shared";
-
-// ---------------------------------------------------------------------------
-// Per-slice state + action interfaces
-// ---------------------------------------------------------------------------
+export interface FailedOperationPayload {
+  op: GraphOperation;
+}
 
 export interface DraftSlice {
-  strategy: Strategy | null;
-  stepsById: Record<string, Step>;
-
-  addStep: (step: Step) => void;
-  updateStep: (stepId: string, updates: Partial<Step>) => void;
-  removeStep: (stepId: string) => void;
-  setStrategy: (strategy: Strategy | null) => void;
-  setWdkInfo: (
-    wdkStrategyId: number,
-    wdkUrl?: string | null,
-    name?: string | null,
-    description?: string | null,
-  ) => void;
-  setStrategyMeta: (updates: Partial<Strategy>) => void;
-  buildPlan: () => {
-    plan: StrategyPlan;
-    name: string;
-    recordType: string | null;
-  } | null;
-  setStepValidationErrors: (errors: Record<string, string | undefined>) => void;
-  setStepCounts: (counts: Record<string, number | null | undefined>) => void;
+  lastFailedOperation: FailedOperationPayload | null;
+  setLastFailedOperation: (payload: FailedOperationPayload | null) => void;
   clear: () => void;
 }
 
-export interface HistorySlice {
-  history: Strategy[];
-  historyIndex: number;
+export interface LifecycleSlice {
+  /** Per-step XState v5 machine snapshot. Pure reducer, no running actors. */
+  stepLifecycleById: Record<string, StepMachineSnapshot>;
 
-  undo: () => void;
-  redo: () => void;
-  canUndo: () => boolean;
-  canRedo: () => boolean;
+  /** Ensure a lifecycle entry exists for the given step id. No-op if already present. */
+  initStepLifecycle: (stepId: string, seed?: StepLifecycleSeed) => void;
+  /** Dispatch an event to the step's machine. Auto-initializes if missing. */
+  dispatchStepEvent: (stepId: string, event: StepMachineEvent) => void;
+  /** Remove the lifecycle entry for a step id. */
+  removeStepLifecycle: (stepId: string) => void;
+  /** Read-only snapshot accessor. Returns null if no entry exists. */
+  getStepLifecycle: (stepId: string) => StepMachineSnapshot | null;
+
+  /** Apply validation results for a batch of steps (error message or cleared). */
+  applyStepValidationErrors: (errors: Record<string, string | undefined>) => void;
+  /** Apply count results for a batch of steps (number, null, or undefined). */
+  applyStepCounts: (counts: Record<string, number | null | undefined>) => void;
 }
 
-export interface ListSlice {
-  strategies: Strategy[];
-  executedStrategies: Strategy[];
+export interface HistorySnapshot {
+  strategy: Strategy | null;
+}
 
-  setStrategies: (items: Strategy[]) => void;
-  addStrategyToList: (item: Strategy) => void;
-  removeStrategyFromList: (id: string) => void;
-  addExecutedStrategy: (strategy: Strategy) => void;
+export interface HistorySlice {
+  undoStack: Patch[][];
+  redoStack: Patch[][];
+
+  pushSnapshot: (prev: HistorySnapshot, current: Strategy | null) => void;
+  /** Apply the most recent inverse patch to *current* and return the resulting
+   *  strategy. Returns null if the undo stack is empty. */
+  undo: (current: Strategy | null) => Strategy | null;
+  /** Apply the most recent forward patch to *current* and return the resulting
+   *  strategy. Returns null if the redo stack is empty. */
+  redo: (current: Strategy | null) => Strategy | null;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+  clearHistory: () => void;
 }
 
 export interface MetaSlice {
@@ -63,4 +66,7 @@ export interface MetaSlice {
 // Combined store type
 // ---------------------------------------------------------------------------
 
-export type StrategyState = DraftSlice & HistorySlice & ListSlice & MetaSlice;
+export type StrategyState = DraftSlice &
+  HistorySlice &
+  MetaSlice &
+  LifecycleSlice;

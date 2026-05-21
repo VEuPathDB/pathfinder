@@ -1,4 +1,5 @@
-import { test, expect } from "../fixtures/test";
+import { test, expect } from "../fixtures/a11y";
+import { MOCK_PLAN_PROMPT } from "../fixtures/mock-prompts";
 
 /**
  * Journey: Toxoplasma Host Cell Invasion — ToxoDB
@@ -22,7 +23,9 @@ test.describe("Toxoplasma Host Invasion Journey", () => {
     workbenchSidebarPage,
     workbenchMainPage,
   }) => {
-    const toxoGenes = seedData.siteData.toxodb.geneIds;
+    const toxoSiteData = seedData.siteData["toxodb"];
+    if (toxoSiteData === undefined) throw new Error("toxodb seed data missing");
+    const toxoGenes = toxoSiteData.geneIds;
     const fullCount = toxoGenes.length;
     const subsetGenes = toxoGenes.slice(0, 2);
     const subsetCount = subsetGenes.length;
@@ -57,17 +60,17 @@ test.describe("Toxoplasma Host Invasion Journey", () => {
     await chatPage.expectIdle();
 
     // Round 3 — trigger planning artifact (GenesByTaxon for T. gondii ME49)
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
     // ── Phase 2: Strategy Creation ───────────────────────────────
 
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
-    await graphPage.expectCompactView();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
     await chatPage.expectIdle();
 
     // Verify strategy persisted
-    const strategiesResp = await apiClient.get("/api/v1/strategies?siteId=toxodb");
+    const strategiesResp = await apiClient.get("/api/v1/conversations?siteId=toxodb");
     expect(strategiesResp.ok()).toBeTruthy();
 
     // ── Phase 3: Workbench — Gene Sets ───────────────────────────

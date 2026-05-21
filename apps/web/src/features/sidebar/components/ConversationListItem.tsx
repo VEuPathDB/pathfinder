@@ -1,26 +1,34 @@
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { MoreVertical } from "lucide-react";
-import type { Strategy } from "@pathfinder/shared";
+import Link from "next/link";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { ConversationItem } from "@/features/sidebar/components/conversationSidebarTypes";
+import { useFlushBeforeNav } from "@/features/strategy/hooks/useFlushBeforeNav";
 import { formatSidebarTime } from "@/lib/formatTime";
-import { Input } from "@/lib/components/ui/Input";
+import { cn } from "@/lib/utils/cn";
 
 interface ConversationListItemProps {
   item: ConversationItem;
   isActive: boolean;
   isRenaming: boolean;
   renameValue: string;
-  graphHasValidationIssue: boolean;
-  /** True when this item is the active conversation AND a chat stream is in progress. */
   isActiveStreaming: boolean;
+  activePhase: string | null;
+  activePhaseStatus: string | null;
   onRenameValueChange: (value: string) => void;
   onCommitRename: (item: ConversationItem) => void;
   onCancelRename: () => void;
-  onSelect: (item: ConversationItem) => void;
   onStartRename: (item: ConversationItem) => void;
   onStartDelete: (item: ConversationItem) => void;
-  onStartDuplicate: (strategy: Strategy) => void;
-  onToggleSaved: (strategy: Strategy) => void;
+  onToggleSaved: (item: ConversationItem) => void;
 }
 
 export function ConversationListItem({
@@ -28,28 +36,31 @@ export function ConversationListItem({
   isActive,
   isRenaming,
   renameValue,
-  graphHasValidationIssue,
   isActiveStreaming,
   onRenameValueChange,
   onCommitRename,
   onCancelRename,
-  onSelect,
   onStartRename,
   onStartDelete,
-  onStartDuplicate,
   onToggleSaved,
 }: ConversationListItemProps) {
-  const si = item.strategyItem;
+  const { navigate } = useFlushBeforeNav();
+  const metaParts: string[] = [];
+  if (item.stepCount > 0) {
+    metaParts.push(`${item.stepCount} step${item.stepCount === 1 ? "" : "s"}`);
+  }
+  metaParts.push(formatSidebarTime(item.updatedAt));
 
   return (
     <div
       data-testid="conversation-item"
       data-conversation-id={item.id}
-      className={`group flex w-full items-start justify-between gap-2 rounded-md border px-3 py-2 text-xs ${
+      className={cn(
+        "group relative rounded-md px-2.5 py-1.5 transition-colors",
         isActive
-          ? "border-input bg-muted text-foreground"
-          : "border-border bg-card text-muted-foreground hover:border-input hover:bg-muted"
-      }`}
+          ? "bg-primary/15 text-primary hover:bg-primary/20"
+          : "text-foreground/85 hover:bg-muted/60",
+      )}
     >
       {isRenaming ? (
         <Input
@@ -64,105 +75,72 @@ export function ConversationListItem({
             }
             if (e.key === "Escape") onCancelRename();
           }}
-          className="min-w-0 flex-1 bg-card px-1.5 py-0.5 font-medium"
+          className="h-7 min-w-0 bg-card px-1.5 py-0.5 font-medium"
           autoFocus
         />
       ) : (
-        <button
-          type="button"
-          onClick={() => onSelect(item)}
-          className="min-w-0 flex-1 text-left"
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            <span
-              className="min-w-0 truncate text-sm font-medium text-foreground"
+        <>
+          <Link
+            href={`/${item.siteId}/conversation/${item.id}`}
+            className="block"
+            onClick={(e) => {
+              if (isActive) return;
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+              if (e.button !== 0) return;
+              e.preventDefault();
+              void navigate(`/${item.siteId}/conversation/${item.id}`);
+            }}
+          >
+            <div
+              className="truncate pr-6 text-sm font-medium"
               title={item.title}
             >
               {item.title}
-            </span>
-            {si && graphHasValidationIssue && (
-              <span
-                className="inline-flex h-2 w-2 shrink-0 rounded-full bg-destructive/50"
-                title="Validation issues"
-              />
-            )}
-            {item.kind === "strategy" &&
-              si &&
-              (si.wdkStrategyId || (si.stepCount ?? 0) > 0) && (
-                <span
-                  className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                    isActiveStreaming && !si.wdkStrategyId
-                      ? "bg-warning/10 text-warning"
-                      : si.isSaved
-                        ? "bg-success/10 text-success"
-                        : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {isActiveStreaming && !si.wdkStrategyId
-                    ? "Building"
-                    : si.isSaved
-                      ? "Saved"
-                      : "Draft"}
-                </span>
-              )}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {formatSidebarTime(item.updatedAt)}
-          </div>
-        </button>
-      )}
-
-      {!isRenaming && (
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <button
-              type="button"
-              className="ml-1 shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Conversation actions"
-            >
-              <MoreVertical className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              className="z-50 min-w-[160px] rounded-md border border-border bg-card p-1 text-sm text-foreground shadow-lg"
-              sideOffset={4}
-              align="end"
-            >
-              <DropdownMenu.Item
-                className="cursor-pointer rounded px-2 py-1 outline-none hover:bg-muted focus:bg-muted"
-                onSelect={() => onStartRename(item)}
-              >
-                Rename
-              </DropdownMenu.Item>
-              {si && (
+            </div>
+            <div className="mt-0.5 truncate text-xs text-muted-foreground">
+              {metaParts.join(" · ")}
+              {isActiveStreaming && (
                 <>
-                  <DropdownMenu.Item
-                    className="cursor-pointer rounded px-2 py-1 outline-none hover:bg-muted focus:bg-muted"
-                    onSelect={() => onStartDuplicate(si)}
-                  >
-                    Duplicate
-                  </DropdownMenu.Item>
-                  {si.wdkStrategyId && (
-                    <DropdownMenu.Item
-                      className="cursor-pointer rounded px-2 py-1 outline-none hover:bg-muted focus:bg-muted"
-                      onSelect={() => onToggleSaved(si)}
-                    >
-                      {si.isSaved ? "Revert to draft" : "Mark as saved"}
-                    </DropdownMenu.Item>
-                  )}
+                  {" · "}
+                  <span className="text-primary">streaming</span>
                 </>
               )}
-              <DropdownMenu.Separator className="my-1 h-px bg-muted" />
-              <DropdownMenu.Item
-                className="cursor-pointer rounded px-2 py-1 text-destructive outline-none hover:bg-destructive/5 focus:bg-destructive/5"
+            </div>
+          </Link>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Conversation actions"
+                className="absolute right-1 top-1 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+              >
+                <MoreVertical className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={4}
+              className="min-w-[160px]"
+            >
+              <DropdownMenuItem onSelect={() => onStartRename(item)}>
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onToggleSaved(item)}>
+                {item.isSaved ? "Unmark saved" : "Mark as saved"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
                 onSelect={() => onStartDelete(item)}
               >
                 Delete
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
       )}
     </div>
   );

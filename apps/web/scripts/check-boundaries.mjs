@@ -101,7 +101,15 @@ function extractImports(source) {
 }
 
 /** Allowed import prefixes for feature files (rule 3). */
-const ALLOWED_PREFIXES = ["@/lib/", "@/state/", "@pathfinder/shared"];
+const ALLOWED_PREFIXES = [
+  "@/lib/",
+  "@/state/",
+  "@pathfinder/shared",
+  // Vendored shadcn / AI Elements primitives — installed via shadcn CLI,
+  // treated as third-party. Lives under src/components/{ui,ai-elements}/.
+  "@/components/ui/",
+  "@/components/ai-elements/",
+];
 
 /**
  * Check whether an import specifier is allowed from within a feature directory.
@@ -144,8 +152,18 @@ function isAllowedFeatureImport(specifier, selfFeature) {
 }
 
 const CROSS_FEATURE_EXCEPTIONS = new Map([
-  // workbench may import from analysis (ResultsTable exception)
-  ["workbench", new Set(["analysis"])],
+  // workbench may import from analysis (ResultsTable) and conversation
+  // (ChatView is the single chat surface — used in both strategy and
+  // experiment modes)
+  ["workbench", new Set(["analysis", "conversation"])],
+  // conversation may import from settings, engine, strategy (PlanParameterEditor,
+  // WdkQuestionInput, StepParamFields, plus StrategyGraph rendered alongside
+  // the chat thread), and workbench (slash commands targeting gene sets)
+  ["conversation", new Set(["settings", "engine", "strategy", "workbench", "saved", "analysis"])],
+  // sidebar uses StrategyLifecycleBadge from conversation, and the
+  // useFlushBeforeNav hook from strategy to await pending pushes before
+  // switching conversations.
+  ["sidebar", new Set(["conversation", "strategy"])],
 ]);
 
 function checkFile(filePath) {

@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Card } from "@/lib/components/ui/Card";
-import { useWorkbenchStore } from "../store/useWorkbenchStore";
-import type { PanelId } from "../store/useWorkbenchStore";
+import { useWorkbenchStore } from "@/state/useWorkbenchStore";
+import type { PanelId } from "@/state/useWorkbenchStore";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -37,10 +36,10 @@ export function AnalysisPanelContainer({
   const expanded = useWorkbenchStore((s) => s.expandedPanels.has(panelId));
   const togglePanel = useWorkbenchStore((s) => s.togglePanel);
 
-  const handleToggle = useCallback(() => {
+  const handleToggle = () => {
     if (disabled) return;
     togglePanel(panelId);
-  }, [disabled, togglePanel, panelId]);
+  };
 
   const isExpanded = expanded && !disabled;
   const displaySubtitle = disabled ? (disabledReason ?? subtitle) : subtitle;
@@ -69,7 +68,7 @@ export function AnalysisPanelContainer({
         />
 
         {/* Icon */}
-        {icon && (
+        {icon != null && (
           <span className="shrink-0 text-muted-foreground" aria-hidden="true">
             {icon}
           </span>
@@ -78,7 +77,7 @@ export function AnalysisPanelContainer({
         {/* Title & subtitle */}
         <div className="min-w-0 flex-1">
           <span className="block text-sm font-medium text-foreground">{title}</span>
-          {displaySubtitle && (
+          {displaySubtitle != null && displaySubtitle !== "" && (
             <span className="block truncate text-xs text-muted-foreground">
               {displaySubtitle}
             </span>

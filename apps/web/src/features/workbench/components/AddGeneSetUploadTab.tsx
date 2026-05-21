@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { FileUp, Search } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
 import { Input } from "@/lib/components/ui/Input";
@@ -53,28 +53,25 @@ export function AddGeneSetUploadTab({ onClose, onCreated }: AddGeneSetUploadTabP
   const parsedIds = parseGeneIds(fileText);
   const detectedCount = parsedIds.length;
 
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      resetVerification();
-      const reader = new FileReader();
-      reader.onload = () => {
-        const text = reader.result as string;
-        setFileText(text);
-        setFileName(file.name);
-        if (!name) {
-          setName(stripExtension(file.name));
-        }
-      };
-      reader.onerror = () => {
-        setError("Failed to read file. Please try again.");
-      };
-      reader.readAsText(file);
-    },
-    [name, resetVerification, setError],
-  );
+    resetVerification();
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      setFileText(text);
+      setFileName(file.name);
+      if (!name) {
+        setName(stripExtension(file.name));
+      }
+    };
+    reader.onerror = () => {
+      setError("Failed to read file. Please try again.");
+    };
+    reader.readAsText(file);
+  };
 
   return (
     <>
@@ -140,7 +137,9 @@ export function AddGeneSetUploadTab({ onClose, onCreated }: AddGeneSetUploadTabP
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => handleVerify(parsedIds)}
+            onClick={() => {
+              void handleVerify(parsedIds);
+            }}
             loading={verifying}
             disabled={verifying || isSubmitting}
             className="gap-1 text-xs"
@@ -160,7 +159,7 @@ export function AddGeneSetUploadTab({ onClose, onCreated }: AddGeneSetUploadTabP
       )}
 
       {/* Error */}
-      {error && (
+      {error != null && error !== "" && (
         <p className="mt-3 text-xs text-destructive" role="alert">
           {error}
         </p>
@@ -180,7 +179,9 @@ export function AddGeneSetUploadTab({ onClose, onCreated }: AddGeneSetUploadTabP
         <Button
           type="button"
           size="sm"
-          onClick={() => handleSubmit(name, parsedIds, "upload")}
+          onClick={() => {
+            void handleSubmit(name, parsedIds, "upload");
+          }}
           loading={isSubmitting}
           disabled={detectedCount === 0}
         >

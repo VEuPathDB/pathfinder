@@ -1,10 +1,17 @@
-import { useState, useCallback, useMemo } from "react";
+"use client";
+
+import { useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { cn } from "@/lib/utils/cn";
+import { isMultiParam } from "@/features/strategy/parameters/spec";
 import type { VocabNode } from "@/lib/utils/vocab";
-import type { ParamWidgetProps } from "./types";
+import type { ParamWidgetProps, ParamFieldApi } from "./types";
 import { CheckboxParam } from "./CheckboxParam";
 
 function collectLeaves(node: VocabNode): string[] {
-  if (!node.children?.length) return [node.value];
+  if (node.children == null || node.children.length === 0) return [node.value];
   return node.children.flatMap(collectLeaves);
 }
 
@@ -24,7 +31,7 @@ function buildDefaultExpanded(nodes: VocabNode[], depth = 0): Set<string> {
   const result = new Set<string>();
   if (depth >= 2) return result;
   for (const node of nodes) {
-    if (node.children?.length) {
+    if (node.children != null && node.children.length > 0) {
       result.add(node.value);
       for (const v of buildDefaultExpanded(node.children, depth + 1)) {
         result.add(v);
@@ -34,68 +41,35 @@ function buildDefaultExpanded(nodes: VocabNode[], depth = 0): Set<string> {
   return result;
 }
 
-export function TreeBoxParam(props: ParamWidgetProps) {
-  const {
-    spec,
-    value,
-    multi,
-    multiValue,
-    options,
-    vocabTree,
-    onChangeSingle,
-    onChangeMulti,
-    fieldBorderClass,
-  } = props;
-
-  // Flat fallback when no tree structure
+export function TreeBoxParam({ spec, name, options, vocabTree, field }: ParamWidgetProps) {
   if (!vocabTree) {
-    return <CheckboxParam {...props} />;
+    return <CheckboxParam spec={spec} name={name} options={options} vocabTree={null} field={field} />;
   }
 
-  return (
-    <TreeBoxInner
-      spec={spec}
-      value={value}
-      multi={multi}
-      multiValue={multiValue}
-      options={options}
-      vocabTree={vocabTree}
-      onChangeSingle={onChangeSingle}
-      onChangeMulti={onChangeMulti}
-      fieldBorderClass={fieldBorderClass}
-    />
-  );
+  return <TreeBoxInner spec={spec} name={name} vocabTree={vocabTree} field={field} />;
 }
 
 function TreeBoxInner({
   spec,
-  value,
-  multi,
-  multiValue,
+  name,
   vocabTree,
-  onChangeSingle,
-  onChangeMulti,
-  fieldBorderClass,
+  field,
 }: {
   spec: ParamWidgetProps["spec"];
-  value: ParamWidgetProps["value"];
-  multi: boolean;
-  multiValue: string[];
-  options: ParamWidgetProps["options"];
+  name: string;
   vocabTree: VocabNode[];
-  onChangeSingle: ParamWidgetProps["onChangeSingle"];
-  onChangeMulti: ParamWidgetProps["onChangeMulti"];
-  fieldBorderClass?: string;
+  field: ParamFieldApi;
 }) {
+  const multi = isMultiParam(spec);
+
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() =>
     buildDefaultExpanded(vocabTree),
   );
   const [searchTerm, setSearchTerm] = useState("");
 
   const allLeaves = collectAllLeaves(vocabTree);
-  const selectedSet = useMemo(() => new Set(multiValue), [multiValue]);
 
-  const toggleExpand = useCallback((nodeValue: string) => {
+  const toggleExpand = (nodeValue: string) => {
     setExpandedNodes((prev) => {
       const next = new Set(prev);
       if (next.has(nodeValue)) {
@@ -105,44 +79,53 @@ function TreeBoxInner({
       }
       return next;
     });
-  }, []);
-
-  const toggleBranch = useCallback(
-    (node: VocabNode) => {
-      const leaves = collectLeaves(node);
-      const allChecked = leaves.every((l) => selectedSet.has(l));
-      if (allChecked) {
-        onChangeMulti(multiValue.filter((v) => !leaves.includes(v)));
-      } else {
-        const next = [...multiValue];
-        for (const l of leaves) {
-          if (!next.includes(l)) next.push(l);
-        }
-        onChangeMulti(next);
-      }
-    },
-    [multiValue, onChangeMulti, selectedSet],
-  );
-
-  const toggleLeaf = useCallback(
-    (leafValue: string) => {
-      if (selectedSet.has(leafValue)) {
-        onChangeMulti(multiValue.filter((v) => v !== leafValue));
-      } else {
-        onChangeMulti([...multiValue, leafValue]);
-      }
-    },
-    [multiValue, onChangeMulti, selectedSet],
-  );
+  };
 
   const lowerSearch = searchTerm.toLowerCase();
+
+  const errors = field.state.meta.errors;
+  const hasError = errors.length > 0;
+  const errorMessage = hasError ? String(errors[0]) : null;
+
+  const currentValue: string[] = multi
+    ? (Array.isArray(field.state.value)
+        ? (field.state.value as unknown[]).filter(
+            (v): v is string => typeof v === "string",
+          )
+        : [])
+    : [];
+  const selectedSet = new Set(currentValue);
+
+  const toggleBranch = (node: VocabNode) => {
+    const leaves = collectLeaves(node);
+    const allChecked = leaves.every((l) => selectedSet.has(l));
+    if (allChecked) {
+      field.handleChange(currentValue.filter((v) => !leaves.includes(v)));
+    } else {
+      const next = [...currentValue];
+      for (const l of leaves) {
+        if (!next.includes(l)) next.push(l);
+      }
+      field.handleChange(next);
+    }
+  };
+
+  const toggleLeaf = (leafValue: string) => {
+    if (selectedSet.has(leafValue)) {
+      field.handleChange(currentValue.filter((v) => v !== leafValue));
+    } else {
+      field.handleChange([...currentValue, leafValue]);
+    }
+  };
+
+  const singleValue = !multi && typeof field.state.value === "string" ? field.state.value : "";
 
   function renderNode(node: VocabNode, depth: number) {
     if (lowerSearch && !nodeMatchesSearch(node, lowerSearch)) {
       return null;
     }
 
-    const isBranch = Boolean(node.children?.length);
+    const isBranch = Boolean(node.children != null && node.children.length > 0);
     const isExpanded = expandedNodes.has(node.value);
     const leaves = collectLeaves(node);
     const allChecked = leaves.every((l) => selectedSet.has(l));
@@ -184,29 +167,15 @@ function TreeBoxInner({
           )}
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             {multi ? (
-              <input
-                type="checkbox"
-                checked={allChecked}
-                ref={(el) => {
-                  if (el) el.indeterminate = someChecked;
-                }}
-                onChange={() =>
-                  isBranch ? toggleBranch(node) : toggleLeaf(node.value)
-                }
-                className="accent-primary"
+              <Checkbox
+                checked={allChecked ? true : someChecked ? "indeterminate" : false}
+                onCheckedChange={() => (isBranch ? toggleBranch(node) : toggleLeaf(node.value))}
+                onBlur={field.handleBlur}
+                aria-label={node.label}
               />
-            ) : (
-              !isBranch && (
-                <input
-                  type="radio"
-                  name={spec.name}
-                  value={node.value}
-                  checked={value === node.value}
-                  onChange={() => onChangeSingle(node.value)}
-                  className="accent-primary"
-                />
-              )
-            )}
+            ) : !isBranch ? (
+              <RadioGroupItem value={node.value} aria-label={node.label} />
+            ) : null}
             {node.label}
           </label>
         </div>
@@ -217,27 +186,53 @@ function TreeBoxInner({
     );
   }
 
-  const selectedCount = multiValue.filter((v) => allLeaves.includes(v)).length;
+  const selectedCount = currentValue.filter((v) => allLeaves.includes(v)).length;
 
-  return (
+  const treeBody = (
     <div
-      className={`rounded-md border ${fieldBorderClass || "border-border"} bg-card text-sm`}
+      aria-invalid={hasError ? "true" : undefined}
+      aria-describedby={hasError ? `${name}-error` : undefined}
+      className={cn(
+        "rounded-md border bg-card text-sm",
+        hasError ? "border-destructive/30 bg-destructive/5" : "border-border",
+      )}
     >
       <div className="p-2 border-b border-border">
-        <input
+        <Input
           type="text"
           placeholder="Search..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full rounded border border-border bg-card px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground"
+          onChange={(event) => setSearchTerm(event.target.value)}
         />
       </div>
       <div className="max-h-64 overflow-y-auto p-2">
         {vocabTree.map((node) => renderNode(node, 0))}
       </div>
-      <div className="px-2 py-1.5 border-t border-border text-xs text-muted-foreground">
-        {selectedCount} of {allLeaves.length} selected
-      </div>
+      {multi && (
+        <div className="px-2 py-1.5 border-t border-border text-xs text-muted-foreground">
+          {selectedCount} of {allLeaves.length} selected
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      {multi ? (
+        treeBody
+      ) : (
+        <RadioGroup
+          value={singleValue}
+          onValueChange={(next) => field.handleChange(next)}
+        >
+          {treeBody}
+        </RadioGroup>
+      )}
+      {hasError && errorMessage != null && (
+        <p id={`${name}-error`} role="alert" className="mt-1 text-xs text-destructive">
+          {errorMessage}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,14 +1,17 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Plus } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
 import { ScrollArea } from "@/lib/components/ui/ScrollArea";
 import { TooltipProvider } from "@/lib/components/ui/Tooltip";
-import { useWorkbenchStore } from "../store";
+import { useShallow } from "zustand/react/shallow";
+import { useWorkbenchStore } from "@/state/useWorkbenchStore";
 import { performSetOperation, createGeneSet } from "../api/geneSets";
 import { useSessionStore } from "@/state/useSessionStore";
+import { useGeneSetsQuery } from "@/lib/query/hooks/useGeneSetsQuery";
+import { useInvalidateGeneSets } from "@/lib/query/hooks/useInvalidateGeneSets";
 import { GeneSetCard } from "./GeneSetCard";
 import { GeneSetFilter } from "./GeneSetFilter";
 import { SetVenn } from "@/lib/components/SetVenn";
@@ -24,14 +27,24 @@ interface WorkbenchSidebarProps {
 
 export function WorkbenchSidebar({ onCollapse }: WorkbenchSidebarProps) {
   const router = useRouter();
-  const geneSets = useWorkbenchStore((s) => s.geneSets);
-  const activeSetId = useWorkbenchStore((s) => s.activeSetId);
-  const selectedSetIds = useWorkbenchStore((s) => s.selectedSetIds);
-  const setActiveSet = useWorkbenchStore((s) => s.setActiveSet);
-  const toggleSetSelection = useWorkbenchStore((s) => s.toggleSetSelection);
-  const addGeneSet = useWorkbenchStore((s) => s.addGeneSet);
-  const clearSelection = useWorkbenchStore((s) => s.clearSelection);
   const selectedSite = useSessionStore((s) => s.selectedSite);
+  const { data: geneSets = [] } = useGeneSetsQuery(selectedSite);
+  const invalidateGeneSets = useInvalidateGeneSets();
+  const {
+    activeSetId,
+    selectedSetIds,
+    setActiveSet,
+    toggleSetSelection,
+    clearSelection,
+  } = useWorkbenchStore(
+    useShallow((s) => ({
+      activeSetId: s.activeSetId,
+      selectedSetIds: s.selectedSetIds,
+      setActiveSet: s.setActiveSet,
+      toggleSetSelection: s.toggleSetSelection,
+      clearSelection: s.clearSelection,
+    })),
+  );
 
   const [filter, setFilter] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -42,13 +55,12 @@ export function WorkbenchSidebar({ onCollapse }: WorkbenchSidebarProps) {
   // Derived state
   const activeSet = geneSets.find((gs) => gs.id === activeSetId) ?? null;
   const selectedSets = geneSets.filter((gs) => selectedSetIds.includes(gs.id));
-  const activeGeneIds = useMemo(() => activeSet?.geneIds ?? [], [activeSet]);
+  const activeGeneIds = activeSet?.geneIds ?? [];
 
-  const filteredSets = useMemo(() => {
-    if (!filter.trim()) return geneSets;
-    const q = filter.trim().toLowerCase();
-    return geneSets.filter((gs) => gs.name.toLowerCase().includes(q));
-  }, [geneSets, filter]);
+  const filterQuery = filter.trim().toLowerCase();
+  const filteredSets = filterQuery
+    ? geneSets.filter((gs) => gs.name.toLowerCase().includes(filterQuery))
+    : geneSets;
 
   const showFilter = geneSets.length >= 5;
   const showVenn = selectedSets.length >= 2 && selectedSets.length <= 5;
@@ -56,48 +68,44 @@ export function WorkbenchSidebar({ onCollapse }: WorkbenchSidebarProps) {
 
   // -- Handlers ---------------------------------------------------------------
 
-  const handleVennRegionClick = useCallback(
-    async (geneIds: string[], label: string) => {
-      try {
-        const gs = await createGeneSet({
-          name: label,
-          source: "derived",
-          geneIds,
-          siteId: selectedSite,
-        });
-        addGeneSet(gs);
-        setActiveSet(gs.id);
-        router.push(`/workbench/${gs.id}`);
-      } catch (err) {
-        console.error("Failed to create set from Venn region:", err);
-      }
-    },
-    [selectedSite, addGeneSet, setActiveSet, router],
-  );
+  const handleVennRegionClick = async (geneIds: string[], label: string) => {
+    try {
+      const gs = await createGeneSet({
+        name: label,
+        source: "derived",
+        geneIds,
+        siteId: selectedSite,
+      });
+      await invalidateGeneSets();
+      setActiveSet(gs.id);
+      router.push(`/${selectedSite}/workbench/${gs.id}`);
+    } catch (err) {
+      console.error("Failed to create set from Venn region:", err);
+    }
+  };
 
-  const handleComposeExecute = useCallback(
-    async (result: { operation: string; geneIds: string[]; name: string }) => {
-      if (selectedSets.length !== 2) return;
-      setComposing(true);
-      try {
-        const gs = await performSetOperation({
-          operation: result.operation as "intersect" | "union" | "minus",
-          setAId: selectedSets[0].id,
-          setBId: selectedSets[1].id,
-          name: result.name,
-        });
-        addGeneSet(gs);
-        setActiveSet(gs.id);
-        router.push(`/workbench/${gs.id}`);
-        clearSelection();
-      } catch (err) {
-        console.error("Failed to execute set operation:", err);
-      } finally {
-        setComposing(false);
-      }
-    },
-    [selectedSets, addGeneSet, setActiveSet, router, clearSelection],
-  );
+  const handleComposeExecute = async (result: { operation: string; geneIds: string[]; name: string }) => {
+    const setA = selectedSets[0];
+    const setB = selectedSets[1];
+    if (selectedSets.length !== 2 || setA == null || setB == null) return;
+    setComposing(true);
+    try {
+      const gs = await performSetOperation({
+        operation: result.operation as "intersect" | "union" | "minus",
+        setAId: setA.id,
+        setBId: setB.id,
+        name: result.name,
+      });
+      await invalidateGeneSets();
+      setActiveSet(gs.id);
+      router.push(`/${selectedSite}/workbench/${gs.id}`);
+      clearSelection();
+    } catch (err) {
+      console.error("Failed to execute set operation:", err);
+    } finally {
+      setComposing(false);
+    }
+  };
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -158,7 +166,7 @@ export function WorkbenchSidebar({ onCollapse }: WorkbenchSidebarProps) {
                   activeGeneIds={activeGeneIds}
                   onActivate={() => {
                     setActiveSet(gs.id);
-                    router.push(`/workbench/${gs.id}`);
+                    router.push(`/${selectedSite}/workbench/${gs.id}`);
                   }}
                   onToggleSelect={() => toggleSetSelection(gs.id)}
                 />
@@ -173,9 +181,11 @@ export function WorkbenchSidebar({ onCollapse }: WorkbenchSidebarProps) {
             <SetVenn
               sets={selectedSets.map((s) => ({
                 key: s.name,
-                geneIds: s.geneIds ?? [],
+                geneIds: s.geneIds,
               }))}
-              onRegionClick={handleVennRegionClick}
+              onRegionClick={(geneIds, label) => {
+                void handleVennRegionClick(geneIds, label);
+              }}
               height={selectedSets.length > 3 ? 280 : 200}
               width={240}
             />
@@ -183,12 +193,14 @@ export function WorkbenchSidebar({ onCollapse }: WorkbenchSidebarProps) {
         )}
 
         {/* Zone 3: Compose (when 2 selected) */}
-        {showCompose && (
+        {showCompose && selectedSets[0] != null && selectedSets[1] != null && (
           <div className="border-t border-border px-3 py-3">
             <ComposeBar
               setA={selectedSets[0]}
               setB={selectedSets[1]}
-              onExecute={handleComposeExecute}
+              onExecute={(result) => {
+                void handleComposeExecute(result);
+              }}
               loading={composing}
             />
           </div>
@@ -198,7 +210,7 @@ export function WorkbenchSidebar({ onCollapse }: WorkbenchSidebarProps) {
         <SelectionToolbar
           activeSet={activeSet}
           selectedSets={selectedSets}
-          allSetsCount={geneSets.length}
+          allSetIds={geneSets.map((gs) => gs.id)}
           onCompare={() => setShowCompare(true)}
           onOverlap={() => setShowOverlap(true)}
         />
@@ -206,14 +218,17 @@ export function WorkbenchSidebar({ onCollapse }: WorkbenchSidebarProps) {
         {/* Modals */}
         <AddGeneSetModal open={showAddModal} onClose={() => setShowAddModal(false)} />
 
-        {showCompare && selectedSets.length === 2 && (
-          <CompareModal
-            open={showCompare}
-            onClose={() => setShowCompare(false)}
-            setA={selectedSets[0]}
-            setB={selectedSets[1]}
-          />
-        )}
+        {showCompare &&
+          selectedSets.length === 2 &&
+          selectedSets[0] != null &&
+          selectedSets[1] != null && (
+            <CompareModal
+              open={showCompare}
+              onClose={() => setShowCompare(false)}
+              setA={selectedSets[0]}
+              setB={selectedSets[1]}
+            />
+          )}
 
         {showOverlap && selectedSets.length >= 2 && (
           <OverlapModal

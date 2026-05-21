@@ -3,15 +3,18 @@
 import { BarChart3 } from "lucide-react";
 import { DistributionExplorer } from "@/features/analysis";
 import { AnalysisPanelContainer } from "../AnalysisPanelContainer";
-import { useWorkbenchStore } from "../../store";
+import { useWorkbenchStore } from "@/state/useWorkbenchStore";
+import { useSessionStore } from "@/state/useSessionStore";
+import { useGeneSetsQuery } from "@/lib/query/hooks/useGeneSetsQuery";
 
 export function DistributionsPanel() {
-  const geneSets = useWorkbenchStore((s) => s.geneSets);
+  const selectedSite = useSessionStore((s) => s.selectedSite);
+  const { data: geneSets = [] } = useGeneSetsQuery(selectedSite);
   const activeSetId = useWorkbenchStore((s) => s.activeSetId);
   const activeSet = geneSets.find((gs) => gs.id === activeSetId);
 
   // Distribution explorer requires a WDK step (strategy-backed gene set).
-  const hasWdkStep = !!activeSet?.wdkStepId;
+  const hasWdkStep = activeSet?.wdkStepId != null;
   const isDisabled = !activeSet || !hasWdkStep;
 
   return (

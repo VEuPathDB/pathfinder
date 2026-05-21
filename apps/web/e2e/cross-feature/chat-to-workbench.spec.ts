@@ -1,7 +1,8 @@
-import { test, expect } from "../fixtures/test";
+import { test, expect } from "../fixtures/a11y";
 import { clearAllGeneSets } from "../fixtures/api-client";
+import { MOCK_PLAN_PROMPT } from "../fixtures/mock-prompts";
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
+const BASE_URL = process.env["PLAYWRIGHT_BASE_URL"] ?? "http://localhost:3000";
 
 test.describe("Chat → Workbench Flow", () => {
   test("build strategy via chat, navigate to workbench, add genes, run enrichment", async ({
@@ -27,16 +28,15 @@ test.describe("Chat → Workbench Flow", () => {
     await chatPage.expectIdle();
 
     // Trigger planning artifact
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
-    // UI: Apply strategy
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
-    await graphPage.expectCompactView();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
     await chatPage.expectIdle();
 
     // UI: Step pills visible
-    const pillCount = await graphPage.stepPills.count();
+    const pillCount = await graphPage.railStepRows.count();
     expect(pillCount).toBeGreaterThan(0);
 
     // API: Strategy persisted — use captured ID for isolation

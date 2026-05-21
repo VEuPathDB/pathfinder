@@ -1,94 +1,61 @@
-import { useEffect, useRef } from "react";
-import { useDebouncedCallback } from "use-debounce";
-import type { StrategyPlan } from "@pathfinder/shared";
+import { useState } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useDebounce } from "use-debounce";
+import type { StrategyAst } from "@pathfinder/shared";
 
-export type StepCountsResponse = { counts?: Record<string, number | null> };
+type StepCountsResponse = { counts?: Record<string, number | null> };
 
 export function useStepCounts(args: {
   siteId: string;
-  plan: StrategyPlan | null;
+  plan: StrategyAst | null;
   planHash: string | null;
   stepIds: string[];
-  setStepCounts: (counts: Record<string, number | null | undefined>) => void;
-  fetchCounts: (siteId: string, plan: StrategyPlan) => Promise<StepCountsResponse>;
+  applyStepCounts: (counts: Record<string, number | null | undefined>) => void;
+  fetchCounts: (siteId: string, plan: StrategyAst) => Promise<StepCountsResponse>;
   debounceMs?: number;
-  /** Increment to force a re-fetch even when planHash hasn't changed. */
-  refreshKey?: number;
 }) {
   const {
     siteId,
     plan,
     planHash,
     stepIds,
-    setStepCounts,
+    applyStepCounts,
     fetchCounts,
     debounceMs = 650,
-    refreshKey = 0,
   } = args;
 
-  const lastRequestKeyRef = useRef<string | null>(null);
-  const requestIdRef = useRef(0);
+  const planValid = plan != null && planHash != null && planHash !== "";
+  const [debouncedPlanHash] = useDebounce(planHash, debounceMs);
 
-  const debouncedFetchCounts = useDebouncedCallback(() => {
-    if (!plan || !planHash) return;
+  const { data } = useQuery({
+    queryKey: ["strategies", "step-counts", siteId, debouncedPlanHash] as const,
+    queryFn: () => fetchCounts(siteId, plan!),
+    enabled: planValid && stepIds.length > 0 && debouncedPlanHash != null,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
 
-    const stepIdsKey = stepIds.slice().sort().join("|");
-    const requestKey = `${planHash}:${stepIdsKey}:${refreshKey}`;
-    lastRequestKeyRef.current = requestKey;
-    const requestId = (requestIdRef.current += 1);
+  const countsKey = JSON.stringify(data?.counts ?? {}) + "|" + stepIds.join(",");
+  const validKey = `${planValid}|${stepIds.join(",")}`;
 
-    const loading: Record<string, number | null | undefined> = {};
-    for (const stepId of stepIds) loading[stepId] = undefined;
-    setStepCounts(loading);
+  const [prevCountsKey, setPrevCountsKey] = useState(countsKey);
+  if (countsKey !== prevCountsKey) {
+    setPrevCountsKey(countsKey);
+    const next: Record<string, number | null> = {};
+    const counts = data?.counts ?? {};
+    for (const stepId of stepIds) {
+      next[stepId] = counts[stepId] ?? null;
+    }
+    applyStepCounts(next);
+  }
 
-    fetchCounts(siteId, plan)
-      .then((response) => {
-        if (requestId !== requestIdRef.current) return;
-        const counts = response.counts || {};
-        const next: Record<string, number | null> = {};
-        for (const stepId of stepIds) {
-          next[stepId] = counts[stepId] ?? null;
-        }
-        setStepCounts(next);
-      })
-      .catch((err) => {
-        console.error("[useStepCounts]", err);
-        if (requestId !== requestIdRef.current) return;
-        const next: Record<string, number | null> = {};
-        for (const stepId of stepIds) next[stepId] = null;
-        setStepCounts(next);
-      });
-  }, debounceMs);
-
-  useEffect(() => {
-    if (stepIds.length === 0) return;
-
-    // If the graph/plan is currently invalid (e.g. multiple outputs), don't wait on
-    // step counts at all. Immediately show unknown counts ("?") and invalidate any
-    // in-flight request so it can't overwrite the UI later.
-    if (!plan || !planHash) {
-      requestIdRef.current += 1;
-      lastRequestKeyRef.current = null;
+  const [prevValidKey, setPrevValidKey] = useState(validKey);
+  if (validKey !== prevValidKey) {
+    setPrevValidKey(validKey);
+    if (!planValid && stepIds.length > 0) {
       const next: Record<string, number | null> = {};
       for (const stepId of stepIds) next[stepId] = null;
-      setStepCounts(next);
-      return;
+      applyStepCounts(next);
     }
-
-    const stepIdsKey = stepIds.slice().sort().join("|");
-    const requestKey = `${planHash}:${stepIdsKey}:${refreshKey}`;
-    if (lastRequestKeyRef.current === requestKey) return;
-
-    debouncedFetchCounts();
-  }, [
-    siteId,
-    plan,
-    planHash,
-    stepIds,
-    setStepCounts,
-    fetchCounts,
-    debounceMs,
-    refreshKey,
-    debouncedFetchCounts,
-  ]);
+  }
 }

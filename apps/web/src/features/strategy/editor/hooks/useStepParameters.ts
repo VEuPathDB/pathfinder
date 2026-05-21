@@ -1,16 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, startTransition } from "react";
 import type { Search, StepKind } from "@pathfinder/shared";
 import type { StepParameters } from "@/lib/strategyGraph/types";
-import { usePrevious } from "@/lib/hooks/usePrevious";
 import { useParamSpecs } from "@/lib/hooks/useParamSpecs";
 import { extractVocabOptions, type VocabOption } from "@/lib/utils/vocab";
 import { extractSpecVocabulary } from "../components/stepEditorUtils";
-import { coerceParametersForSpecs } from "@/features/strategy/parameters/coerce";
 
 interface UseStepParametersArgs {
-  stepId: string;
   siteId: string;
   recordType: string | null;
   kind: StepKind;
@@ -19,11 +15,19 @@ interface UseStepParametersArgs {
   isSearchNameAvailable: boolean;
   apiRecordTypeValue: string | null | undefined;
   resolveRecordTypeForSearch: (searchRecordType?: string | null) => string;
-  initialParameters: StepParameters;
+  stepParameters: StepParameters | undefined;
 }
 
+/**
+ * Read-only param state — fetches `paramSpecs` and computes vocab + hidden
+ * defaults. Form values are owned by `useParamForm`; dependent-param refresh
+ * is owned by `useDependentParamRefresh`.
+ *
+ * `stepParameters` is the persisted `step.parameters` map: passed to
+ * `/param-specs` as `contextValues` so WDK echoes the user's saved values
+ * back through `initialDisplayValue` (instead of WDK's own defaults).
+ */
 export function useStepParameters({
-  stepId,
   siteId,
   recordType,
   kind,
@@ -32,23 +36,9 @@ export function useStepParameters({
   isSearchNameAvailable,
   apiRecordTypeValue,
   resolveRecordTypeForSearch,
-  initialParameters,
+  stepParameters,
 }: UseStepParametersArgs) {
-  const [parameters, setParameters] = useState<StepParameters>(initialParameters);
-  const [rawParams, setRawParams] = useState(
-    JSON.stringify(initialParameters, null, 2),
-  );
-  const [showRaw, setShowRaw] = useState(false);
-
-  // Dependent parameter state (currently unused placeholders).
-  const dependentOptions: Record<string, VocabOption[]> = {};
-  const dependentLoading: Record<string, boolean> = {};
-  const dependentErrors: Record<string, string | null> = {};
-
-  // -------------------------------------------------------------------------
-  // Param specs
-  // -------------------------------------------------------------------------
-  const { paramSpecs, isLoading } = useParamSpecs({
+  const { paramSpecs, isLoading, error } = useParamSpecs({
     siteId,
     recordType,
     searchName,
@@ -56,109 +46,39 @@ export function useStepParameters({
     isSearchNameAvailable,
     apiRecordTypeValue,
     resolveRecordTypeForSearch,
-    contextValues: parameters,
+    ...(stepParameters !== undefined ? { contextValues: stepParameters } : {}),
     enabled: kind !== "combine",
   });
 
-  // -------------------------------------------------------------------------
-  // Reset params when step identity or search name changes (user switched search).
-  // Keyed only on stepId + searchName — NOT record type, which can resolve
-  // asynchronously and cause a spurious reset that clears loaded params.
-  // -------------------------------------------------------------------------
-  const identityKey = `${stepId}:${searchName || ""}`;
-  const prevIdentityKey = usePrevious(identityKey);
-
-  useEffect(() => {
-    if (prevIdentityKey === undefined) return;
-    if (prevIdentityKey === identityKey) return;
-    startTransition(() => {
-      setParameters({});
-      setRawParams("{}");
-    });
-  }, [identityKey, prevIdentityKey]);
-
-  // -------------------------------------------------------------------------
-  // Coerce initial params when paramSpecs first load.
-  // WDK-synced strategies store multi-pick values as JSON-encoded strings
-  // (e.g. '["Plasmodium falciparum 3D7"]'). The widgets expect arrays, so
-  // we coerce once paramSpecs are available to determine which params are
-  // multi-pick. This runs exactly once per mount (component remounts for
-  // each new step since StepEditor is conditionally rendered).
-  // -------------------------------------------------------------------------
-  const hasCoercedRef = useRef(false);
-  useEffect(() => {
-    if (paramSpecs.length === 0 || isLoading) return;
-    if (hasCoercedRef.current) return;
-    hasCoercedRef.current = true;
-
-    startTransition(() => {
-      setParameters((prev) => {
-        if (Object.keys(prev).length === 0) return prev;
-        return coerceParametersForSpecs(prev, paramSpecs, {
-          allowStringParsing: false,
-        });
-      });
-      setRawParams((prev) => {
-        try {
-          const obj = JSON.parse(prev) as StepParameters;
-          if (Object.keys(obj).length === 0) return prev;
-          const coerced = coerceParametersForSpecs(obj, paramSpecs, {
-            allowStringParsing: false,
-          });
-          return JSON.stringify(coerced, null, 2);
-        } catch {
-          return prev;
-        }
-      });
-    });
-  }, [paramSpecs, isLoading]);
-
-  // -------------------------------------------------------------------------
-  // Vocabulary options (derived from param specs)
-  // -------------------------------------------------------------------------
-  const vocabOptions = useMemo(() => {
-    return paramSpecs.reduce<Record<string, VocabOption[]>>((acc, spec) => {
-      if (!spec.name) return acc;
+  const vocabOptions = paramSpecs.reduce<Record<string, VocabOption[]>>(
+    (acc, spec) => {
+      if (spec.name === "") return acc;
       const vocabulary = extractSpecVocabulary(spec);
-      if (vocabulary) {
+      if (vocabulary != null) {
         acc[spec.name] = extractVocabOptions(vocabulary);
       }
       return acc;
-    }, {});
-  }, [paramSpecs]);
+    },
+    {},
+  );
 
-  // -------------------------------------------------------------------------
-  // Hidden param defaults — for params with isVisible=false that no composite
-  // widget claims. These get merged into the save payload at lowest priority.
-  // -------------------------------------------------------------------------
-  const hiddenDefaults = useMemo(() => {
-    const defaults: StepParameters = {};
-    for (const spec of paramSpecs) {
-      if (spec.isVisible === false && spec.name) {
-        const defaultVal = spec.initialDisplayValue;
-        if (defaultVal != null) {
-          defaults[spec.name] = defaultVal;
-        } else if (spec.type === "input-step") {
-          defaults[spec.name] = "";
-        }
+  const hiddenDefaults: StepParameters = {};
+  for (const spec of paramSpecs) {
+    if (spec.isVisible === false && spec.name) {
+      const defaultVal = spec.initialDisplayValue;
+      if (defaultVal != null) {
+        hiddenDefaults[spec.name] = defaultVal;
+      } else if (spec.type === "input-step") {
+        hiddenDefaults[spec.name] = "";
       }
     }
-    return defaults;
-  }, [paramSpecs]);
+  }
 
   return {
-    parameters,
-    setParameters,
-    rawParams,
-    setRawParams,
-    showRaw,
-    setShowRaw,
     paramSpecs,
     isLoading,
+    error,
     vocabOptions,
     hiddenDefaults,
-    dependentOptions,
-    dependentLoading,
-    dependentErrors,
   };
 }

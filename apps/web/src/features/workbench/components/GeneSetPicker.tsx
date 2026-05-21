@@ -1,28 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useOnClickOutside } from "usehooks-ts";
 import { Database } from "lucide-react";
-import { useWorkbenchStore } from "../store";
+import { useSessionStore } from "@/state/useSessionStore";
+import { useGeneSetsQuery } from "@/lib/query/hooks/useGeneSetsQuery";
 
 interface GeneSetPickerProps {
   onSelect: (geneIds: string[]) => void;
 }
 
 export function GeneSetPicker({ onSelect }: GeneSetPickerProps) {
-  const geneSets = useWorkbenchStore((s) => s.geneSets);
+  const selectedSite = useSessionStore((s) => s.selectedSite);
+  const { data: geneSets = [] } = useGeneSetsQuery(selectedSite);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const setsWithGenes = geneSets.filter((gs) => gs.geneIds && gs.geneIds.length > 0);
+  const setsWithGenes = geneSets.filter((gs) => gs.geneIds.length > 0);
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  useOnClickOutside(ref as React.RefObject<HTMLElement>, () => setOpen(false));
 
   return (
     <div ref={ref} className="relative">
@@ -43,7 +39,7 @@ export function GeneSetPicker({ onSelect }: GeneSetPickerProps) {
               key={gs.id}
               type="button"
               onClick={() => {
-                onSelect(gs.geneIds ?? []);
+                onSelect(gs.geneIds);
                 setOpen(false);
               }}
               className="flex w-full items-center justify-between px-3 py-2 text-left text-xs transition-colors duration-75 hover:bg-accent"

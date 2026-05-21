@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { getVeupathdbAuthStatus, loginVeupathdb } from "@/lib/api/veupathdb-auth";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  authStatusOptions,
+  getVeupathdbAuthStatus,
+  loginVeupathdb,
+} from "@/lib/api/veupathdb-auth";
 import { useSessionStore } from "@/state/useSessionStore";
 import { Input } from "@/lib/components/ui/Input";
 
@@ -21,8 +26,8 @@ export function SignInForm({ onSuccess }: SignInFormProps) {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
 
-  const setVeupathdbAuth = useSessionStore((state) => state.setVeupathdbAuth);
   const selectedSite = useSessionStore((state) => state.selectedSite);
+  const queryClient = useQueryClient();
 
   const handleSubmit = async () => {
     setAuthError(null);
@@ -30,8 +35,11 @@ export function SignInForm({ onSuccess }: SignInFormProps) {
     try {
       await loginVeupathdb(email, password, selectedSite);
       const status = await getVeupathdbAuthStatus(selectedSite);
-      setVeupathdbAuth(status.signedIn, status.name ?? null);
       if (status.signedIn) {
+        queryClient.setQueryData(
+          authStatusOptions(selectedSite).queryKey,
+          status,
+        );
         onSuccess?.();
       } else {
         setAuthError("Login failed. Please check your credentials.");
@@ -62,7 +70,7 @@ export function SignInForm({ onSuccess }: SignInFormProps) {
           }}
         />
       </div>
-      {authError && (
+      {authError != null && (
         <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {authError}
         </div>
@@ -70,7 +78,9 @@ export function SignInForm({ onSuccess }: SignInFormProps) {
       <button
         type="button"
         disabled={authBusy}
-        onClick={handleSubmit}
+        onClick={() => {
+          void handleSubmit();
+        }}
         className="w-full rounded-md bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:bg-primary/90 hover:-translate-y-px active:translate-y-0 disabled:opacity-60"
       >
         {authBusy ? "Signing in..." : "Sign in"}

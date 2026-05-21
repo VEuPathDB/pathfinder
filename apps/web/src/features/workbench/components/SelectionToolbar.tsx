@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Trash2,
   Download,
@@ -12,8 +12,10 @@ import {
 import { Button } from "@/lib/components/ui/Button";
 import { deleteGeneSet } from "../api/geneSets";
 import { exportAsTxt, exportAsCsv, exportMultipleAsCsv } from "../utils/export";
-import { useWorkbenchStore } from "../store";
-import type { GeneSet } from "../store";
+import { useShallow } from "zustand/react/shallow";
+import { useWorkbenchStore } from "@/state/useWorkbenchStore";
+import { useInvalidateGeneSets } from "@/lib/query/hooks/useInvalidateGeneSets";
+import type { GeneSet } from "@pathfinder/shared";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import {
   DropdownMenu,
@@ -25,7 +27,7 @@ import {
 interface SelectionToolbarProps {
   activeSet: GeneSet | null;
   selectedSets: GeneSet[];
-  allSetsCount: number;
+  allSetIds: string[];
   onCompare: () => void;
   onOverlap: () => void;
 }
@@ -33,43 +35,46 @@ interface SelectionToolbarProps {
 export function SelectionToolbar({
   activeSet,
   selectedSets,
-  allSetsCount,
+  allSetIds,
   onCompare,
   onOverlap,
 }: SelectionToolbarProps) {
-  const removeGeneSets = useWorkbenchStore((s) => s.removeGeneSets);
-  const selectAll = useWorkbenchStore((s) => s.selectAll);
-  const deselectAll = useWorkbenchStore((s) => s.deselectAll);
+  const { selectAll, deselectAll, clearSelection } = useWorkbenchStore(
+    useShallow((s) => ({
+      selectAll: s.selectAll,
+      deselectAll: s.deselectAll,
+      clearSelection: s.clearSelection,
+    })),
+  );
+  const invalidateGeneSets = useInvalidateGeneSets();
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const toDelete = useMemo(
-    () => (selectedSets.length > 0 ? selectedSets : activeSet ? [activeSet] : []),
-    [selectedSets, activeSet],
-  );
+  const toDelete = selectedSets.length > 0 ? selectedSets : activeSet ? [activeSet] : [];
   const hasExactlyTwo = selectedSets.length === 2;
   const hasTwoOrMore = selectedSets.length >= 2;
 
-  const handleDeleteRequest = useCallback(() => {
+  const handleDeleteRequest = () => {
     if (toDelete.length === 0) return;
     setShowDeleteConfirm(true);
-  }, [toDelete.length]);
+  };
 
-  const handleDeleteConfirm = useCallback(async () => {
+  const handleDeleteConfirm = async () => {
     setShowDeleteConfirm(false);
     setDeleting(true);
     setDeleteError(null);
     try {
       await Promise.all(toDelete.map((gs) => deleteGeneSet(gs.id)));
-      removeGeneSets(toDelete.map((gs) => gs.id));
+      clearSelection();
+      await invalidateGeneSets();
     } catch (err) {
       console.error("Failed to delete gene set(s):", err);
       setDeleteError("Some gene sets could not be deleted. Please try again.");
     } finally {
       setDeleting(false);
     }
-  }, [toDelete, removeGeneSets]);
+  };
 
   const exportTarget =
     selectedSets.length > 0 ? selectedSets : activeSet ? [activeSet] : [];
@@ -78,7 +83,7 @@ export function SelectionToolbar({
     <>
       <div className="border-t border-border px-3 py-2.5">
         {/* Selection summary */}
-        {allSetsCount > 0 && (
+        {allSetIds.length > 0 && (
           <div className="mb-2 flex items-center justify-between">
             <p className="text-[10px] text-muted-foreground">
               {selectedSets.length > 0
@@ -87,10 +92,10 @@ export function SelectionToolbar({
             </p>
             <button
               type="button"
-              onClick={selectedSets.length === allSetsCount ? deselectAll : selectAll}
+              onClick={selectedSets.length === allSetIds.length ? deselectAll : () => selectAll(allSetIds)}
               className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
             >
-              {selectedSets.length === allSetsCount ? (
+              {selectedSets.length === allSetIds.length ? (
                 <>
                   <Square className="h-3 w-3" /> Deselect all
                 </>
@@ -150,16 +155,20 @@ export function SelectionToolbar({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top">
-                {exportTarget.length === 1 && (
-                  <>
-                    <DropdownMenuItem onClick={() => exportAsCsv(exportTarget[0])}>
-                      Export as CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => exportAsTxt(exportTarget[0])}>
-                      Export as TXT
-                    </DropdownMenuItem>
-                  </>
-                )}
+                {(() => {
+                  const singleTarget =
+                    exportTarget.length === 1 ? exportTarget[0] : null;
+                  return singleTarget != null ? (
+                    <>
+                      <DropdownMenuItem onClick={() => exportAsCsv(singleTarget)}>
+                        Export as CSV
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportAsTxt(singleTarget)}>
+                        Export as TXT
+                      </DropdownMenuItem>
+                    </>
+                  ) : null;
+                })()}
                 {exportTarget.length > 1 && (
                   <DropdownMenuItem onClick={() => exportMultipleAsCsv(exportTarget)}>
                     Export {exportTarget.length} sets as CSV
@@ -170,7 +179,7 @@ export function SelectionToolbar({
           )}
         </div>
 
-        {deleteError && (
+        {deleteError != null && deleteError !== "" && (
           <p className="mt-2 text-xs text-destructive" role="alert">
             {deleteError}
           </p>
@@ -180,7 +189,9 @@ export function SelectionToolbar({
       <DeleteConfirmDialog
         open={showDeleteConfirm}
         count={toDelete.length}
-        onConfirm={handleDeleteConfirm}
+        onConfirm={() => {
+          void handleDeleteConfirm();
+        }}
         onCancel={() => setShowDeleteConfirm(false)}
       />
     </>

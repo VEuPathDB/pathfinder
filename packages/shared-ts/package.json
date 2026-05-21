@@ -1,37 +1,36 @@
 {
   "name": "@pathfinder/shared",
-  "version": "0.1.0-alpha",
+  "version": "0.2.0-alpha.1",
   "description": "Shared TypeScript types for Pathfinder",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "generate:openapi": "node scripts/generate-openapi.mjs",
-    "check:openapi": "node scripts/generate-openapi.mjs --check",
+    "generate": "kubb",
     "build": "tsc",
     "dev": "tsc --watch",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.95.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@kubb/cli": "^4.37.2",
+    "@kubb/core": "^4.37.2",
+    "@kubb/plugin-oas": "^4.37.2",
+    "@kubb/plugin-react-query": "^4.37.2",
+    "@kubb/plugin-ts": "^4.37.2",
+    "@kubb/plugin-zod": "^4.37.2",
+    "@kubb/react-fabric": "^0.14.0",
+    "@tanstack/react-query": "^5.95.2",
     "@types/node": "^25.3.5",
-    "openapi-typescript": "^7.13.0",
-    "typescript": "^5.9.3"
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "zod": "^4.3.6"
   },
   "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./types": {
-      "import": "./dist/types.js",
-      "types": "./dist/types.d.ts"
-    },
-    "./zod": {
-      "import": "./dist/zod.js",
-      "types": "./dist/zod.d.ts"
-    }
+    ".": "./src/index.ts",
+    "./generated/*": "./src/generated/*"
   }
 }

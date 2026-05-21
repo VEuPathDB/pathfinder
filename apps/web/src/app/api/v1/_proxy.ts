@@ -8,11 +8,10 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 
+import { getConfiguredServerApiBaseUrl } from "@/lib/config/apiBase";
+
 export function getUpstreamBase(): string {
-  return (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(
-    /\/+$/,
-    "",
-  );
+  return getConfiguredServerApiBaseUrl();
 }
 
 export function forwardHeaders(
@@ -22,10 +21,13 @@ export function forwardHeaders(
   const headers: Record<string, string> = { ...overrides };
 
   const auth = req.headers.get("authorization");
-  if (auth) headers["Authorization"] = auth;
+  if (auth !== null) headers["Authorization"] = auth;
 
   const cookie = req.headers.get("cookie");
-  if (cookie) headers["Cookie"] = cookie;
+  if (cookie !== null) headers["Cookie"] = cookie;
+
+  const xrw = req.headers.get("x-requested-with");
+  if (xrw !== null) headers["X-Requested-With"] = xrw;
 
   return headers;
 }
@@ -52,7 +54,7 @@ function pipeStream(upstream: ReadableStream<Uint8Array>): ReadableStream<Uint8A
       }
     },
     cancel() {
-      reader.cancel();
+      void reader.cancel();
     },
   });
 }
@@ -80,16 +82,16 @@ export async function proxySSEPost(
 
   let upstream: Response;
   try {
-    upstream = await fetch(url, {
+    const fetchOptions: RequestInit & { duplex: string } = {
       method: "POST",
       headers: forwardHeaders(req, {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
       }),
       body,
-      // @ts-expect-error -- Node 18+ undici: disables response body buffering
       duplex: "half",
-    });
+    };
+    upstream = await fetch(url, fetchOptions);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
@@ -103,7 +105,7 @@ export async function proxySSEPost(
     return new Response(errorBody, {
       status: upstream.status,
       headers: {
-        "Content-Type": upstream.headers.get("content-type") || "application/json",
+        "Content-Type": upstream.headers.get("content-type") ?? "application/json",
       },
     });
   }
@@ -146,7 +148,7 @@ export async function proxySSEGet(
     return new Response(errorBody, {
       status: upstream.status,
       headers: {
-        "Content-Type": upstream.headers.get("content-type") || "application/json",
+        "Content-Type": upstream.headers.get("content-type") ?? "application/json",
       },
     });
   }
@@ -173,16 +175,23 @@ export async function proxyJsonRequest(
       method,
       headers: forwardHeaders(req, {
         Accept: "application/json",
-        ...(options?.includeBody ? { "Content-Type": "application/json" } : {}),
+        ...(options?.includeBody === true
+          ? { "Content-Type": "application/json" }
+          : {}),
       }),
-      ...(options?.includeBody ? { body: await req.text() } : {}),
+      ...(options?.includeBody === true ? { body: await req.text() } : {}),
     });
     const body = await upstream.text();
+    const headers = new Headers({
+      "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+    });
+    const setCookie = upstream.headers.get("set-cookie");
+    if (setCookie !== null) {
+      headers.set("set-cookie", setCookie);
+    }
     return new Response(body, {
       status: upstream.status,
-      headers: {
-        "Content-Type": upstream.headers.get("content-type") || "application/json",
-      },
+      headers,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

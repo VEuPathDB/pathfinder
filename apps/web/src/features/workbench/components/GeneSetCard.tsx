@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
-import type { GeneSet } from "../store";
+import type { GeneSet } from "@pathfinder/shared";
 import { cn } from "@/lib/utils/cn";
 import { SOURCE_CONFIG } from "./geneSetSourceConfig";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/lib/components/ui/Tooltip";
@@ -33,21 +32,21 @@ export function GeneSetCard({
   const { icon: Icon } = SOURCE_CONFIG[geneSet.source];
 
   // Compute overlap percentage with the active set
-  const overlapPct = useMemo(() => {
-    const ids = geneSet.geneIds ?? [];
+  const overlapPct = (() => {
+    const ids = geneSet.geneIds;
     if (activeGeneIds.length === 0 || ids.length === 0) return null;
     if (isActive) return 100;
     const activeSet = new Set(activeGeneIds);
     const overlap = ids.filter((id) => activeSet.has(id)).length;
     return Math.round((overlap / ids.length) * 100);
-  }, [isActive, activeGeneIds, geneSet.geneIds]);
+  })();
 
   // Provenance for derived sets
-  const provenance = useMemo(() => {
+  const provenance = (() => {
     if (geneSet.source !== "derived" || !geneSet.operation) return null;
     const symbol = OP_SYMBOLS[geneSet.operation] ?? geneSet.operation;
     return `${symbol} derived`;
-  }, [geneSet.source, geneSet.operation]);
+  })();
 
   return (
     <div
@@ -116,7 +115,7 @@ export function GeneSetCard({
         )}
 
         {/* Row 3: provenance for derived sets */}
-        {provenance && (
+        {provenance != null && provenance !== "" && (
           <p className="mt-0.5 text-[10px] text-muted-foreground">{provenance}</p>
         )}
       </button>

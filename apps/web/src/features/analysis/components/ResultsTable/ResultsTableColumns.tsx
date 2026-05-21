@@ -1,11 +1,15 @@
+import type { ColumnDef } from "@tanstack/react-table";
 import type { Classification } from "@pathfinder/shared";
 import { Badge } from "@/lib/components/ui/Badge";
 import { sanitizeHtml } from "@/lib/utils/sanitizeHtml";
-import type { WdkRecord } from "@/lib/types/wdk";
+import type { RecordAttribute } from "@pathfinder/shared/generated/types/RecordAttribute";
+import type { ClassifiedRecord } from "@pathfinder/shared/generated/types/ClassifiedRecord";
 
 export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
-export const CLASSIFICATION_STYLES: Record<
+const CLASSIFICATION_COLUMN_ID = "classification";
+
+const CLASSIFICATION_STYLES: Record<
   Classification,
   {
     label: string;
@@ -23,9 +27,9 @@ export const CLASSIFICATION_STYLES: Record<
   },
 };
 
-export function getPrimaryKey(record: WdkRecord): string {
-  if (!Array.isArray(record.id) || record.id.length === 0) {
-    return String(record.id ?? "unknown");
+export function getPrimaryKey(record: ClassifiedRecord): string {
+  if (record.id.length === 0) {
+    return "unknown";
   }
   return record.id.map((k) => k.value).join("/");
 }
@@ -44,7 +48,7 @@ const HTML_TAG_RE = /<[^>]+>/;
 
 function stripHtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, "text/html");
-  return doc.body.textContent ?? "";
+  return doc.body.textContent;
 }
 
 /** Partial shape of a WDK link-attribute JSON blob. */
@@ -65,7 +69,7 @@ function tryParseJsonLink(raw: string): { text: string; url: string } | null {
   return null;
 }
 
-export function AttributeValue({ value }: { value: string | null | undefined }) {
+export function AttributeValue({ value }: { value: unknown }) {
   if (value == null) return <span className="text-muted-foreground">{"\u2014"}</span>;
 
   const str = typeof value === "object" ? JSON.stringify(value) : String(value);
@@ -88,6 +92,36 @@ export function AttributeValue({ value }: { value: string | null | undefined }) 
   if (HTML_TAG_RE.test(str)) return <>{stripHtml(str)}</>;
 
   return <>{str}</>;
+}
+
+export function buildColumns(
+  attributes: RecordAttribute[],
+  includeClassification: boolean,
+): ColumnDef<ClassifiedRecord>[] {
+  const attributeColumns: ColumnDef<ClassifiedRecord>[] = attributes.map((attr) => ({
+    id: attr.name,
+    header: attr.displayName,
+    accessorFn: (row) => row.attributes[attr.name],
+    enableSorting: attr.isSortable !== false,
+    enableHiding: true,
+    cell: (info) => <AttributeValue value={info.getValue()} />,
+  }));
+
+  if (!includeClassification) {
+    return attributeColumns;
+  }
+
+  const classificationColumn: ColumnDef<ClassifiedRecord> = {
+    id: CLASSIFICATION_COLUMN_ID,
+    header: "Class",
+    enableSorting: false,
+    enableHiding: false,
+    cell: (info) => (
+      <ClassificationBadge value={info.row.original.classification ?? null} />
+    ),
+  };
+
+  return [classificationColumn, ...attributeColumns];
 }
 
 export function AttributeValueRich({ value }: { value: unknown }) {

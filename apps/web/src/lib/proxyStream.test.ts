@@ -8,6 +8,7 @@
  * 3. The proxy must not accumulate multiple events before sending.
  */
 
+import type { NextRequest } from "next/server";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 
 // We can't directly import the pipeStream function since it's not exported,
@@ -50,7 +51,7 @@ async function collectChunks(stream: ReadableStream<Uint8Array>): Promise<string
   const decoder = new TextDecoder();
   const chunks: string[] = [];
 
-  while (true) {
+  for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(decoder.decode(value, { stream: true }));
@@ -65,11 +66,13 @@ async function collectChunks(stream: ReadableStream<Uint8Array>): Promise<string
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("NEXT_PUBLIC_API_URL", "http://api.test");
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("SSE proxy streaming behavior", () => {
@@ -98,7 +101,7 @@ describe("SSE proxy streaming behavior", () => {
     const mockReq = {
       headers: new Headers({ authorization: "Bearer test" }),
       url: "http://localhost:3000/api/v1/operations/op-1/subscribe",
-    } as unknown as import("next/server").NextRequest;
+    } as unknown as NextRequest;
 
     const response = await proxySSEGet(mockReq, "/api/v1/operations/op-1/subscribe");
 
@@ -132,7 +135,7 @@ describe("SSE proxy streaming behavior", () => {
     const mockReq = {
       headers: new Headers({}),
       url: "http://localhost:3000/test",
-    } as unknown as import("next/server").NextRequest;
+    } as unknown as NextRequest;
 
     const response = await proxySSEGet(mockReq, "/test");
 
@@ -158,7 +161,7 @@ describe("SSE proxy streaming behavior", () => {
     const mockReq = {
       headers: new Headers({}),
       url: "http://localhost:3000/test",
-    } as unknown as import("next/server").NextRequest;
+    } as unknown as NextRequest;
 
     await proxySSEGet(mockReq, "/test");
 
@@ -171,27 +174,43 @@ describe("SSE proxy streaming behavior", () => {
   });
 });
 
+describe("JSON proxy behavior", () => {
+  it("forwards upstream set-cookie headers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response('{"ok":true}', {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "set-cookie": "pathfinder-auth=test; Path=/; HttpOnly",
+        },
+      })),
+    );
+
+    const { proxyJsonRequest } = await import("@/app/api/v1/_proxy");
+
+    const mockReq = {
+      headers: new Headers({}),
+      method: "POST",
+      url: "http://localhost:3000/api/v1/dev/login",
+    } as unknown as NextRequest;
+
+    const response = await proxyJsonRequest(mockReq, "/api/v1/dev/login");
+
+    expect(response.headers.get("set-cookie")).toContain("pathfinder-auth=test");
+  });
+});
+
 describe("Next.js config for SSE", () => {
   it("has compression disabled to prevent SSE buffering", async () => {
-    // Read the next.config.js and verify compress: false
+    // Read the next.config.ts and verify compress: false
     // This is critical: Next.js default compress: true uses gzip which
     // buffers the response, breaking token-by-token SSE delivery.
     const fs = await import("node:fs");
     const path = await import("node:path");
 
-    // Walk up from src/lib to find next.config.js at the web app root
-    let dir = path.resolve(__dirname, "..");
-    let configPath = "";
-    for (let i = 0; i < 5; i++) {
-      const candidate = path.join(dir, "next.config.js");
-      if (fs.existsSync(candidate)) {
-        configPath = candidate;
-        break;
-      }
-      dir = path.dirname(dir);
-    }
-
-    expect(configPath).not.toBe(""); // must find the config
+    const configPath = path.resolve(__dirname, "../..", "next.config.ts");
+    expect(fs.existsSync(configPath)).toBe(true);
     const configContent = fs.readFileSync(configPath, "utf-8");
 
     // The config must explicitly set compress: false

@@ -47,16 +47,16 @@ function CIRow({
   ci: ConfidenceInterval;
   isEnrichment?: boolean;
 }) {
-  const widthIsNarrow = ci.upper - ci.lower < 0.15;
+  const widthIsNarrow = (ci.upper ?? 0) - (ci.lower ?? 0) < 0.15;
   return (
     <tr className="border-b border-border last:border-0">
       <td className="px-4 py-2 text-sm text-foreground">{label}</td>
       <td className="px-4 py-2 text-right font-mono text-sm tabular-nums">
-        {isEnrichment ? `${fmtNum(ci.mean)}x` : pct(ci.mean)}
+        {isEnrichment === true ? `${fmtNum(ci.mean)}x` : pct(ci.mean)}
       </td>
       <td className="px-4 py-2 text-right font-mono text-xs tabular-nums text-muted-foreground">
-        [{isEnrichment ? fmtNum(ci.lower) : pct(ci.lower)},{" "}
-        {isEnrichment ? fmtNum(ci.upper) : pct(ci.upper)}]
+        [{isEnrichment === true ? fmtNum(ci.lower) : pct(ci.lower)},{" "}
+        {isEnrichment === true ? fmtNum(ci.upper) : pct(ci.upper)}]
       </td>
       <td className="px-4 py-2 text-right text-xs">
         <Badge
@@ -74,7 +74,7 @@ export function RobustnessSection({ robustness }: RobustnessSectionProps) {
   const allCis = { ...robustness.metricCis, ...(robustness.rankMetricCis ?? {}) };
   const ciEntries = Object.entries(allCis).filter(([k]) => k in METRIC_DISPLAY);
   const hasRankCis = Object.keys(robustness.rankMetricCis ?? {}).length > 0;
-  const stability = stabilityLabel(robustness.topKStability);
+  const stability = stabilityLabel(robustness.topKStability ?? 0);
 
   return (
     <Section title="Robustness & Uncertainty">

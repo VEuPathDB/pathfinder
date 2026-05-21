@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "@/styles/globals.css";
+import "streamdown/styles.css";
+import { TelemetryErrorBoundary } from "@/lib/telemetry/ErrorBoundary";
 import { Providers } from "./components/Providers";
 
 const inter = Inter({
@@ -15,8 +17,11 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+// Every page requires auth + API data — nothing should be statically prerendered.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
-  title: "PathFinder - VEuPathDB Strategy Builder",
+  title: "PathFinder",
   description: "AI-powered search strategy builder for VEuPathDB",
   icons: {
     icon: "/favicon.svg",
@@ -31,9 +36,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
       <body className="h-full overflow-hidden bg-background text-foreground font-sans antialiased">
-        <Providers>
-          <main className="h-full">{children}</main>
-        </Providers>
+        <TelemetryErrorBoundary>
+          <Providers>
+            <main className="h-full">{children}</main>
+          </Providers>
+        </TelemetryErrorBoundary>
       </body>
     </html>
   );

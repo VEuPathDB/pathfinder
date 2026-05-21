@@ -1,4 +1,8 @@
 import { test, expect } from "../fixtures/test";
+import {
+  MOCK_DELEGATION_PROMPT,
+  MOCK_PLAN_PROMPT,
+} from "../fixtures/mock-prompts";
 
 test.describe("Strategy Graph", () => {
   test.describe.configure({ mode: "serial" });
@@ -11,29 +15,27 @@ test.describe("Strategy Graph", () => {
   test("planning artifact creates strategy with real search names stored in DB", async ({
     chatPage,
     graphPage,
-    page,
     apiClient,
   }) => {
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
-    // UI: Click apply
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
-    await graphPage.expectCompactView();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
     await chatPage.expectIdle();
 
-    // UI: Step pills visible with content
-    const pillCount = await graphPage.stepPills.count();
-    expect(pillCount).toBeGreaterThan(0);
+    // UI: Step rows visible with content
+    const rowCount = await graphPage.railStepRows.count();
+    expect(rowCount).toBeGreaterThan(0);
 
-    // UI: First step pill should show real search-related text
-    const firstPillText = await graphPage.stepPills.first().textContent();
-    expect(firstPillText).toBeTruthy();
+    // UI: First step row should show real search-related text
+    const firstRowText = await graphPage.firstRailStepText();
+    expect(firstRowText.length).toBeGreaterThan(0);
 
     // API: Strategy persisted with steps — use captured ID for isolation
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
-    const fullResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const fullResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(fullResp.ok()).toBeTruthy();
     const full = await fullResp.json();
     expect(full.steps.length).toBeGreaterThan(0);
@@ -44,18 +46,20 @@ test.describe("Strategy Graph", () => {
     graphPage,
     apiClient,
   }) => {
-    await chatPage.send("delegation");
-    await chatPage.expectAssistantMessage(/\[mock\].*delegation/i);
-    await graphPage.expectCompactView();
+    await chatPage.send(MOCK_DELEGATION_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
+    await chatPage.expectIdle();
 
-    // UI: Step pills from delegation
-    const pillCount = await graphPage.stepPills.count();
-    expect(pillCount).toBeGreaterThan(0);
+    // UI: Step rows from delegation
+    const rowCount = await graphPage.railStepRows.count();
+    expect(rowCount).toBeGreaterThan(0);
 
     // API: Strategy persisted — use captured ID for isolation
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
-    const fullResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const fullResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(fullResp.ok()).toBeTruthy();
   });
 
@@ -65,11 +69,11 @@ test.describe("Strategy Graph", () => {
     page,
     apiClient,
   }) => {
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
-    await graphPage.expectCompactView();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
 
     // Use the strategy ID captured during newChat()
     const strategyId = chatPage.lastStrategyId;
@@ -80,13 +84,13 @@ test.describe("Strategy Graph", () => {
       timeout: 15_000,
     });
 
-    // UI: Graph compact view must be visible after reload
-    await graphPage.expectCompactView();
-    const pillCount = await graphPage.stepPills.count();
-    expect(pillCount).toBeGreaterThan(0);
+    // UI: Graph rail must be visible after reload
+    await graphPage.expectRailPanel();
+    const rowCount = await graphPage.railStepRows.count();
+    expect(rowCount).toBeGreaterThan(0);
 
     // API: Strategy still in DB after reload with steps intact
-    const afterResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const afterResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(afterResp.ok()).toBeTruthy();
     const strategy = await afterResp.json();
     expect(strategy.steps.length).toBeGreaterThan(0);
@@ -96,12 +100,14 @@ test.describe("Strategy Graph", () => {
     chatPage,
     graphPage,
   }) => {
-    await chatPage.send("delegation");
-    // Graph must appear DURING streaming, before message_end
-    await graphPage.expectCompactView();
-    // Step pills must be visible
-    const pillCount = await graphPage.stepPills.count();
-    expect(pillCount).toBeGreaterThan(0);
+    await chatPage.send(MOCK_DELEGATION_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
+    // Graph must appear during execution streaming, before message_end.
+    await graphPage.expectRailPanel();
+    // Step rows must be visible
+    const rowCount = await graphPage.railStepRows.count();
+    expect(rowCount).toBeGreaterThan(0);
   });
 
   test("delegation graph visible in UI after page reload", async ({
@@ -110,10 +116,11 @@ test.describe("Strategy Graph", () => {
     page,
     apiClient,
   }) => {
-    await chatPage.send("delegation");
-    await chatPage.expectAssistantMessage(/\[mock\].*delegation/i);
+    await chatPage.send(MOCK_DELEGATION_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
     await chatPage.expectIdle();
-    await graphPage.expectCompactView();
 
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
@@ -123,13 +130,13 @@ test.describe("Strategy Graph", () => {
       timeout: 15_000,
     });
 
-    // UI: Graph renders after reload
-    await graphPage.expectCompactView();
-    const pillCount = await graphPage.stepPills.count();
-    expect(pillCount).toBeGreaterThan(0);
+    // UI: Graph rail renders after reload
+    await graphPage.expectRailPanel();
+    const rowCount = await graphPage.railStepRows.count();
+    expect(rowCount).toBeGreaterThan(0);
 
     // API: Steps persisted
-    const resp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const resp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(resp.ok()).toBeTruthy();
     const strategy = await resp.json();
     expect(strategy.steps.length).toBeGreaterThan(0);

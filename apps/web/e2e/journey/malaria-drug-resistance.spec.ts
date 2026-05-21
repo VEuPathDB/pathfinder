@@ -1,4 +1,5 @@
-import { test, expect } from "../fixtures/test";
+import { test, expect } from "../fixtures/a11y";
+import { MOCK_PLAN_PROMPT } from "../fixtures/mock-prompts";
 
 /**
  * Journey: Malaria Drug Resistance Research — PlasmoDB
@@ -55,18 +56,18 @@ test.describe("Malaria Drug Resistance Journey", () => {
     await chatPage.expectIdle();
 
     // Round 3 — trigger planning artifact (real GenesByTaxon search)
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
     // ── Phase 2: Strategy Creation ────────────────────────────────
 
     // Apply plan — backend stores real strategy with GenesByTaxon search
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
-    await graphPage.expectCompactView();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
     await chatPage.expectIdle();
 
     // Verify strategy was persisted via API
-    const strategiesResp = await apiClient.get("/api/v1/strategies");
+    const strategiesResp = await apiClient.get("/api/v1/conversations");
     expect(strategiesResp.ok()).toBeTruthy();
     const strategies = await strategiesResp.json();
     expect(strategies.length).toBeGreaterThan(0);

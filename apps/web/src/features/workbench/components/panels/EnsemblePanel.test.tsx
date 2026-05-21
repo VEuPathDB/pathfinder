@@ -33,14 +33,23 @@ const storeState: Record<string, unknown> = {
 const mockStore = (selector: (s: Record<string, unknown>) => unknown) =>
   selector(storeState);
 
-vi.mock("../../store", () => ({
+vi.mock("@/state/useWorkbenchStore", () => ({
   useWorkbenchStore: (selector: (s: Record<string, unknown>) => unknown) =>
     mockStore(selector),
 }));
 
-vi.mock("../../store/useWorkbenchStore", () => ({
-  useWorkbenchStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    mockStore(selector),
+vi.mock("@/state/useSessionStore", () => ({
+  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      selectedSite: "PlasmoDB",
+    }),
+}));
+
+vi.mock("@/lib/query/hooks/useGeneSetsQuery", () => ({
+  useGeneSetsQuery: () => ({
+    data: storeState["geneSets"] as GeneSet[],
+    isPending: false,
+  }),
 }));
 
 // Mock the API call
@@ -50,8 +59,11 @@ vi.mock("@/lib/api/http", () => ({
 }));
 
 // Mock GeneChipInput's dependencies
-vi.mock("@/lib/api/genes", () => ({
-  resolveGeneIds: vi.fn().mockResolvedValue({ resolved: [], unresolved: [] }),
+vi.mock("@pathfinder/shared/generated/hooks/useResolveGenes", () => ({
+  resolveGenes: vi.fn().mockResolvedValue({ resolved: [], unresolved: [] }),
+}));
+
+vi.mock("@pathfinder/shared/generated/hooks/useSearchGenes", () => ({
   searchGenes: vi.fn().mockResolvedValue([]),
 }));
 
@@ -72,13 +84,13 @@ describe("EnsemblePanel", () => {
   });
 
   beforeEach(() => {
-    storeState.geneSets = [];
-    storeState.selectedSetIds = [];
-    storeState.expandedPanels = new Set(["ensemble"]);
+    storeState["geneSets"] = [];
+    storeState["selectedSetIds"] = [];
+    storeState["expandedPanels"] = new Set(["ensemble"]);
   });
 
   it("shows disabled state when fewer than 2 gene sets exist", () => {
-    storeState.geneSets = [makeGeneSet("s1", ["G1"])];
+    storeState["geneSets"] = [makeGeneSet("s1", ["G1"])];
     render(<EnsemblePanel />);
     expect(screen.getByText("Ensemble Scoring")).toBeTruthy();
     // Panel header shows but content should not render (disabled)
@@ -86,11 +98,11 @@ describe("EnsemblePanel", () => {
   });
 
   it("renders gene set selector when 2+ gene sets exist", () => {
-    storeState.geneSets = [
+    storeState["geneSets"] = [
       makeGeneSet("s1", ["G1", "G2"]),
       makeGeneSet("s2", ["G2", "G3"]),
     ];
-    storeState.selectedSetIds = ["s1", "s2"];
+    storeState["selectedSetIds"] = ["s1", "s2"];
 
     render(<EnsemblePanel />);
     expect(screen.getByText("Set s1")).toBeTruthy();
@@ -98,8 +110,8 @@ describe("EnsemblePanel", () => {
   });
 
   it("disables compute button when fewer than 2 sets are selected", () => {
-    storeState.geneSets = [makeGeneSet("s1", ["G1"]), makeGeneSet("s2", ["G2"])];
-    storeState.selectedSetIds = ["s1"];
+    storeState["geneSets"] = [makeGeneSet("s1", ["G1"]), makeGeneSet("s2", ["G2"])];
+    storeState["selectedSetIds"] = ["s1"];
 
     render(<EnsemblePanel />);
     const button = screen.getByRole("button", { name: /compute/i });
@@ -108,11 +120,11 @@ describe("EnsemblePanel", () => {
   });
 
   it("shows ranked table after computation", async () => {
-    storeState.geneSets = [
+    storeState["geneSets"] = [
       makeGeneSet("s1", ["G1", "G2"]),
       makeGeneSet("s2", ["G2", "G3"]),
     ];
-    storeState.selectedSetIds = ["s1", "s2"];
+    storeState["selectedSetIds"] = ["s1", "s2"];
 
     mockRequestJson.mockResolvedValueOnce([
       { geneId: "G2", frequency: 1.0, count: 2, total: 2, inPositives: false },
@@ -133,22 +145,26 @@ describe("EnsemblePanel", () => {
   });
 
   it("sends correct request body to the API", async () => {
-    storeState.geneSets = [
+    storeState["geneSets"] = [
       makeGeneSet("s1", ["G1"]),
       makeGeneSet("s2", ["G2"]),
       makeGeneSet("s3", ["G3"]),
     ];
-    storeState.selectedSetIds = ["s1", "s3"];
+    storeState["selectedSetIds"] = ["s1", "s3"];
 
     mockRequestJson.mockResolvedValueOnce([]);
 
     render(<EnsemblePanel />);
     fireEvent.click(screen.getByRole("button", { name: /compute/i }));
 
-    expect(mockRequestJson).toHaveBeenCalledWith("/api/v1/gene-sets/ensemble", {
-      method: "POST",
-      body: { geneSetIds: ["s1", "s3"], positiveControls: undefined },
-    });
+    expect(mockRequestJson).toHaveBeenCalledWith(
+      expect.anything(),
+      "/api/v1/gene-sets/ensemble",
+      {
+        method: "POST",
+        body: { geneSetIds: ["s1", "s3"], positiveControls: undefined },
+      },
+    );
   });
 
   // -----------------------------------------------------------------------
@@ -156,11 +172,11 @@ describe("EnsemblePanel", () => {
   // -----------------------------------------------------------------------
 
   it("shows error when selected gene sets are from different sites", async () => {
-    storeState.geneSets = [
+    storeState["geneSets"] = [
       makeGeneSet("s1", ["G1", "G2"], "PlasmoDB"),
       makeGeneSet("s2", ["G2", "G3"], "ToxoDB"),
     ];
-    storeState.selectedSetIds = ["s1", "s2"];
+    storeState["selectedSetIds"] = ["s1", "s2"];
 
     render(<EnsemblePanel />);
     const button = screen.getByRole("button", { name: /compute/i });
@@ -174,12 +190,12 @@ describe("EnsemblePanel", () => {
   });
 
   it("shows no error when all gene sets are from the same site", async () => {
-    storeState.geneSets = [
+    storeState["geneSets"] = [
       makeGeneSet("s1", ["G1", "G2"], "PlasmoDB"),
       makeGeneSet("s2", ["G2", "G3"], "PlasmoDB"),
       makeGeneSet("s3", ["G3", "G4"], "PlasmoDB"),
     ];
-    storeState.selectedSetIds = ["s1", "s2", "s3"];
+    storeState["selectedSetIds"] = ["s1", "s2", "s3"];
 
     mockRequestJson.mockResolvedValueOnce([
       { geneId: "G2", frequency: 0.67, count: 2, total: 3, inPositives: false },
@@ -198,11 +214,11 @@ describe("EnsemblePanel", () => {
 
   it("clears cross-site error when computation succeeds", async () => {
     // First: trigger the cross-site error
-    storeState.geneSets = [
+    storeState["geneSets"] = [
       makeGeneSet("s1", ["G1"], "PlasmoDB"),
       makeGeneSet("s2", ["G2"], "ToxoDB"),
     ];
-    storeState.selectedSetIds = ["s1", "s2"];
+    storeState["selectedSetIds"] = ["s1", "s2"];
 
     const { rerender } = render(<EnsemblePanel />);
     fireEvent.click(screen.getByRole("button", { name: /compute/i }));
@@ -212,11 +228,11 @@ describe("EnsemblePanel", () => {
     });
 
     // Now fix the selection: both from same site
-    storeState.geneSets = [
+    storeState["geneSets"] = [
       makeGeneSet("s1", ["G1"], "PlasmoDB"),
       makeGeneSet("s2", ["G2"], "PlasmoDB"),
     ];
-    storeState.selectedSetIds = ["s1", "s2"];
+    storeState["selectedSetIds"] = ["s1", "s2"];
 
     mockRequestJson.mockResolvedValueOnce([
       { geneId: "G1", frequency: 0.5, count: 1, total: 2, inPositives: false },

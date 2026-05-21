@@ -1,31 +1,27 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Layers, Loader2 } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
 import { requestJson } from "@/lib/api/http";
+import { ensembleScoreSchema } from "@pathfinder/shared/generated/zod/ensembleScoreSchema";
+import type { EnsembleScore } from "@pathfinder/shared/generated/types/EnsembleScore";
+import { z } from "zod";
 import { AnalysisPanelContainer } from "../AnalysisPanelContainer";
 import { GeneChipInput } from "../GeneChipInput";
-import { useWorkbenchStore } from "../../store";
+import { useWorkbenchStore } from "@/state/useWorkbenchStore";
+import { useSessionStore } from "@/state/useSessionStore";
+import { useGeneSetsQuery } from "@/lib/query/hooks/useGeneSetsQuery";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface EnsembleScore {
-  geneId: string;
-  frequency: number;
-  count: number;
-  total: number;
-  inPositives: boolean;
-}
+const EnsembleScoreListSchema = z.array(ensembleScoreSchema);
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export function EnsemblePanel() {
-  const geneSets = useWorkbenchStore((s) => s.geneSets);
+  const selectedSite = useSessionStore((s) => s.selectedSite);
+  const { data: geneSets = [] } = useGeneSetsQuery(selectedSite);
   const selectedSetIds = useWorkbenchStore((s) => s.selectedSetIds);
   const toggleSetSelection = useWorkbenchStore((s) => s.toggleSetSelection);
 
@@ -37,7 +33,7 @@ export function EnsemblePanel() {
   const hasEnoughSets = geneSets.length >= 2;
   const canCompute = selectedSetIds.length >= 2;
 
-  const handleCompute = useCallback(async () => {
+  const handleCompute = async () => {
     if (!canCompute) return;
 
     const selectedSets = geneSets.filter((gs) => selectedSetIds.includes(gs.id));
@@ -54,7 +50,7 @@ export function EnsemblePanel() {
     setResults(null);
 
     try {
-      const data = await requestJson<EnsembleScore[]>("/api/v1/gene-sets/ensemble", {
+      const data = await requestJson(EnsembleScoreListSchema, "/api/v1/gene-sets/ensemble", {
         method: "POST",
         body: {
           geneSetIds: selectedSetIds,
@@ -67,7 +63,7 @@ export function EnsemblePanel() {
     } finally {
       setLoading(false);
     }
-  }, [canCompute, selectedSetIds, positiveControls, geneSets]);
+  };
 
   return (
     <AnalysisPanelContainer
@@ -114,7 +110,13 @@ export function EnsemblePanel() {
         />
 
         {/* Compute button */}
-        <Button size="sm" onClick={handleCompute} disabled={!canCompute || loading}>
+        <Button
+          size="sm"
+          onClick={() => {
+            void handleCompute();
+          }}
+          disabled={!canCompute || loading}
+        >
           {loading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
@@ -123,10 +125,12 @@ export function EnsemblePanel() {
           {loading ? "Computing..." : "Compute"}
         </Button>
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error != null && error !== "" && (
+          <p className="text-xs text-destructive">{error}</p>
+        )}
 
         {/* Results table */}
-        {results && results.length > 0 && (
+        {results != null && results.length > 0 && (
           <div className="overflow-x-auto rounded-md border">
             <table className="w-full text-xs">
               <thead>
@@ -161,7 +165,7 @@ export function EnsemblePanel() {
           </div>
         )}
 
-        {results && results.length === 0 && (
+        {results?.length === 0 && (
           <p className="text-xs text-muted-foreground">
             No genes found across the selected sets.
           </p>

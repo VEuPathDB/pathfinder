@@ -18,14 +18,14 @@ test.describe("Conversations", () => {
   }) => {
     await chatPage.send("create a new conversation");
     await chatPage.expectAssistantMessage(/\[mock\]/);
-    await expect(sidebarPage.items.first()).toBeVisible({ timeout: 15_000 });
+    await sidebarPage.expectAtLeastOneConversation();
 
     // API confirms strategy exists with messages — use captured ID for isolation
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
 
     // Fetch full strategy to verify messages are stored
-    const fullResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const fullResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(fullResp.ok()).toBeTruthy();
     const full = await fullResp.json();
     expect(full.messages).toBeDefined();
@@ -39,13 +39,13 @@ test.describe("Conversations", () => {
     await chatPage.send("first conversation");
     await chatPage.expectAssistantMessage(/\[mock\]/);
 
-    const midResp = await apiClient.get("/api/v1/strategies");
+    const midResp = await apiClient.get("/api/v1/conversations");
     const midCount = (await midResp.json()).length;
 
     await chatPage.newChat();
     await expect(chatPage.composer).toBeVisible();
 
-    const afterResp = await apiClient.get("/api/v1/strategies");
+    const afterResp = await apiClient.get("/api/v1/conversations");
     expect((await afterResp.json()).length).toBe(midCount + 1);
   });
 
@@ -62,7 +62,7 @@ test.describe("Conversations", () => {
     await sidebarPage.expectConversationName(conversationId, /renamed strategy/i);
 
     // API confirms rename persisted
-    const resp = await apiClient.get(`/api/v1/strategies/${conversationId}`);
+    const resp = await apiClient.get(`/api/v1/conversations/${conversationId}`);
     expect(resp.ok()).toBeTruthy();
     const strategy = await resp.json();
     expect(strategy.name).toMatch(/renamed strategy/i);
@@ -76,12 +76,12 @@ test.describe("Conversations", () => {
   }) => {
     await chatPage.send("conversation to delete");
     await chatPage.expectAssistantMessage(/\[mock\]/);
-    await expect(sidebarPage.items.first()).toBeVisible({ timeout: 15_000 });
+    await sidebarPage.expectAtLeastOneConversation();
 
     const conversationId = await sidebarPage.firstConversationId();
 
     // Verify exists before delete
-    const beforeResp = await apiClient.get(`/api/v1/strategies/${conversationId}`);
+    const beforeResp = await apiClient.get(`/api/v1/conversations/${conversationId}`);
     expect(beforeResp.ok()).toBeTruthy();
 
     // Wait for the DELETE API call to complete alongside the UI action
@@ -98,7 +98,7 @@ test.describe("Conversations", () => {
     });
 
     // API confirms soft-deleted (moved to dismissed, since auto-build gave it a WDK ID)
-    const dismissedResp = await apiClient.get("/api/v1/strategies/dismissed");
+    const dismissedResp = await apiClient.get("/api/v1/conversations/dismissed");
     expect(dismissedResp.ok()).toBeTruthy();
     const dismissed = (await dismissedResp.json()) as { id: string }[];
     expect(dismissed.some((d) => d.id === conversationId)).toBeTruthy();

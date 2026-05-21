@@ -1,26 +1,29 @@
 import type { Experiment } from "@pathfinder/shared";
-import { requestBlob, requestJson } from "@/lib/api/http";
+import { experimentResponseSchema } from "@pathfinder/shared/generated/zod/experimentResponseSchema";
+import { refineResponseSchema } from "@pathfinder/shared/generated/zod/refineResponseSchema";
+
+import { requestBlob, requestJson, requestVoid } from "@/lib/api/http";
 import type { StepParameters } from "@/lib/strategyGraph/types";
 
-// Re-export from shared location so workbench consumers still work.
-export { listExperiments, seedExperiments } from "@/lib/api/experiments";
-
 export async function getExperiment(experimentId: string): Promise<Experiment> {
-  return await requestJson<Experiment>(`/api/v1/experiments/${experimentId}`);
+  const raw = await requestJson(experimentResponseSchema, `/api/v1/experiments/${experimentId}`);
+  return raw as unknown as Experiment;
 }
 
 export async function deleteExperiment(experimentId: string): Promise<void> {
-  await requestJson(`/api/v1/experiments/${experimentId}`, { method: "DELETE" });
+  await requestVoid(`/api/v1/experiments/${experimentId}`, { method: "DELETE" });
 }
 
 export async function updateExperimentNotes(
   experimentId: string,
   notes: string,
 ): Promise<Experiment> {
-  return await requestJson<Experiment>(`/api/v1/experiments/${experimentId}`, {
-    method: "PATCH",
-    body: { notes },
-  });
+  const raw = await requestJson(
+    experimentResponseSchema,
+    `/api/v1/experiments/${experimentId}`,
+    { method: "PATCH", body: { notes } },
+  );
+  return raw as unknown as Experiment;
 }
 
 export async function exportExperiment(
@@ -36,11 +39,11 @@ export async function exportExperiment(
 }
 
 /** Configuration for a refinement action (combine or transform). */
-export interface RefineConfig {
+interface RefineConfig {
   searchName?: string;
   parameters?: StepParameters;
   operator?: string;
-  stepId?: string | number;
+  transformName?: string;
   [key: string]: unknown;
 }
 
@@ -49,15 +52,19 @@ export async function refineExperiment(
   action: "combine" | "transform",
   config: RefineConfig,
 ): Promise<{ success: boolean; newStepId?: number }> {
-  return await requestJson(`/api/v1/experiments/${experimentId}/refine`, {
-    method: "POST",
-    body: { action, ...config },
-  });
+  const raw = await requestJson(
+    refineResponseSchema,
+    `/api/v1/experiments/${experimentId}/refine`,
+    { method: "POST", body: { action, ...config } },
+  );
+  return { success: raw.success, ...(raw.newStepId != null ? { newStepId: raw.newStepId } : {}) };
 }
 
 export async function reEvaluateExperiment(experimentId: string): Promise<Experiment> {
-  return await requestJson<Experiment>(
+  const raw = await requestJson(
+    experimentResponseSchema,
     `/api/v1/experiments/${experimentId}/re-evaluate`,
     { method: "POST" },
   );
+  return raw as unknown as Experiment;
 }

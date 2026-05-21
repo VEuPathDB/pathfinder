@@ -81,13 +81,13 @@ systemctl --user start pathfinder-web
 Or start everything explicitly:
 
 ```bash
-systemctl --user start pathfinder-db pathfinder-redis pathfinder-qdrant pathfinder-api pathfinder-web
+systemctl --user start pathfinder-db pathfinder-api pathfinder-web
 ```
 
 ## 5. Check status
 
 ```bash
-systemctl --user status pathfinder-db pathfinder-redis pathfinder-qdrant pathfinder-api pathfinder-web
+systemctl --user status pathfinder-db pathfinder-api pathfinder-web
 ```
 
 ## 6. View logs
@@ -105,7 +105,7 @@ journalctl --user -u 'pathfinder-*' -n 100
 With linger enabled, services with `WantedBy=default.target` start at boot:
 
 ```bash
-systemctl --user enable pathfinder-db pathfinder-redis pathfinder-qdrant pathfinder-api pathfinder-web
+systemctl --user enable pathfinder-db pathfinder-api pathfinder-web
 ```
 
 ## 8. Local overrides (drop-in directories)
@@ -167,13 +167,13 @@ systemctl --user restart pathfinder-web
 ## 10. Stop everything
 
 ```bash
-systemctl --user stop pathfinder-web pathfinder-api pathfinder-qdrant pathfinder-redis pathfinder-db
+systemctl --user stop pathfinder-web pathfinder-api pathfinder-db
 ```
 
 ## 11. Remove persistent data
 
 ```bash
-podman volume rm pathfinder-postgres-data pathfinder-redis-data pathfinder-qdrant-data
+podman volume rm pathfinder-postgres-data
 ```
 
 ## 12. Re-index Qdrant (RAG ingestion)
@@ -228,8 +228,6 @@ Logged-in users can find their API key at their VEuPathDB profile page under
 
 | Service | Image | Published port | Depends on |
 |---------|-------|---------------|------------|
-| pathfinder-db | postgres:16-alpine | — (internal) | — |
-| pathfinder-redis | redis:7-alpine | — (internal) | — |
-| pathfinder-qdrant | qdrant/qdrant:latest | — (internal) | — |
-| pathfinder-api | localhost/pathfinder-api:latest | 8000 | db, redis |
+| pathfinder-db | pgvector/pgvector:pg16 | — (internal) | — |
+| pathfinder-api | localhost/pathfinder-api:latest | 8000 | db |
 | pathfinder-web | localhost/pathfinder-web:latest | 3000 | api |

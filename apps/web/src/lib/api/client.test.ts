@@ -1,246 +1,122 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { StrategyPlan } from "@pathfinder/shared";
-
-vi.mock("./http", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./http")>();
-  return {
-    ...actual,
-    requestJson: vi.fn(),
-    requestJsonValidated: vi.fn(),
-  };
-});
-
-import { requestJson, requestJsonValidated } from "./http";
+/**
+ * @vitest-environment jsdom
+ */
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
+import { client } from "./client";
 import { APIError } from "./http";
-import {
-  listSites,
-  getRecordTypes,
-  getSearches,
-  getParamSpecs,
-  validateSearchParams,
-} from "./sites";
-import {
-  listStrategies,
-  syncWdkStrategies,
-  openStrategy,
-  getStrategy,
-  createStrategy,
-  updateStrategy,
-  deleteStrategy,
-  normalizePlan,
-  computeStepCounts,
-} from "./strategies";
-import {
-  getVeupathdbAuthStatus,
-  loginVeupathdb,
-  logoutVeupathdb,
-} from "./veupathdb-auth";
 
-const requestJsonMock = vi.mocked(requestJson);
-const requestJsonValidatedMock = vi.mocked(requestJsonValidated);
+const BASE = "http://localhost:3000";
 
-describe("lib/api functions", () => {
-  beforeEach(() => {
-    requestJsonMock.mockReset();
-    requestJsonValidatedMock.mockReset();
-  });
+const server = setupServer();
 
-  it("getStrategy fails fast on non-UUID ids", async () => {
-    await expect(getStrategy("wdk:123")).rejects.toBeInstanceOf(APIError);
-    await expect(getStrategy("wdk:123")).rejects.toMatchObject({
-      status: 400,
-      message: "Invalid strategy id.",
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+
+describe("lib/api/client", () => {
+  it("returns parsed JSON for GET", async () => {
+    server.use(
+      http.get(`${BASE}/api/v1/hello`, () =>
+        HttpResponse.json({ greeting: "hi" }),
+      ),
+    );
+    const result = await client<{ greeting: string }>({
+      method: "get",
+      url: "/api/v1/hello",
     });
+    expect(result.status).toBe(200);
+    expect(result.data).toEqual({ greeting: "hi" });
   });
 
-  it("getStrategy calls requestJsonValidated for UUID ids", async () => {
-    requestJsonValidatedMock.mockResolvedValueOnce({ id: "x" });
-    const id = "00000000-0000-4000-8000-000000000000";
-    await getStrategy(id);
-    expect(requestJsonValidatedMock).toHaveBeenCalledWith(
-      expect.anything(),
-      `/api/v1/strategies/${id}`,
+  it("sends content-type application/json on POST with body", async () => {
+    let seenContentType: string | null = null;
+    let seenBody: unknown = null;
+    server.use(
+      http.post(`${BASE}/api/v1/echo`, async ({ request }) => {
+        seenContentType = request.headers.get("content-type");
+        seenBody = await request.json();
+        return HttpResponse.json({ ok: true });
+      }),
     );
-  });
-
-  it("loginVeupathdb validates required inputs before making a request", async () => {
-    await expect(loginVeupathdb("", "", "veupathdb")).rejects.toBeInstanceOf(Error);
-    expect(requestJsonMock).not.toHaveBeenCalled();
-  });
-
-  it("listSites hits the sites endpoint", async () => {
-    requestJsonValidatedMock.mockResolvedValueOnce([]);
-    await listSites();
-    expect(requestJsonValidatedMock).toHaveBeenCalledWith(
-      expect.anything(),
-      "/api/v1/sites",
-    );
-  });
-
-  it("getRecordTypes encodes the site id", async () => {
-    requestJsonValidatedMock.mockResolvedValueOnce([]);
-    await getRecordTypes("foo/bar");
-    expect(requestJsonValidatedMock).toHaveBeenCalledWith(
-      expect.anything(),
-      "/api/v1/sites/foo%2Fbar/record-types",
-    );
-  });
-
-  it("getSearches only includes query when recordType is provided", async () => {
-    requestJsonValidatedMock.mockResolvedValueOnce([]);
-    await getSearches("plasmodb", null);
-    expect(requestJsonValidatedMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/api/v1/sites/plasmodb/searches",
-      {
-        query: undefined,
-      },
-    );
-
-    requestJsonValidatedMock.mockResolvedValueOnce([]);
-    await getSearches("plasmodb", "gene");
-    expect(requestJsonValidatedMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/api/v1/sites/plasmodb/searches",
-      {
-        query: { recordType: "gene" },
-      },
-    );
-  });
-
-  it("getParamSpecs uses POST body with contextValues and encodes url parts", async () => {
-    requestJsonValidatedMock.mockResolvedValueOnce([]);
-    await getParamSpecs("site 1", "gene/type", "my search", { a: 1 });
-    expect(requestJsonValidatedMock).toHaveBeenCalledWith(
-      expect.anything(),
-      "/api/v1/sites/site%201/searches/gene%2Ftype/my%20search/param-specs",
-      { method: "POST", body: { contextValues: { a: 1 } } },
-    );
-  });
-
-  it("validateSearchParams uses POST body with contextValues", async () => {
-    requestJsonValidatedMock.mockResolvedValueOnce({ valid: true });
-    await validateSearchParams("plasmodb", "gene", "search", { x: "y" });
-    expect(requestJsonValidatedMock).toHaveBeenCalledWith(
-      expect.anything(),
-      "/api/v1/sites/plasmodb/searches/gene/search/validate",
-      { method: "POST", body: { contextValues: { x: "y" } } },
-    );
-  });
-
-  it("listStrategies includes siteId query when provided", async () => {
-    requestJsonValidatedMock.mockResolvedValueOnce([]);
-    await listStrategies("plasmodb");
-    expect(requestJsonValidatedMock).toHaveBeenCalledWith(
-      expect.anything(),
-      "/api/v1/strategies",
-      { query: { siteId: "plasmodb" } },
-    );
-  });
-
-  it("openStrategy POSTs payload", async () => {
-    requestJsonValidatedMock.mockResolvedValueOnce({ strategyId: "x" });
-    await openStrategy({ siteId: "plasmodb", wdkStrategyId: 123 });
-    expect(requestJsonValidatedMock).toHaveBeenCalledWith(
-      expect.anything(),
-      "/api/v1/strategies/open",
-      { method: "POST", body: { siteId: "plasmodb", wdkStrategyId: 123 } },
-    );
-  });
-
-  it("create/update/delete strategy use correct methods", async () => {
-    const plan: StrategyPlan = {
-      recordType: "gene",
-      root: { searchName: "s", id: "n1", displayName: "d", parameters: {} },
-      metadata: { name: "x" },
-    };
-    requestJsonValidatedMock.mockResolvedValueOnce({ id: "s1" });
-    await createStrategy({ name: "N", siteId: "plasmodb", plan });
-    expect(requestJsonValidatedMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/api/v1/strategies",
-      { method: "POST", body: { name: "N", siteId: "plasmodb", plan } },
-    );
-
-    requestJsonValidatedMock.mockResolvedValueOnce({ id: "s1" });
-    await updateStrategy("s1", { name: "N2" });
-    expect(requestJsonValidatedMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/api/v1/strategies/s1",
-      { method: "PATCH", body: { name: "N2" } },
-    );
-
-    requestJsonMock.mockResolvedValueOnce(undefined);
-    await deleteStrategy("s1");
-    expect(requestJsonMock).toHaveBeenLastCalledWith("/api/v1/strategies/s1", {
-      method: "DELETE",
+    await client({
+      method: "post",
+      url: "/api/v1/echo",
+      data: { x: 1 },
     });
+    expect(seenContentType).toBe("application/json");
+    expect(seenBody).toEqual({ x: 1 });
   });
 
-  it("normalizePlan and computeStepCounts POST expected payloads", async () => {
-    const plan: StrategyPlan = {
-      recordType: "gene",
-      root: { searchName: "s", id: "n1", displayName: "d", parameters: {} },
-      metadata: { name: "x" },
-    };
-    requestJsonValidatedMock.mockResolvedValueOnce({ plan });
-    await normalizePlan("plasmodb", plan);
-    expect(requestJsonValidatedMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/api/v1/strategies/plan/normalize",
-      { method: "POST", body: { siteId: "plasmodb", plan } },
+  it("throws APIError with status and parsed body on 4xx", async () => {
+    server.use(
+      http.get(`${BASE}/api/v1/nope`, () =>
+        HttpResponse.json({ detail: "bad request" }, { status: 400 }),
+      ),
     );
-
-    requestJsonValidatedMock.mockResolvedValueOnce({ counts: {} });
-    await computeStepCounts("plasmodb", plan);
-    expect(requestJsonValidatedMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/api/v1/strategies/step-counts",
-      { method: "POST", body: { siteId: "plasmodb", plan } },
-    );
+    await expect(
+      client({ method: "get", url: "/api/v1/nope" }),
+    ).rejects.toBeInstanceOf(APIError);
+    try {
+      await client({ method: "get", url: "/api/v1/nope" });
+    } catch (err) {
+      expect(err).toBeInstanceOf(APIError);
+      const apiErr = err as APIError;
+      expect(apiErr.status).toBe(400);
+      expect(apiErr.data).toEqual({ detail: "bad request" });
+      expect(apiErr.message).toBe("bad request");
+    }
   });
 
-  it("syncWdkStrategies calls the batch sync endpoint", async () => {
-    requestJsonValidatedMock.mockResolvedValueOnce([]);
-    await syncWdkStrategies("plasmodb");
-    expect(requestJsonValidatedMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/api/v1/strategies/sync-wdk",
-      { method: "POST", query: { siteId: "plasmodb" } },
+  it("extracts detail array from problem+json bodies into message", async () => {
+    server.use(
+      http.get(`${BASE}/api/v1/validation`, () =>
+        HttpResponse.json(
+          { detail: [{ msg: "field required" }, { msg: "must be int" }] },
+          { status: 422, headers: { "content-type": "application/problem+json" } },
+        ),
+      ),
     );
+    try {
+      await client({ method: "get", url: "/api/v1/validation" });
+      throw new Error("expected to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(APIError);
+      const apiErr = err as APIError;
+      expect(apiErr.status).toBe(422);
+      expect(apiErr.message).toBe("field required; must be int");
+    }
   });
 
-  it("auth bridge endpoints forward the provided siteId", async () => {
-    requestJsonValidatedMock.mockResolvedValueOnce({
-      signedIn: false,
-      name: null,
-      email: null,
+  it("sends Accept: application/json header", async () => {
+    let seenAccept: string | null = null;
+    server.use(
+      http.get(`${BASE}/api/v1/hello`, ({ request }) => {
+        seenAccept = request.headers.get("accept");
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    await client({ method: "get", url: "/api/v1/hello" });
+    expect(seenAccept).toContain("application/json");
+  });
+
+  it("serializes query params and skips undefined values", async () => {
+    let seenUrl: string | null = null;
+    server.use(
+      http.get(`${BASE}/api/v1/search`, ({ request }) => {
+        seenUrl = request.url;
+        return HttpResponse.json([]);
+      }),
+    );
+    await client({
+      method: "get",
+      url: "/api/v1/search",
+      params: { q: "malaria", limit: 10, skip: undefined, active: true },
     });
-    await getVeupathdbAuthStatus("plasmodb");
-    expect(requestJsonValidatedMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/api/v1/veupathdb/auth/status",
-      { query: { siteId: "plasmodb" } },
-    );
-
-    requestJsonValidatedMock.mockResolvedValueOnce({ success: true });
-    await loginVeupathdb("a@b.com", "pw", "plasmodb");
-    expect(requestJsonValidatedMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/api/v1/veupathdb/auth/login",
-      {
-        method: "POST",
-        query: { siteId: "plasmodb" },
-        body: { email: "a@b.com", password: "pw" },
-      },
-    );
-
-    requestJsonValidatedMock.mockResolvedValueOnce({ success: true });
-    await logoutVeupathdb("plasmodb");
-    expect(requestJsonValidatedMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "/api/v1/veupathdb/auth/logout",
-      { method: "POST", query: { siteId: "plasmodb" } },
-    );
+    expect(seenUrl).toContain("q=malaria");
+    expect(seenUrl).toContain("limit=10");
+    expect(seenUrl).toContain("active=true");
+    expect(seenUrl).not.toContain("skip=");
   });
 });

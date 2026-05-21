@@ -3,19 +3,16 @@
  */
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getExpandedRowModel,
+} from "@tanstack/react-table";
+import type { RecordAttribute } from "@pathfinder/shared/generated/types/RecordAttribute";
+import type { ClassifiedRecord } from "@pathfinder/shared/generated/types/ClassifiedRecord";
 import { RecordRow } from "./RecordRow";
-import type { RecordAttribute, WdkRecord } from "@/lib/types/wdk";
+import { buildColumns, getPrimaryKey } from "./ResultsTableColumns";
 
-// Mock ResultsTableColumns to avoid DOMParser dependency
-vi.mock("./ResultsTableColumns", () => ({
-  ClassificationBadge: ({ value }: { value: string | null }) =>
-    value ? <span data-testid="classification">{value}</span> : null,
-  AttributeValue: ({ value }: { value: string | null | undefined }) => (
-    <span data-testid="attr-value">{value ?? "\u2014"}</span>
-  ),
-}));
-
-// Mock ExpandedRowDetail
 vi.mock("./ExpandedRowDetail", () => ({
   ExpandedRowDetail: ({ pk, loading }: { pk: string; loading: boolean }) => (
     <div data-testid="expanded-detail" data-loading={loading}>
@@ -24,75 +21,100 @@ vi.mock("./ExpandedRowDetail", () => ({
   ),
 }));
 
-const columns: RecordAttribute[] = [
-  { name: "gene_id", displayName: "Gene ID", isDisplayable: true },
-  { name: "product", displayName: "Product", isDisplayable: true },
+const attributes: RecordAttribute[] = [
+  { name: "gene_id", displayName: "Gene ID", help: null, type: null, isDisplayable: true, isSortable: false, isSuggested: false },
+  { name: "product", displayName: "Product", help: null, type: null, isDisplayable: true, isSortable: false, isSuggested: false },
 ];
 
-const record: WdkRecord = {
+const defaultRecord: ClassifiedRecord = {
+  displayName: "PF3D7_1234",
   id: [{ name: "source_id", value: "PF3D7_1234" }],
+  recordClassName: "transcript",
   attributes: { gene_id: "PF3D7_1234", product: "kinase" },
+  tables: {},
+  tableErrors: [],
 };
 
-function renderRow(overrides: Partial<Parameters<typeof RecordRow>[0]> = {}) {
-  const defaults = {
-    record,
-    pk: "PF3D7_1234",
-    columns,
-    hasClassification: false,
-    isExpanded: false,
-    detail: null,
-    detailError: null,
-    detailLoading: false,
-    onToggle: vi.fn(),
-    ...overrides,
-  };
+interface HarnessProps {
+  record?: ClassifiedRecord;
+  includeClassification?: boolean;
+  isExpanded?: boolean;
+  onToggle?: () => void;
+}
 
-  return render(
+function Harness({
+  record = defaultRecord,
+  includeClassification = false,
+  isExpanded = false,
+  onToggle = () => {},
+}: HarnessProps) {
+  "use no memo";
+  const tableColumns = buildColumns(attributes, includeClassification);
+  const rowId = getPrimaryKey(record);
+  const table = useReactTable<ClassifiedRecord>({
+    data: [record],
+    columns: tableColumns,
+    getRowId: (row) => getPrimaryKey(row),
+    state: { expanded: isExpanded ? { [rowId]: true } : {} },
+    onExpandedChange: () => {},
+    manualExpanding: true,
+    getCoreRowModel: getCoreRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+  });
+
+  const row = table.getRowModel().rows[0];
+  if (!row) {
+    throw new Error("Test harness produced no rows");
+  }
+
+  return (
     <table>
       <tbody>
-        <RecordRow {...defaults} />
+        <RecordRow
+          row={row}
+          detail={null}
+          detailError={null}
+          detailLoading={false}
+          onToggle={onToggle}
+        />
       </tbody>
-    </table>,
+    </table>
   );
 }
 
 describe("RecordRow", () => {
   afterEach(cleanup);
 
-  it("renders attribute values for each column", () => {
-    renderRow();
-    const values = screen.getAllByTestId("attr-value");
-    expect(values).toHaveLength(2);
-    expect(values[0].textContent).toBe("PF3D7_1234");
-    expect(values[1].textContent).toBe("kinase");
+  it("renders attribute values for each visible column", () => {
+    const { container } = render(<Harness />);
+    const dataRow = container.querySelector("tr[data-expanded]");
+    expect(dataRow).not.toBeNull();
+    expect(dataRow!.textContent).toContain("PF3D7_1234");
+    expect(screen.getByText("kinase")).toBeTruthy();
   });
 
   it("calls onToggle when the data row is clicked", () => {
     const onToggle = vi.fn();
-    const { container } = renderRow({ onToggle });
-    // The clickable <tr> has data-expanded attribute
+    const { container } = render(<Harness onToggle={onToggle} />);
     const dataRow = container.querySelector("tr[data-expanded]");
     expect(dataRow).not.toBeNull();
     fireEvent.click(dataRow!);
     expect(onToggle).toHaveBeenCalledOnce();
   });
 
-  it("shows classification badge when hasClassification is true", () => {
-    const classifiedRecord: WdkRecord = {
-      ...record,
-      _classification: "TP" as const,
+  it("shows classification badge when the classification column is present", () => {
+    const classifiedRecord: ClassifiedRecord = {
+      ...defaultRecord,
+      classification: "TP" as const,
     };
-    renderRow({ record: classifiedRecord, hasClassification: true });
-    expect(screen.getByTestId("classification").textContent).toBe("TP");
+    render(<Harness record={classifiedRecord} includeClassification />);
+    expect(screen.getByText("True Positive")).toBeTruthy();
   });
 
-  it("renders ExpandedRowDetail with the pk", () => {
-    renderRow({ isExpanded: true });
-    // The detail is always in the DOM (hidden via CSS when collapsed),
-    // so just verify it received the correct pk
+  it("passes the primary-key row id into the expanded detail", () => {
+    render(<Harness isExpanded />);
     const details = screen.getAllByTestId("expanded-detail");
     expect(details.length).toBeGreaterThanOrEqual(1);
-    expect(details[0].textContent).toContain("PF3D7_1234");
+    expect(details[0]!.textContent).toContain("PF3D7_1234");
   });
 });

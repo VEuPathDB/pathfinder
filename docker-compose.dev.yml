@@ -1,0 +1,97 @@
+# Explicit local-development overlay.
+#
+# Usage:
+#   docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+services:
+  api:
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      API_ENV: ${API_ENV:-development}
+      API_SECRET_KEY: ${API_SECRET_KEY:-pathfinder-dev-secret-key-change-me-1234567890}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/pathfinder}
+      PATHFINDER_CHAT_PROVIDER: ${PATHFINDER_CHAT_PROVIDER:?Set PATHFINDER_CHAT_PROVIDER=default for normal development. Mock mode is test-only.}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./apps/api/src
+          target: /app/apps/api/src
+        - action: rebuild
+          path: ./apps/api/pyproject.toml
+        - action: rebuild
+          path: ./apps/api/uv.lock
+
+  worker:
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      API_ENV: ${API_ENV:-development}
+      API_SECRET_KEY: ${API_SECRET_KEY:-pathfinder-dev-secret-key-change-me-1234567890}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/pathfinder}
+      PATHFINDER_CHAT_PROVIDER: ${PATHFINDER_CHAT_PROVIDER:?Set PATHFINDER_CHAT_PROVIDER=default for normal development. Mock mode is test-only.}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./apps/api/src
+          target: /app/apps/api/src
+        - action: rebuild
+          path: ./apps/api/pyproject.toml
+        - action: rebuild
+          path: ./apps/api/uv.lock
+
+  web:
+    build:
+      target: dev
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://api:8000}
+        NEXT_PUBLIC_TELEMETRY_ENABLED: ${NEXT_PUBLIC_TELEMETRY_ENABLED:-true}
+        NEXT_PUBLIC_DEPLOYMENT_ENV: ${NEXT_PUBLIC_DEPLOYMENT_ENV:-development}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://api:8000}
+      NEXT_PUBLIC_TELEMETRY_ENABLED: ${NEXT_PUBLIC_TELEMETRY_ENABLED:-true}
+      NEXT_PUBLIC_DEPLOYMENT_ENV: ${NEXT_PUBLIC_DEPLOYMENT_ENV:-development}
+      SIGNOZ_OTEL_COLLECTOR_HTTP: ${SIGNOZ_OTEL_COLLECTOR_HTTP:-http://signoz-otel-collector:4318}
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/web/src
+          target: /app/apps/web/src
+        - action: sync
+          path: ./apps/web/public
+          target: /app/apps/web/public
+        - action: sync
+          path: ./packages/shared-ts/src
+          target: /app/packages/shared-ts/src
+        - action: rebuild
+          path: ./apps/web/next.config.ts
+        - action: rebuild
+          path: ./apps/web/package.json
+        - action: rebuild
+          path: ./apps/web/tsconfig.json
+
+  # Type codegen: fetches OpenAPI spec from API -> generates TypeScript types.
+  codegen:
+    profiles: ["dev"]
+    image: node:22-slim
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: >
+      sh -c "apt-get update -qq && apt-get install -y -qq curl > /dev/null 2>&1 &&
+             cd /app && corepack enable && yarn install > /dev/null 2>&1 &&
+             cd /app && sh scripts/sync-api-types.sh"
+    restart: "no"

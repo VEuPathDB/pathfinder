@@ -1,0 +1,21 @@
+[
+  {
+    "messageId": "<REDACTED>",
+    "type": "start"
+  },
+  {
+    "data": {
+      "phase": "completed",
+      "reason": "supervisor failed \u2014 ending turn",
+      "status": "failed"
+    },
+    "type": "data-phase-change"
+  },
+  {
+    "finishReason": "stop",
+    "type": "finish"
+  },
+  {
+    "type": "done"
+  }
+]

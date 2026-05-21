@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import type { GeneSearchResult } from "@pathfinder/shared";
@@ -29,31 +29,35 @@ function GeneDetailPopover({
       onMouseLeave={onMouseLeave}
     >
       <p className="text-xs font-semibold text-foreground">
-        {gene.displayName || gene.geneId}
+        {gene.displayName !== "" && gene.displayName != null
+          ? gene.displayName
+          : gene.geneId}
       </p>
       <p className="text-[10px] text-muted-foreground">{gene.geneId}</p>
       <dl className="mt-2 space-y-1 text-[10px]">
         <div>
           <dt className="font-medium text-muted-foreground">Product</dt>
-          <dd className="text-foreground">{gene.product || "\u2014"}</dd>
+          <dd className="text-foreground">
+            {gene.product !== "" && gene.product != null ? gene.product : "\u2014"}
+          </dd>
         </div>
         <div>
           <dt className="font-medium text-muted-foreground">Organism</dt>
           <dd className="italic text-foreground">{gene.organism}</dd>
         </div>
-        {gene.geneName && (
+        {gene.geneName !== "" && gene.geneName != null && (
           <div>
             <dt className="font-medium text-muted-foreground">Gene name</dt>
             <dd className="text-foreground">{gene.geneName}</dd>
           </div>
         )}
-        {gene.geneType && (
+        {gene.geneType !== "" && gene.geneType != null && (
           <div>
             <dt className="font-medium text-muted-foreground">Type</dt>
             <dd className="text-foreground">{gene.geneType}</dd>
           </div>
         )}
-        {gene.location && (
+        {gene.location !== "" && gene.location != null && (
           <div>
             <dt className="font-medium text-muted-foreground">Location</dt>
             <dd className="text-foreground">{gene.location}</dd>
@@ -96,7 +100,11 @@ function GeneRow({
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium text-foreground">
-          {gene.displayName || gene.product || gene.geneId}
+          {gene.displayName !== "" && gene.displayName != null
+            ? gene.displayName
+            : gene.product !== "" && gene.product != null
+              ? gene.product
+              : gene.geneId}
         </p>
         <p className="truncate text-[10px] text-muted-foreground">{gene.geneId}</p>
         <p className="truncate text-[10px] italic text-muted-foreground/70">
@@ -145,30 +153,27 @@ export function GeneSearchResults({
   const [hoverPos, setHoverPos] = useState({ top: 0, right: 0 });
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleMouseEnter = useCallback(
-    (gene: GeneSearchResult, e: React.MouseEvent<HTMLDivElement>) => {
-      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-      const rect = e.currentTarget.getBoundingClientRect();
-      const sidebarRect = sidebarRef.current?.getBoundingClientRect();
-      hoverTimeoutRef.current = setTimeout(() => {
-        setHoveredGene(gene);
-        setHoverPos({
-          top: rect.top,
-          right: window.innerWidth - (sidebarRect?.left ?? rect.left) + 8,
-        });
-      }, 300);
-    },
-    [sidebarRef],
-  );
+  const handleMouseEnter = (gene: GeneSearchResult, e: React.MouseEvent<HTMLDivElement>) => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const sidebarRect = sidebarRef.current?.getBoundingClientRect();
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredGene(gene);
+      setHoverPos({
+        top: rect.top,
+        right: window.innerWidth - (sidebarRect?.left ?? rect.left) + 8,
+      });
+    }, 300);
+  };
 
-  const handleMouseLeave = useCallback(() => {
+  const handleMouseLeave = () => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     setHoveredGene(null);
-  }, []);
+  };
 
-  const handlePopoverEnter = useCallback(() => {
+  const handlePopoverEnter = () => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-  }, []);
+  };
 
   if (loading) {
     return (
@@ -178,7 +183,7 @@ export function GeneSearchResults({
     );
   }
 
-  if (error) {
+  if (error != null && error !== "") {
     return (
       <div className="px-3 py-6 text-center text-xs text-destructive">{error}</div>
     );

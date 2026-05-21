@@ -1,72 +1,113 @@
+"use client";
+
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils/cn";
+import { isMultiParam } from "@/features/strategy/parameters/spec";
 import type { ParamWidgetProps } from "./types";
 
-export function SelectParam({
-  spec,
-  value,
-  multi,
-  multiValue,
-  options,
-  onChangeSingle,
-  onChangeMulti,
-  fieldBorderClass,
-}: ParamWidgetProps) {
+const PLACEHOLDER_VALUE = "__placeholder__";
+
+export function SelectParam({ spec, name, options, field }: ParamWidgetProps) {
+  const multi = isMultiParam(spec);
+  const errors = field.state.meta.errors;
+  const hasError = errors.length > 0;
+  const errorMessage = hasError ? String(errors[0]) : null;
+
   if (!multi) {
+    const value = typeof field.state.value === "string" ? field.state.value : "";
     return (
-      <select
-        value={value ?? ""}
-        onChange={(e) => onChangeSingle(e.target.value)}
-        className={`w-full rounded-md border px-2 py-1.5 text-sm bg-card text-foreground ${fieldBorderClass || "border-border"}`}
-      >
-        {spec.allowEmptyValue !== false && <option value="">-- Select --</option>}
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      <div>
+        <Select
+          value={value === "" ? PLACEHOLDER_VALUE : value}
+          onValueChange={(next) => field.handleChange(next === PLACEHOLDER_VALUE ? "" : next)}
+        >
+          <SelectTrigger
+            aria-invalid={hasError ? "true" : undefined}
+            aria-describedby={hasError ? `${name}-error` : undefined}
+            className="w-full"
+            onBlur={field.handleBlur}
+          >
+            <SelectValue placeholder="-- Select --" />
+          </SelectTrigger>
+          <SelectContent>
+            {spec.allowEmptyValue !== false && (
+              <SelectItem value={PLACEHOLDER_VALUE}>-- Select --</SelectItem>
+            )}
+            {options.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {hasError && errorMessage != null && (
+          <p id={`${name}-error`} role="alert" className="mt-1 text-xs text-destructive">
+            {errorMessage}
+          </p>
+        )}
+      </div>
     );
   }
 
-  const allSelected = options.length > 0 && multiValue.length === options.length;
+  const selected: string[] = Array.isArray(field.state.value)
+    ? field.state.value
+    : [];
+  const allSelected = options.length > 0 && selected.length === options.length;
 
   const toggleAll = () => {
-    onChangeMulti(allSelected ? [] : options.map((o) => o.value));
+    field.handleChange(allSelected ? [] : options.map((o) => o.value));
   };
 
   const toggle = (val: string) => {
-    onChangeMulti(
-      multiValue.includes(val)
-        ? multiValue.filter((v) => v !== val)
-        : [...multiValue, val],
+    field.handleChange(
+      selected.includes(val)
+        ? selected.filter((v) => v !== val)
+        : [...selected, val],
     );
   };
 
   return (
-    <div
-      className={`rounded-md border ${fieldBorderClass || "border-border"} bg-card max-h-48 overflow-y-auto p-2`}
-    >
-      {options.length > 3 && (
-        <label className="flex items-center gap-2 text-xs text-muted-foreground mb-1 pb-1 border-b border-border">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={toggleAll}
-            className="accent-primary"
-          />
-          Select all ({options.length})
-        </label>
+    <div>
+      <div
+        aria-invalid={hasError ? "true" : undefined}
+        className={cn(
+          "rounded-md border bg-card max-h-48 overflow-y-auto p-2",
+          hasError ? "border-destructive/30 bg-destructive/5" : "border-border",
+        )}
+      >
+        {options.length > 3 && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground mb-1 pb-1 border-b border-border">
+            <Checkbox
+              checked={allSelected}
+              onCheckedChange={toggleAll}
+              aria-label="Select all"
+            />
+            Select all ({options.length})
+          </label>
+        )}
+        {options.map((opt) => (
+          <label key={opt.value} className="flex items-center gap-2 text-sm py-0.5">
+            <Checkbox
+              checked={selected.includes(opt.value)}
+              onCheckedChange={() => toggle(opt.value)}
+              aria-label={opt.label}
+            />
+            {opt.label}
+          </label>
+        ))}
+      </div>
+      {hasError && errorMessage != null && (
+        <p id={`${name}-error`} role="alert" className="mt-1 text-xs text-destructive">
+          {errorMessage}
+        </p>
       )}
-      {options.map((opt) => (
-        <label key={opt.value} className="flex items-center gap-2 text-sm py-0.5">
-          <input
-            type="checkbox"
-            checked={multiValue.includes(opt.value)}
-            onChange={() => toggle(opt.value)}
-            className="accent-primary"
-          />
-          {opt.label}
-        </label>
-      ))}
     </div>
   );
 }

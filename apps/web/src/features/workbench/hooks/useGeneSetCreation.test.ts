@@ -2,15 +2,15 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import type { GeneSet } from "@pathfinder/shared";
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock("@/lib/api/genes", () => ({
-  resolveGeneIds: vi.fn(),
+vi.mock("@pathfinder/shared/generated/hooks/useResolveGenes", () => ({
+  resolveGenes: vi.fn(),
 }));
 
 vi.mock("../api/geneSets", () => ({
@@ -22,20 +22,18 @@ vi.mock("@/state/useSessionStore", () => ({
     selector({ selectedSite: "PlasmoDB" }),
 }));
 
-const mockAddGeneSet = vi.fn();
-vi.mock("../store/useWorkbenchStore", () => ({
-  useWorkbenchStore: (
-    selector: (s: { addGeneSet: typeof mockAddGeneSet }) => unknown,
-  ) => selector({ addGeneSet: mockAddGeneSet }),
+const mockInvalidate = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/query/hooks/useInvalidateGeneSets", () => ({
+  useInvalidateGeneSets: () => mockInvalidate,
 }));
 
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-const { resolveGeneIds } = await import("@/lib/api/genes");
+const { resolveGenes } = await import("@pathfinder/shared/generated/hooks/useResolveGenes");
 const { createGeneSet } = await import("../api/geneSets");
-const mockResolve = vi.mocked(resolveGeneIds);
+const mockResolve = vi.mocked(resolveGenes);
 const mockCreate = vi.mocked(createGeneSet);
 
 import { useGeneSetCreation } from "./useGeneSetCreation";
@@ -84,7 +82,7 @@ describe("useGeneSetCreation", () => {
     vi.clearAllMocks();
   });
 
-  it("handleVerify calls resolveGeneIds and sets resolved/unresolved state", async () => {
+  it("handleVerify calls resolveGenes and sets resolved/unresolved state", async () => {
     const resolved = makeResolvedGene("PF3D7_0100100");
     mockResolve.mockResolvedValue({
       resolved: [resolved],
@@ -99,13 +97,14 @@ describe("useGeneSetCreation", () => {
       await result.current.handleVerify(["PF3D7_0100100", "INVALID_ID"]);
     });
 
-    expect(mockResolve).toHaveBeenCalledWith("PlasmoDB", [
-      "PF3D7_0100100",
-      "INVALID_ID",
-    ]);
-    expect(result.current.verified).toBe(true);
-    expect(result.current.resolvedGenes).toEqual([resolved]);
-    expect(result.current.unresolvedIds).toEqual(["INVALID_ID"]);
+    expect(mockResolve).toHaveBeenCalledWith("PlasmoDB", {
+      geneIds: ["PF3D7_0100100", "INVALID_ID"],
+    });
+    await waitFor(() => {
+      expect(result.current.verified).toBe(true);
+      expect(result.current.resolvedGenes).toEqual([resolved]);
+      expect(result.current.unresolvedIds).toEqual(["INVALID_ID"]);
+    });
   });
 
   it("handleVerify does nothing for empty input", async () => {
@@ -132,11 +131,13 @@ describe("useGeneSetCreation", () => {
       await result.current.handleVerify(["PF3D7_0100100"]);
     });
 
-    expect(result.current.error).toBe("Network error");
-    expect(result.current.verified).toBe(false);
+    await waitFor(() => {
+      expect(result.current.error).toBe("Network error");
+      expect(result.current.verified).toBe(false);
+    });
   });
 
-  it("handleSubmit calls createGeneSet and adds to store", async () => {
+  it("handleSubmit calls createGeneSet and invalidates query cache", async () => {
     const geneSet = makeGeneSet();
     mockCreate.mockResolvedValue(geneSet);
 
@@ -154,7 +155,7 @@ describe("useGeneSetCreation", () => {
       geneIds: ["PF3D7_0100100"],
       siteId: "PlasmoDB",
     });
-    expect(mockAddGeneSet).toHaveBeenCalledWith(geneSet);
+    expect(mockInvalidate).toHaveBeenCalled();
     expect(mockOnCreated).toHaveBeenCalled();
   });
 
@@ -173,6 +174,10 @@ describe("useGeneSetCreation", () => {
     // First verify
     await act(async () => {
       await result.current.handleVerify(["PF3D7_0100100", "BAD"]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.verified).toBe(true);
     });
 
     // Then submit -- should use only resolved gene IDs
@@ -224,8 +229,10 @@ describe("useGeneSetCreation", () => {
       await result.current.handleSubmit("My Set", ["G1"], "paste");
     });
 
-    expect(result.current.error).toBe("Server error");
-    expect(mockOnCreated).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(result.current.error).toBe("Server error");
+      expect(mockOnCreated).not.toHaveBeenCalled();
+    });
   });
 
   it("resetVerification clears verification state", async () => {
@@ -243,18 +250,22 @@ describe("useGeneSetCreation", () => {
       await result.current.handleVerify(["PF3D7_0100100", "BAD"]);
     });
 
-    expect(result.current.verified).toBe(true);
-    expect(result.current.resolvedGenes).not.toBeNull();
-    expect(result.current.unresolvedIds.length).toBe(1);
+    await waitFor(() => {
+      expect(result.current.verified).toBe(true);
+      expect(result.current.resolvedGenes).not.toBeNull();
+      expect(result.current.unresolvedIds.length).toBe(1);
+    });
 
     // Reset
     act(() => {
       result.current.resetVerification();
     });
 
-    expect(result.current.verified).toBe(false);
-    expect(result.current.resolvedGenes).toBeNull();
-    expect(result.current.unresolvedIds).toEqual([]);
-    expect(result.current.error).toBeNull();
+    await waitFor(() => {
+      expect(result.current.verified).toBe(false);
+      expect(result.current.resolvedGenes).toBeNull();
+      expect(result.current.unresolvedIds).toEqual([]);
+      expect(result.current.error).toBeNull();
+    });
   });
 });

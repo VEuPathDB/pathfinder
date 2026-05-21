@@ -1,71 +1,77 @@
 [project]
 name = "pathfinder-api"
-version = "0.1.0a1"
+version = "0.2.0a1"
 description = "VEuPathDB Strategy Builder Chatbot API"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
-    "pydantic>=2.9.0",
-    "pydantic-settings>=2.6.0",
-    "sqlalchemy[asyncio]>=2.0.35",
-    "asyncpg>=0.30.0",
-    "alembic>=1.14.0",
-    "httpx>=0.28.0",
-    "kani[openai,anthropic,google]>=1.2.0",
-    "qdrant-client>=1.12.0",
-    "python-multipart>=0.0.16",
-    "structlog>=24.4.0",
-    "pyyaml>=6.0.2",
-    "tenacity>=9.0.0",
-    "json5>=0.9.0",
-    "rapidfuzz>=3.9.0",
-    "optuna>=4.0.0",
-    "redis[hiredis]>=5.2.0",
-    "pyjwt>=2.9.0",
+    "fastapi>=0.135.0",
+    "uvicorn[standard]>=0.44.0",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.13.0",
+    "sqlalchemy[asyncio]>=2.0.49",
+    "asyncpg>=0.31.0",
+    "alembic>=1.18.0",
+    "httpx>=0.28.1",
+    "pydantic-ai>=1.80.0",
+    "langgraph==1.1.6",
+    "langgraph-checkpoint-postgres==3.0.5",
+    "psycopg[binary]>=3.2.0",
+    "langfuse>=4.0.0",
+    "opentelemetry-sdk>=1.39.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.39.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.39.0",
+    "opentelemetry-instrumentation-fastapi>=0.60b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.60b0",
+    "opentelemetry-instrumentation-httpx>=0.60b0",
+    "opentelemetry-instrumentation-logging>=0.60b0",
+    "python-multipart>=0.0.22",
+    "structlog>=25.0.0",
+    "pyyaml>=6.0.3",
+    "tenacity>=9.1.0",
+    "json5>=0.14.0",
+    "onnxruntime>=1.19.0",
+    "tokenizers>=0.21.0",
+    "rapidfuzz>=3.14.0",
+    "optuna>=4.8.0",
+    "pyjwt>=2.12.1",
     "slowapi>=0.1.9",
     "pathfinder-shared",
-    "furo[dev]>=2025.12.19",
-    "sphinx-design[dev]>=0.7.0",
-    "sphinx-copybutton[dev]>=0.5.2",
-    "sphinxcontrib-mermaid[dev]>=2.0.1",
-    "sphinx-inline-tabs[dev]>=2025.12.21.14",
-    "sphinx[dev]>=8",
+    "cachetools>=7.0.5",
+    "fastembed>=0.8.0",
+    "procrastinate>=3.8.1",
+    "ddgs>=9.14.1",
+    "markdown>=3.10.0",
+]
+
+[tool.uv]
+constraint-dependencies = [
+    "pyasn1>=0.6.3",  # CVE-2026-30922
 ]
 
 [tool.uv.sources]
 pathfinder-shared = { path = "../../packages/shared-py", editable = true }
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.24.0",
-    "pytest-cov>=6.0.0",
-    "respx>=0.21.0",
-    "pre-commit>=3.7.0",
-    "ruff>=0.7.0",
-    "mypy>=1.19.0",
-    "types-pyyaml>=6.0.0",
-    "vulture>=2.10",
-    "sphinx>=8.0.0",
-]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/veupath_chatbot"]
+packages = ["src/pathfinder"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["src/veupath_chatbot/tests"]
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["src/pathfinder/tests"]
+addopts = "--ignore=src/pathfinder/tests/llm -m 'not llm'"
 markers = [
     "live_wdk: tests that make live HTTP calls to VEuPathDB WDK endpoints (require network)",
+    "vcr: tests backed by VCR cassettes (auto-registered by pytest-recording)",
+    "llm: per-phase tests that hit real OpenAI and real WDK (opt-in; run via `uv run pytest src/pathfinder/tests/llm -m llm --override-ini addopts=''`)",
 ]
 
 [tool.coverage.run]
-source = ["src/veupath_chatbot"]
+source = ["src/pathfinder"]
 omit = ["*/tests/*"]
 
 [tool.ruff]
@@ -74,7 +80,37 @@ target-version = "py314"
 src = ["src", "alembic"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+select = [
+    "E", "F", "I", "N", "W", "UP", "B", "C4", "SIM",  # existing
+    "A",      # builtin-shadowing (list = [], type = "foo")
+    "ASYNC",  # async anti-patterns (missing await, blocking in async)
+    "BLE",    # blind except (bare `except:` or `except Exception:`)
+    "C90",    # McCabe complexity
+    "DTZ",    # datetime without timezone
+    "EM",     # string literals in exceptions
+    "ERA",    # commented-out code
+    "FBT",    # boolean trap (boolean positional args)
+    "ICN",    # import conventions
+    "ISC",    # implicit string concatenation
+    "LOG",    # logging anti-patterns
+    "PIE",    # misc linting
+    "PT",     # pytest style enforcement
+    "PTH",    # pathlib over os.path
+    "RET",    # unnecessary return/else patterns
+    "RSE",    # raise improvements
+    "RUF",    # ruff-specific rules
+    "S",      # bandit security (SQL injection, hardcoded passwords, etc.)
+    "T20",    # print() statements (use structlog)
+    "TCH",    # TYPE_CHECKING imports
+    "TID",    # tidy imports
+    "TRY",    # exception handling anti-patterns
+    "PERF",   # performance anti-patterns
+    "FURB",   # modernization
+    "PLC",    # pylint convention
+    "PLE",    # pylint error
+    "PLR",    # pylint refactor
+    "PLW",    # pylint warning
+]
 ignore = [
     # FastAPI path params and Pydantic field names intentionally use mixedCase
     # to match the public HTTP contract (e.g. `siteId`, `planSessionId`).
@@ -86,22 +122,74 @@ ignore = [
     # even on Python 3.14 (PEP 649) because Pydantic's metaclass evaluates
     # annotations eagerly at class construction time.
     "UP037",
+    # We don't use TYPE_CHECKING imports.
+    "TC001", "TC002", "TC003",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 6
+max-returns = 6
+max-branches = 10
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = [
+    "S101",     # assert is what tests do
+    "S105",     # hardcoded passwords in test fixtures are fine
+    "S106",     # hardcoded password args in test fixtures are fine
+    "PLR2004",  # magic values in assertions are expected
+    "FBT",      # boolean args in test helpers are fine
+    "S311",     # deterministic seeds for shuffling is fine
+]
+"src/pathfinder/ai/capabilities/piguard.py" = [
+    "S106",  # pad_token="[PAD]" is tokenizer config, not a password
+]
+"src/pathfinder/ai/prompts/**" = [
+    "E501",  # prompt strings are long by nature
+]
+"scripts/**" = [
+    "T20",    # scripts use print() for CLI output
+    "S101",   # assert in scripts is fine
+]
+"src/pathfinder/ai/tools/standalone/**" = [
+    "PLR0913",  # tool functions need many params for LLM tool interface
+    "FBT",      # boolean params required for LLM tool descriptions
+]
+"src/pathfinder/ai/scratchpad/tools.py" = [
+    "FBT",      # boolean params required for LLM tool descriptions
+]
+"src/pathfinder/jobs/impls/**" = [
+    "PLR0913",  # worker impls mirror tool signatures + framework kwargs
+    "FBT",      # booleans mirror tool interface
+]
+"src/pathfinder/devtools/**" = [
+    "T20",      # devtools scripts use print() for CLI output
+    "C901",     # stream analysis inspects many event types
+    "PLR0912",  # branching inherent to multi-event-type parsing
+    "PLR0915",  # statement count naturally high for CLI tools
+    "PLR2004",  # magic values in CLI thresholds are fine
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["veupath_chatbot"]
+known-first-party = ["pathfinder"]
 
 [tool.mypy]
 python_version = "3.14"
 strict = true
 mypy_path = "stubs"
+plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_ignores = true
 disable_error_code = ["import-untyped", "untyped-decorator"]
-exclude = ["scripts/", "docs/", "src/veupath_chatbot/tests/"]
+exclude = ["scripts/", "docs/", "src/pathfinder/tests/"]
+
+[tool.pydantic-mypy]
+init_typed = false
 
 [[tool.mypy.overrides]]
-module = "veupath_chatbot.tests.*"
+module = "pathfinder.tests.*"
 disable_error_code = [
     "no-untyped-def",
     "arg-type",
@@ -112,23 +200,115 @@ disable_error_code = [
 ]
 
 [tool.vulture]
-paths = ["src/veupath_chatbot"]
+paths = ["src/pathfinder", "vulture_whitelist.py"]
 exclude = ["tests/", "*/conftest.py"]
 min_confidence = 80
 
+# Mutation testing config lives in apps/api/setup.cfg under [mutmut].
+# mutmut 3.x reads only setup.cfg, not pyproject.toml.
+# Run:    uv run python -m mutmut run
+# Show:   uv run python -m mutmut results
+
 [dependency-groups]
 dev = [
-    "fakeredis>=2.34.1",
+    "hypothesis>=6.151.0",
+    "import-linter>=2.11",
+    "mypy>=1.20.0",
+    "pyright>=1.1.408",
+    "pip-audit>=2.10.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
+    "pytest-recording>=0.13.0",
     "respx>=0.22.0",
     "ruff>=0.15.0",
-    "testcontainers",
+    "testcontainers>=4.14.0",
+    "vcrpy>=8.0.0",
+    "schemathesis>=4.16.1",
+    "mutmut>=3.5.0",
+]
+docs = [
+    "furo>=2025.12.19",
+    "sphinx>=8.0.0",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-design>=0.7.0",
+    "sphinx-inline-tabs>=2025.12.21.14",
+    "sphinxcontrib-mermaid>=2.0.1",
 ]
 
 
 [tool.pyright]
 pythonVersion = "3.14"
 pythonPlatform = "Linux"
+
+# ---------------------------------------------------------------------------
+# Import Linter — backend architecture enforcement
+# ---------------------------------------------------------------------------
+[tool.importlinter]
+root_packages = ["pathfinder"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Domain layer is pure (no I/O, no other layers)"
+type = "forbidden"
+source_modules = ["pathfinder.domain"]
+forbidden_modules = [
+    "pathfinder.integrations",
+    "pathfinder.services",
+    "pathfinder.transport",
+    "pathfinder.persistence",
+    "pathfinder.ai",
+    "httpx",
+    "sqlalchemy",
+    "asyncpg",
+    "fastapi",
+]
+
+[[tool.importlinter.contracts]]
+name = "Transport never imports integrations or persistence directly"
+type = "forbidden"
+source_modules = ["pathfinder.transport"]
+forbidden_modules = [
+    "pathfinder.integrations",
+    "pathfinder.persistence",
+]
+
+[[tool.importlinter.contracts]]
+name = "AI tools never import integrations or persistence directly"
+type = "forbidden"
+source_modules = ["pathfinder.ai.tools"]
+forbidden_modules = [
+    "pathfinder.integrations",
+    "pathfinder.persistence",
+]
+
+[[tool.importlinter.contracts]]
+name = "Services never import transport or AI"
+type = "forbidden"
+source_modules = ["pathfinder.services"]
+forbidden_modules = [
+    "pathfinder.transport",
+    "pathfinder.ai",
+]
+
+[[tool.importlinter.contracts]]
+name = "Integrations never import services, transport, or AI"
+type = "forbidden"
+source_modules = ["pathfinder.integrations"]
+forbidden_modules = [
+    "pathfinder.services",
+    "pathfinder.transport",
+    "pathfinder.ai",
+]
+
+[[tool.importlinter.contracts]]
+name = "Persistence never imports services, transport, AI, or integrations"
+type = "forbidden"
+source_modules = ["pathfinder.persistence"]
+forbidden_modules = [
+    "pathfinder.services",
+    "pathfinder.transport",
+    "pathfinder.ai",
+    "pathfinder.integrations",
+]
 

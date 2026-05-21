@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Loader2, Plus, ThumbsDown, ThumbsUp } from "lucide-react";
 import { createGeneSet } from "@/features/workbench/api/geneSets";
 import { useSessionStore } from "@/state/useSessionStore";
-import { useWorkbenchStore } from "../store";
+import { useWorkbenchStore } from "@/state/useWorkbenchStore";
+import { useInvalidateGeneSets } from "@/lib/query/hooks/useInvalidateGeneSets";
 import { Button } from "@/lib/components/ui/Button";
 import { Input } from "@/lib/components/ui/Input";
 import { SaveControlSetForm } from "./SaveControlSetForm";
@@ -23,7 +24,7 @@ export function GeneSearchActions({
   onError,
 }: GeneSearchActionsProps) {
   const selectedSite = useSessionStore((s) => s.selectedSite);
-  const addGeneSet = useWorkbenchStore((s) => s.addGeneSet);
+  const invalidateGeneSets = useInvalidateGeneSets();
   const evaluateOpen = useWorkbenchStore((s) => s.expandedPanels.has("evaluate"));
   const appendPositiveControls = useWorkbenchStore((s) => s.appendPositiveControls);
   const appendNegativeControls = useWorkbenchStore((s) => s.appendNegativeControls);
@@ -34,18 +35,18 @@ export function GeneSearchActions({
 
   const hasSelection = selectedIds.size > 0;
 
-  const handleCreateGeneSet = useCallback(async () => {
+  const handleCreateGeneSet = async () => {
     if (selectedIds.size === 0) return;
     const name = newSetName.trim() || `Search: ${query.trim()}`;
     setCreating(true);
     try {
-      const gs = await createGeneSet({
+      await createGeneSet({
         name,
         source: "paste",
         geneIds: [...selectedIds],
         siteId: selectedSite,
       });
-      addGeneSet(gs);
+      await invalidateGeneSets();
       onClearSelection();
       setShowNameInput(false);
       setNewSetName("");
@@ -54,27 +55,19 @@ export function GeneSearchActions({
     } finally {
       setCreating(false);
     }
-  }, [
-    selectedIds,
-    newSetName,
-    query,
-    selectedSite,
-    addGeneSet,
-    onClearSelection,
-    onError,
-  ]);
+  };
 
-  const handleAddPositive = useCallback(() => {
+  const handleAddPositive = () => {
     if (selectedIds.size === 0) return;
     appendPositiveControls([...selectedIds]);
     onClearSelection();
-  }, [selectedIds, appendPositiveControls, onClearSelection]);
+  };
 
-  const handleAddNegative = useCallback(() => {
+  const handleAddNegative = () => {
     if (selectedIds.size === 0) return;
     appendNegativeControls([...selectedIds]);
     onClearSelection();
-  }, [selectedIds, appendNegativeControls, onClearSelection]);
+  };
 
   return (
     <div className="space-y-2 border-t border-border px-3 py-3">

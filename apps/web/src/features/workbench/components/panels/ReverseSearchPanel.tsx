@@ -1,28 +1,20 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Search, Loader2 } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
 import { requestJson } from "@/lib/api/http";
+import { reverseSearchResultItemSchema } from "@pathfinder/shared/generated/zod/reverseSearchResultItemSchema";
+import type { ReverseSearchResultItem } from "@pathfinder/shared/generated/types/ReverseSearchResultItem";
+import { z } from "zod";
 import { useSessionStore } from "@/state/useSessionStore";
 import { AnalysisPanelContainer } from "../AnalysisPanelContainer";
 import { GeneChipInput } from "../GeneChipInput";
-import { useWorkbenchStore } from "../../store";
+import { useGeneSetsQuery } from "@/lib/query/hooks/useGeneSetsQuery";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+const ReverseSearchResultListSchema = z.array(reverseSearchResultItemSchema);
 
-interface ReverseSearchResult {
-  geneSetId: string;
-  name: string;
-  searchName: string | null;
-  recall: number;
-  precision: number;
-  f1: number;
-  resultCount: number;
-  overlapCount: number;
-}
+type ReverseSearchResult = ReverseSearchResultItem;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -38,7 +30,7 @@ function pct(value: number): string {
 
 export function ReverseSearchPanel() {
   const siteId = useSessionStore((s) => s.selectedSite);
-  const geneSets = useWorkbenchStore((s) => s.geneSets);
+  const { data: geneSets = [] } = useGeneSetsQuery(siteId);
   const hasGeneSets = geneSets.length > 0;
 
   const [positiveInput, setPositiveInput] = useState<string[]>([]);
@@ -49,7 +41,7 @@ export function ReverseSearchPanel() {
 
   const disabled = !siteId;
 
-  const handleSearch = useCallback(async () => {
+  const handleSearch = async () => {
     if (positiveInput.length === 0) {
       setError("Enter at least one positive gene ID.");
       return;
@@ -60,7 +52,8 @@ export function ReverseSearchPanel() {
     setResults([]);
 
     try {
-      const data = await requestJson<ReverseSearchResult[]>(
+      const data = await requestJson(
+        ReverseSearchResultListSchema,
         "/api/v1/gene-sets/reverse-search",
         {
           method: "POST",
@@ -77,7 +70,7 @@ export function ReverseSearchPanel() {
     } finally {
       setLoading(false);
     }
-  }, [positiveInput, negativeInput, siteId]);
+  };
 
   return (
     <AnalysisPanelContainer
@@ -91,7 +84,7 @@ export function ReverseSearchPanel() {
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <GeneChipInput
-            siteId={siteId ?? ""}
+            siteId={siteId}
             value={positiveInput}
             onChange={setPositiveInput}
             label="Positive Gene IDs"
@@ -99,7 +92,7 @@ export function ReverseSearchPanel() {
             required
           />
           <GeneChipInput
-            siteId={siteId ?? ""}
+            siteId={siteId}
             value={negativeInput}
             onChange={setNegativeInput}
             label="Negative Gene IDs"
@@ -107,7 +100,13 @@ export function ReverseSearchPanel() {
           />
         </div>
 
-        <Button size="sm" onClick={handleSearch} disabled={loading || !hasGeneSets}>
+        <Button
+          size="sm"
+          onClick={() => {
+            void handleSearch();
+          }}
+          disabled={loading || !hasGeneSets}
+        >
           {loading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
@@ -122,7 +121,9 @@ export function ReverseSearchPanel() {
           </p>
         )}
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error != null && error !== "" && (
+          <p className="text-xs text-destructive">{error}</p>
+        )}
 
         {results.length > 0 && (
           <div className="overflow-x-auto rounded-md border">
@@ -153,7 +154,7 @@ export function ReverseSearchPanel() {
                     <td className="px-3 py-2 text-right">{pct(r.precision)}</td>
                     <td className="px-3 py-2 text-right">{pct(r.f1)}</td>
                     <td className="px-3 py-2 text-right">
-                      {r.overlapCount}/{r.resultCount}
+                      {r.overlapCount}/{r.estimatedSize}
                     </td>
                   </tr>
                 ))}
