@@ -33,6 +33,8 @@ touch ollama_models.yaml
 # Install JS dependencies (required by the web image build context)
 yarn
 
+yarn workspace @pathfinder/shared generate
+
 podman build -t pathfinder-api:latest -f apps/api/Dockerfile .
 
 podman build -t pathfinder-web:latest -f apps/web/Dockerfile \
