@@ -80,7 +80,6 @@ COPY apps/api/alembic.ini apps/api/
 COPY apps/api/alembic apps/api/alembic
 
 # Copy application code (exclude tests — they add ~300MB of VCR cassettes)
-COPY apps/api/src/data apps/api/src/data
 COPY apps/api/src/pathfinder apps/api/src/pathfinder
 RUN rm -rf apps/api/src/pathfinder/tests
 

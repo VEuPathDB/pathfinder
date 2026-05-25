@@ -115,6 +115,11 @@ quadlets/*.d/
 packages/shared-ts/dist/
 packages/shared-py/dist/
 
+# Runtime cache (persisted via volume mount, not committed)
+apps/api/src/data/catalogs/
+apps/api/src/data/embeddings/
+apps/api/src/pathfinder/data/
+
 # WDK - Repository cloned for local development
 WDK-master/
 wdk-client/

@@ -56,8 +56,12 @@ class PIGuardScanner:
         model_path = model_dir / "model.onnx"
         tokenizer_path = model_dir / "tokenizer.json"
 
+        opts = onnxruntime.SessionOptions()
+        opts.intra_op_num_threads = 2
+        opts.inter_op_num_threads = 1
         self._session = onnxruntime.InferenceSession(
             str(model_path),
+            sess_options=opts,
             providers=["CPUExecutionProvider"],
         )
         self._tokenizer = Tokenizer.from_file(str(tokenizer_path))

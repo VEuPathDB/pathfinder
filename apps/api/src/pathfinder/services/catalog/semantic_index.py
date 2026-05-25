@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 _MODEL_NAME = "nomic-ai/nomic-embed-text-v1.5"
 
 # Pre-computed embeddings shipped with the repo.
-_BUNDLED_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "embeddings"
+_BUNDLED_CACHE_DIR = Path(__file__).resolve().parents[3] / "data" / "embeddings"
 
 
 class _CacheConfig:
@@ -62,7 +62,7 @@ class _ModelState:
                 return cls._instance
             logger.info("Loading fastembed model", model=_MODEL_NAME)
             cache_dir = os.getenv("FASTEMBED_CACHE_DIR") or None
-            cls._instance = TextEmbedding(model_name=_MODEL_NAME, cache_dir=cache_dir)
+            cls._instance = TextEmbedding(model_name=_MODEL_NAME, cache_dir=cache_dir, threads=2)
             logger.info("Fastembed model loaded")
             return cls._instance
 
