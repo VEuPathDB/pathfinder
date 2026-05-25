@@ -62,7 +62,11 @@ class _ModelState:
                 return cls._instance
             logger.info("Loading fastembed model", model=_MODEL_NAME)
             cache_dir = os.getenv("FASTEMBED_CACHE_DIR") or None
-            cls._instance = TextEmbedding(model_name=_MODEL_NAME, cache_dir=cache_dir, threads=2)
+            cls._instance = TextEmbedding(
+                model_name=_MODEL_NAME,
+                cache_dir=cache_dir,
+                threads=int(os.getenv("FASTEMBED_THREADS", "2")),
+            )
             logger.info("Fastembed model loaded")
             return cls._instance
 
