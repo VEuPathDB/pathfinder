@@ -2,6 +2,7 @@
 Description=Pathfinder API server
 After=pathfinder-db.service
 Requires=pathfinder-db.service
+Wants=pathfinder-worker.service
 
 [Container]
 ContainerName=pathfinder-api
