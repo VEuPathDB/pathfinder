@@ -53,7 +53,17 @@ cp .env ~/.config/pathfinder/.env
 # Edit as needed — at minimum set an LLM provider API key
 ```
 
-## 3. Install the quadlet files
+## 3. Create required host directories
+
+The API container bind-mounts a data directory that must exist on the host
+before the container starts — Podman will not create it automatically, and
+the service will fail with a cryptic error if it is missing:
+
+```bash
+mkdir -p ~/.local/share/pathfinder/data
+```
+
+## 4. Install the quadlet files
 
 Symlink the quadlet files (and any local drop-in directories) into the
 systemd user directory:
@@ -62,7 +72,7 @@ systemd user directory:
 mkdir -p ~/.config/containers/systemd
 ln -sf "$PWD"/quadlets/*.{container,volume,network} ~/.config/containers/systemd/
 
-# Also link any drop-in override directories you've created (see §8)
+# Also link any drop-in override directories you've created (see §9)
 for d in quadlets/*.d; do
   [ -d "$d" ] && ln -sfn "$PWD/$d" ~/.config/containers/systemd/
 done
@@ -70,7 +80,7 @@ done
 systemctl --user daemon-reload
 ```
 
-## 4. Start the stack
+## 5. Start the stack
 
 Kill the docker compose stack if it's running.
 
@@ -86,13 +96,13 @@ Or start everything explicitly:
 systemctl --user start pathfinder-db pathfinder-api pathfinder-web
 ```
 
-## 5. Check status
+## 6. Check status
 
 ```bash
 systemctl --user status pathfinder-db pathfinder-api pathfinder-web
 ```
 
-## 6. View logs
+## 7. View logs
 
 ```bash
 # Follow API logs
@@ -102,7 +112,7 @@ journalctl --user -u pathfinder-api -f
 journalctl --user -u 'pathfinder-*' -n 100
 ```
 
-## 7. Enable on boot
+## 8. Enable on boot
 
 With linger enabled, services with `WantedBy=default.target` start at boot:
 
@@ -110,7 +120,7 @@ With linger enabled, services with `WantedBy=default.target` start at boot:
 systemctl --user enable pathfinder-db pathfinder-api pathfinder-web
 ```
 
-## 8. Local overrides (drop-in directories)
+## 9. Local overrides (drop-in directories)
 
 Use systemd-style drop-in directories to override settings without editing
 the version-controlled quadlet files. Create a `.d` directory named after
@@ -155,7 +165,7 @@ override *adds* to the base values. To replace a value, first clear it with
 an empty assignment (`PublishPort=`), then set the new value on the next
 line.
 
-## 9. Rebuild images after code changes
+## 10. Rebuild images after code changes
 
 ```bash
 podman build -t pathfinder-api:latest -f apps/api/Dockerfile .
@@ -166,13 +176,13 @@ podman build -t pathfinder-web:latest -f apps/web/Dockerfile \
 systemctl --user restart pathfinder-web
 ```
 
-## 10. Stop everything
+## 11. Stop everything
 
 ```bash
 systemctl --user stop pathfinder-web pathfinder-api pathfinder-db
 ```
 
-## 11. Remove persistent data
+## 12. Remove persistent data
 
 ```bash
 podman volume rm pathfinder-postgres-data
