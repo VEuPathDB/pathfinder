@@ -2,6 +2,7 @@
 Description=Pathfinder web frontend
 After=pathfinder-api.service
 Requires=pathfinder-api.service
+Wants=pathfinder-worker.service
 
 [Container]
 ContainerName=pathfinder-web
