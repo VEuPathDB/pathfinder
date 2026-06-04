@@ -101,6 +101,10 @@ class Settings(BaseSettings):
     default_tier: TierName = "fast"
 
     # VEuPathDB
+    catalog_excluded_param_prefixes: list[str] = Field(
+        default_factory=list,
+        description="Exclude searches from the catalog if any paramName starts with one of these prefixes.",
+    )
     veupathdb_default_site: str = "veupathdb"
     veupathdb_sites_config: str | None = Field(
         default=None,

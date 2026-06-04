@@ -6,6 +6,7 @@ api_docs_enabled = true
 
 database_url = "postgresql+asyncpg://postgres:postgres@localhost:5432/pathfinder"
 
+# catalog_excluded_param_prefixes = ["eda_"]
 veupathdb_default_site = "veupathdb"
 veupathdb_cache_ttl = 3600
 veupathdb_oauth_url = ""

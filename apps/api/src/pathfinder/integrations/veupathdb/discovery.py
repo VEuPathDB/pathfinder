@@ -20,11 +20,29 @@ from pathfinder.integrations.veupathdb.wdk_models import (
     WDKSearch,
     WDKSearchResponse,
 )
+from pathfinder.platform.config import get_settings
 from pathfinder.platform.errors import AppError
 from pathfinder.platform.logging import get_logger
 from pathfinder.platform.tasks import spawn
 
 logger = get_logger(__name__)
+
+
+def _filter_searches(
+    searches: list[WDKSearch],
+    excluded_prefixes: list[str],
+) -> list[WDKSearch]:
+    """Return searches that have no paramName starting with any excluded prefix."""
+    if not excluded_prefixes:
+        return searches
+    return [
+        s for s in searches
+        if not any(
+            param.startswith(prefix)
+            for param in s.param_names
+            for prefix in excluded_prefixes
+        )
+    ]
 
 
 class SearchCatalog:
@@ -50,8 +68,12 @@ class SearchCatalog:
 
     def _restore_from_snapshot(self, snapshot: CatalogSnapshot) -> None:
         """Populate in-memory state from a cached snapshot."""
+        excluded = get_settings().catalog_excluded_param_prefixes
         self._record_types = snapshot.record_types
-        self._searches = snapshot.searches
+        self._searches = {
+            rt: _filter_searches(searches, excluded)
+            for rt, searches in snapshot.searches.items()
+        }
         self._dataset_summaries = snapshot.dataset_summaries
         self._dataset_contacts = snapshot.dataset_contacts
         self._search_categories = snapshot.search_categories
@@ -202,6 +224,7 @@ class SearchCatalog:
         expanded_supported: bool,
     ) -> None:
         """Populate internal caches from the record types array."""
+        excluded = get_settings().catalog_excluded_param_prefixes
         for rt in record_types:
             result = process_record_type_entry(
                 rt, expanded_supported=expanded_supported
@@ -214,11 +237,11 @@ class SearchCatalog:
             self._record_types.append(typed_rt)
 
             if searches is not None and len(searches) > 0:
-                self._searches[rt_name] = searches
+                self._searches[rt_name] = _filter_searches(searches, excluded)
             else:
                 fetched = await load_searches_for_rt(client, rt_name)
                 if fetched is not None:
-                    self._searches[rt_name] = fetched
+                    self._searches[rt_name] = _filter_searches(fetched, excluded)
 
     # ------------------------------------------------------------------
     # Public query API
