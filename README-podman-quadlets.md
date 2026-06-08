@@ -184,8 +184,14 @@ needed when you want to **reset and fully rebuild** the Qdrant collections.
 
 Requires `pathfinder-qdrant` to be running. Run from the project root so the
 report output path resolves correctly:
+```bash
+systemctl --user status pathfinder-qdrant
+# if required:
+systemctl --user start pathfinder-qdrant
+```
 
 ```bash
+# make sure this is user-owned, not root:
 mkdir -p apps/api/ingest_reports
 
 podman run --rm \
@@ -196,12 +202,27 @@ podman run --rm \
   -v "$PWD/apps/api/ingest_reports:/reports:Z" \
   -w /app/apps/api \
   localhost/pathfinder-api:latest \
-  /bin/sh -lc "uv run python -m veupath_chatbot.services.vectorstore.ingest.wdk_catalog --sites all --reset && \
-               uv run python -m veupath_chatbot.services.vectorstore.ingest.public_strategies --sites all --reset --report-path /reports/ingest_public_strategies_report.jsonl"
+  /bin/sh -lc "uv run python -m veupath_chatbot.integrations.vectorstore.ingest.wdk_catalog --sites all --reset && \
+               uv run python -m veupath_chatbot.integrations.vectorstore.ingest.public_strategies --sites all --reset --report-path /reports/ingest_public_strategies_report.jsonl"
 ```
 
 Both jobs require `OPENAI_API_KEY` (used for embeddings). The second job writes
 a JSONL report to `apps/api/ingest_reports/` (gitignored).
+
+**Beta sites:** if your `VEUPATHDB_SITES_CONFIG` points at `beta-sites.yaml`,
+many WDK endpoints require authentication. Add both variables to
+`~/.config/pathfinder/.env`:
+
+```bash
+# Note: path is inside the container, not on the host
+VEUPATHDB_SITES_CONFIG=/app/apps/api/src/veupath_chatbot/integrations/veupathdb/beta-sites.yaml
+VEUPATHDB_AUTH_TOKEN=your_api_key_here
+```
+
+Logged-in users can find their API key at their VEuPathDB profile page under
+**Service Access** — for example:
+`https://beta.plasmodb.org/plasmo.beta/app/user/profile#serviceAccess`
+(any component site works).
 
 ## Services overview
 

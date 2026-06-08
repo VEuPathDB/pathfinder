@@ -28,6 +28,10 @@ qdrant_timeout_seconds = 10.0
 rag_startup_public_strategies_llm_model = "gpt-4.1-nano"
 rag_startup_public_strategies_report_path = "/tmp/ingest_public_strategies_report.jsonl"
 
+# VEuPathDB catalog
+# Uncomment to hide searches whose param names start with any listed prefix.
+# catalog_excluded_param_prefixes = ["eda_"]
+
 # Optional (uncomment to override)
 # rag_startup_max_strategies_per_site = 25
 # rag_startup_public_strategies_concurrency = 4

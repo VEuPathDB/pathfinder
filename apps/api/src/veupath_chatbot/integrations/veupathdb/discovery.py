@@ -9,10 +9,31 @@ from veupath_chatbot.integrations.veupathdb.param_utils import (
     wdk_search_matches,
 )
 from veupath_chatbot.integrations.veupathdb.site_router import get_site_router
+from veupath_chatbot.platform.config import get_settings
 from veupath_chatbot.platform.logging import get_logger
 from veupath_chatbot.platform.types import JSONArray, JSONObject
 
 logger = get_logger(__name__)
+
+
+def _filter_searches(
+    searches: JSONArray,
+    excluded_prefixes: list[str],
+) -> JSONArray:
+    """Return searches that have no paramName starting with any excluded prefix."""
+    if not excluded_prefixes:
+        return searches
+    return [
+        s for s in searches
+        if not (
+            isinstance(s, dict)
+            and any(
+                isinstance(p, str) and p.startswith(prefix)
+                for p in (s.get("paramNames") or [])
+                for prefix in excluded_prefixes
+            )
+        )
+    ]
 
 
 class SearchCatalog:
@@ -73,12 +94,13 @@ class SearchCatalog:
                         continue
 
                     if rt_name:
+                        excluded = get_settings().catalog_excluded_param_prefixes
                         if searches is not None and searches != []:
-                            self._searches[rt_name] = searches
+                            self._searches[rt_name] = _filter_searches(searches, excluded)
                         else:
                             try:
                                 searches = await client.get_searches(rt_name)
-                                self._searches[rt_name] = searches
+                                self._searches[rt_name] = _filter_searches(searches, excluded)
                             except Exception as e:
                                 logger.warning(
                                     "Failed to load searches",
