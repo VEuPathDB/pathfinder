@@ -22,8 +22,8 @@ Environment=DATABASE_URL=postgresql+asyncpg://postgres:postgres@pathfinder-db:54
 # fastembed and PIGuard both use onnxruntime which defaults to nproc threads.
 # Set FASTEMBED_THREADS in .env to override the default of 2 (e.g. FASTEMBED_THREADS=8 on
 # a server where faster cold-start embedding is worth the extra CPU).
-Environment=OMP_NUM_THREADS=2
-Environment=OPENBLAS_NUM_THREADS=2
+Environment=OMP_NUM_THREADS=16
+Environment=OPENBLAS_NUM_THREADS=16
 # Uncomment to use a local Ollama instance on the host
 # Environment=OLLAMA_BASE_URL=http://host.containers.internal:11434/v1
 
