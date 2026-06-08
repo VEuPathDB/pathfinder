@@ -161,6 +161,7 @@ class Settings(BaseSettings):
     veupathdb_auth_token: str | None = None
     veupathdb_oauth_url: str | None = None
     veupathdb_oauth_client_id: str | None = None
+    catalog_excluded_param_prefixes: list[str] = Field(default_factory=list)
 
     # Chat provider (set to "mock" for deterministic offline E2E testing)
     chat_provider: str = Field(default="default", alias="PATHFINDER_CHAT_PROVIDER")
