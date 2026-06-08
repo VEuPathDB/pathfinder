@@ -21,12 +21,7 @@ const storeState: Record<string, unknown> = {
   togglePanel: vi.fn(),
 };
 
-vi.mock("../../store", () => ({
-  useWorkbenchStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(storeState),
-}));
-
-vi.mock("../../store/useWorkbenchStore", () => ({
+vi.mock("@/state/useWorkbenchStore", () => ({
   useWorkbenchStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector(storeState),
 }));
@@ -38,6 +33,13 @@ const sessionState: Record<string, unknown> = {
 vi.mock("@/state/useSessionStore", () => ({
   useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector(sessionState),
+}));
+
+vi.mock("@/lib/query/hooks/useGeneSetsQuery", () => ({
+  useGeneSetsQuery: () => ({
+    data: storeState["geneSets"],
+    isPending: false,
+  }),
 }));
 
 const mockRequestJson = vi.fn();
@@ -93,12 +95,12 @@ describe("ReverseSearchPanel", () => {
   });
 
   beforeEach(() => {
-    storeState.geneSets = [
+    storeState["geneSets"] = [
       { id: "gs-1", name: "Test Set", geneIds: ["G1", "G2"], siteId: "PlasmoDB" },
     ];
-    storeState.activeSetId = "gs-1";
-    storeState.expandedPanels = new Set(["reverse-search"]);
-    sessionState.selectedSite = "PlasmoDB";
+    storeState["activeSetId"] = "gs-1";
+    storeState["expandedPanels"] = new Set(["reverse-search"]);
+    sessionState["selectedSite"] = "PlasmoDB";
   });
 
   it("renders GeneChipInput with correct labels", () => {
@@ -113,7 +115,7 @@ describe("ReverseSearchPanel", () => {
     render(<ReverseSearchPanel />);
 
     const buttons = screen.getAllByRole("button", { name: /search/i });
-    const runButton = buttons[buttons.length - 1];
+    const runButton = buttons[buttons.length - 1]!;
     fireEvent.click(runButton);
 
     await waitFor(() => {
@@ -130,7 +132,7 @@ describe("ReverseSearchPanel", () => {
         recall: 0.8,
         precision: 0.6,
         f1: 0.686,
-        resultCount: 100,
+        estimatedSize: 100,
         overlapCount: 4,
       },
     ]);
@@ -142,14 +144,14 @@ describe("ReverseSearchPanel", () => {
     expect(positiveOnChange).toBeDefined();
 
     // Flush the state update so the panel sees the new gene IDs
-    await act(() => {
-      positiveOnChange(["G1", "G2", "G3", "G4", "G5"]);
+    act(() => {
+      positiveOnChange!(["G1", "G2", "G3", "G4", "G5"]);
     });
 
     // Click Search after state has settled
-    const buttons = screen.getAllByRole("button", { name: /search/i });
-    const runButton = buttons[buttons.length - 1];
-    fireEvent.click(runButton);
+    const buttons2 = screen.getAllByRole("button", { name: /search/i });
+    const runButton2 = buttons2[buttons2.length - 1]!;
+    fireEvent.click(runButton2);
 
     await waitFor(() => {
       expect(screen.getByText("Test Set")).toBeTruthy();
@@ -158,7 +160,7 @@ describe("ReverseSearchPanel", () => {
   });
 
   it("disabled when no site selected", () => {
-    sessionState.selectedSite = "";
+    sessionState["selectedSite"] = "";
 
     render(<ReverseSearchPanel />);
     expect(screen.getByText("Reverse Search")).toBeTruthy();

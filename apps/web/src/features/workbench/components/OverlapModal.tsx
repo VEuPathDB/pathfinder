@@ -1,14 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { Modal } from "@/lib/components/Modal";
 import { SetVenn } from "@/lib/components/SetVenn";
 import { Button } from "@/lib/components/ui/Button";
 import { createGeneSet } from "../api/geneSets";
-import type { GeneSet } from "../store";
-import { useWorkbenchStore } from "../store";
+import type { GeneSet } from "@pathfinder/shared";
 import { useSessionStore } from "@/state/useSessionStore";
+import { useInvalidateGeneSets } from "@/lib/query/hooks/useInvalidateGeneSets";
 
 interface OverlapModalProps {
   open: boolean;
@@ -27,58 +28,53 @@ interface PairwiseResult {
 
 export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
   const selectedSite = useSessionStore((s) => s.selectedSite);
-  const addGeneSet = useWorkbenchStore((s) => s.addGeneSet);
+  const invalidateGeneSets = useInvalidateGeneSets();
 
   const [clickedRegion, setClickedRegion] = useState<{
     label: string;
     geneIds: string[];
   } | null>(null);
-  const [creatingSet, setCreatingSet] = useState(false);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
 
-  const handleCreateGeneSet = useCallback(async () => {
-    if (!clickedRegion || clickedRegion.geneIds.length === 0) return;
-    setCreatingSet(true);
-    setCreateError(null);
-    setCreateSuccess(null);
-
-    try {
-      const gs = await createGeneSet({
-        name: clickedRegion.label,
+  const createMutation = useMutation({
+    mutationFn: async (region: { label: string; geneIds: string[] }) => {
+      return createGeneSet({
+        name: region.label,
         source: "derived",
-        geneIds: clickedRegion.geneIds,
+        geneIds: region.geneIds,
         siteId: selectedSite,
       });
-      addGeneSet(gs);
-      setCreateSuccess(`Created "${gs.name}" with ${gs.geneIds?.length ?? 0} genes`);
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create gene set.");
-    } finally {
-      setCreatingSet(false);
-    }
-  }, [clickedRegion, selectedSite, addGeneSet]);
+    },
+    onSuccess: async (gs) => {
+      await invalidateGeneSets();
+      setCreateSuccess(`Created "${gs.name}" with ${gs.geneIds.length} genes`);
+    },
+  });
 
   const unresolvedSets = sets.filter(
-    (s) => (s.geneIds ?? []).length === 0 && s.wdkStepId != null,
+    (s) => s.geneIds.length === 0 && s.wdkStepId != null,
   );
 
-  const resolvedSets = sets.filter((s) => (s.geneIds ?? []).length > 0);
+  const resolvedSets = sets.filter((s) => s.geneIds.length > 0);
 
-  const analysis = useMemo(() => {
+  const analysis = (() => {
     // Pairwise comparisons
     const pairwise: PairwiseResult[] = [];
     for (let i = 0; i < sets.length; i++) {
+      const setI = sets[i];
+      if (setI == null) continue;
       for (let j = i + 1; j < sets.length; j++) {
-        const idsA = sets[i].geneIds ?? [];
-        const idsB = sets[j].geneIds ?? [];
+        const setJ = sets[j];
+        if (setJ == null) continue;
+        const idsA = setI.geneIds;
+        const idsB = setJ.geneIds;
         const a = new Set(idsA);
         const b = new Set(idsB);
         const shared = idsA.filter((id) => b.has(id)).length;
         const unionSize = new Set([...idsA, ...idsB]).size;
         pairwise.push({
-          nameA: sets[i].name,
-          nameB: sets[j].name,
+          nameA: setI.name,
+          nameB: setJ.name,
           sizeA: a.size,
           sizeB: b.size,
           shared,
@@ -88,15 +84,15 @@ export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
     }
 
     // Universal genes (in ALL sets)
-    const allSets = sets.map((s) => new Set(s.geneIds ?? []));
-    const allGenes = new Set(sets.flatMap((s) => s.geneIds ?? []));
+    const allSets = sets.map((s) => new Set(s.geneIds));
+    const allGenes = new Set(sets.flatMap((s) => s.geneIds));
     const universal = [...allGenes].filter((g) => allSets.every((s) => s.has(g)));
 
     // Total unique genes
     const totalUnique = allGenes.size;
 
     return { pairwise, universal, totalUnique };
-  }, [sets]);
+  })();
 
   return (
     <Modal
@@ -145,7 +141,7 @@ export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
               <SetVenn
                 sets={resolvedSets.map((s) => ({
                   key: s.name,
-                  geneIds: s.geneIds ?? [],
+                  geneIds: s.geneIds,
                 }))}
                 height={resolvedSets.length > 3 ? 320 : 260}
                 width={420}
@@ -167,7 +163,7 @@ export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
                 onClick={() => {
                   setClickedRegion(null);
                   setCreateSuccess(null);
-                  setCreateError(null);
+                  createMutation.reset();
                 }}
                 className="text-[10px] text-muted-foreground hover:text-foreground"
               >
@@ -191,19 +187,25 @@ export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={handleCreateGeneSet}
-                loading={creatingSet}
-                disabled={creatingSet}
+                onClick={() => {
+                  if (clickedRegion.geneIds.length > 0) {
+                    createMutation.mutate(clickedRegion);
+                  }
+                }}
+                loading={createMutation.isPending}
+                disabled={createMutation.isPending}
                 className="gap-1 text-xs"
               >
                 <Plus className="h-3 w-3" />
                 Create Gene Set
               </Button>
-              {createSuccess && (
+              {createSuccess != null && createSuccess !== "" && (
                 <span className="text-xs text-success">{createSuccess}</span>
               )}
-              {createError && (
-                <span className="text-xs text-destructive">{createError}</span>
+              {createMutation.error != null && (
+                <span className="text-xs text-destructive">
+                  {createMutation.error.message}
+                </span>
               )}
             </div>
           </div>
@@ -220,7 +222,7 @@ export function OverlapModal({ open, onClose, sets }: OverlapModalProps) {
               >
                 <span className="text-sm font-medium truncate mr-2">{s.name}</span>
                 <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {(s.geneIds ?? []).length.toLocaleString()} genes
+                  {s.geneIds.length.toLocaleString()} genes
                 </span>
               </div>
             ))}

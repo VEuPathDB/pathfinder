@@ -1,21 +1,19 @@
 "use client";
 
-import { useWorkbenchStore } from "../store";
+import { useWorkbenchStore } from "@/state/useWorkbenchStore";
 import { useSessionStore } from "@/state/useSessionStore";
+import { useGeneSetsQuery } from "@/lib/query/hooks/useGeneSetsQuery";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { Layers } from "lucide-react";
-import { WorkbenchChat } from "./WorkbenchChat";
+import { ChatView } from "@/features/conversation/ChatView";
 import { SOURCE_CONFIG } from "./geneSetSourceConfig";
 import {
   EnrichmentPanel,
   DistributionsPanel,
-  EvaluatePanel,
   CustomEnrichmentPanel,
   SweepPanel,
   ResultsTablePanel,
   StepContributionPanel,
-  BatchPanel,
-  BenchmarkPanel,
   EnsemblePanel,
   ConfidencePanel,
   ReverseSearchPanel,
@@ -26,14 +24,14 @@ import {
 // ---------------------------------------------------------------------------
 
 function ActiveSetHeader() {
-  const geneSets = useWorkbenchStore((s) => s.geneSets);
+  const selectedSite = useSessionStore((s) => s.selectedSite);
+  const { data: geneSets = [] } = useGeneSetsQuery(selectedSite);
   const activeSetId = useWorkbenchStore((s) => s.activeSetId);
   const activeSet = geneSets.find((gs) => gs.id === activeSetId);
 
   if (!activeSet) return null;
 
-  const colorClass =
-    SOURCE_CONFIG[activeSet.source]?.badgeClass ?? SOURCE_CONFIG.saved.badgeClass;
+  const colorClass = SOURCE_CONFIG[activeSet.source].badgeClass;
 
   return (
     <div className="mb-4 px-4 py-3 animate-fade-in">
@@ -49,10 +47,10 @@ function ActiveSetHeader() {
         </span>
         <span className="text-xs text-muted-foreground">{activeSet.siteId}</span>
       </div>
-      {activeSet.searchName && (
+      {activeSet.searchName != null && activeSet.searchName !== "" && (
         <p className="mt-1 text-xs text-muted-foreground">
           {activeSet.searchName}
-          {activeSet.parameters &&
+          {activeSet.parameters != null &&
             Object.entries(activeSet.parameters)
               .slice(0, 3)
               .map(([k, v]) => ` \u00b7 ${k}: ${String(v)}`)
@@ -71,13 +69,10 @@ const PANELS = [
   ResultsTablePanel,
   EnrichmentPanel,
   DistributionsPanel,
-  EvaluatePanel,
   StepContributionPanel,
   ConfidencePanel,
   EnsemblePanel,
   ReverseSearchPanel,
-  BatchPanel,
-  BenchmarkPanel,
   CustomEnrichmentPanel,
   SweepPanel,
 ];
@@ -89,9 +84,8 @@ const PANELS = [
 export function WorkbenchMain() {
   const activeSetId = useWorkbenchStore((s) => s.activeSetId);
   const lastExperiment = useWorkbenchStore((s) => s.lastExperiment);
-  const selectedSite = useSessionStore((s) => s.selectedSite);
 
-  if (!activeSetId) {
+  if (activeSetId == null) {
     return (
       <EmptyState
         icon={<Layers className="h-10 w-10" />}
@@ -106,10 +100,9 @@ export function WorkbenchMain() {
       {/* Key on activeSetId so all panels remount (reset local state) on gene set switch */}
       <div key={activeSetId} className="mx-auto w-full max-w-5xl space-y-3 p-6">
         <ActiveSetHeader />
-        <WorkbenchChat
-          experimentId={lastExperiment?.id ?? null}
-          siteId={selectedSite}
-        />
+        {lastExperiment?.id != null && lastExperiment.id !== "" && (
+          <ChatView conversationId={lastExperiment.id} allowMissing />
+        )}
         {PANELS.map((Panel, i) => (
           <div
             key={i}

@@ -1,9 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 
 /**
  * Extract a human-readable error message from an unknown thrown value.
  */
-export function toErrorMessage(err: unknown): string {
+function toErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
   return String(err);
@@ -13,7 +13,7 @@ export function toErrorMessage(err: unknown): string {
 // Hook: useAsyncAction
 // ---------------------------------------------------------------------------
 
-export interface AsyncActionState {
+interface AsyncActionState {
   /** Run an async function with automatic loading/error state management. */
   run: <T>(fn: () => Promise<T>) => Promise<T | undefined>;
   /** The last error message, or null if no error. */
@@ -44,7 +44,7 @@ export function useAsyncAction(): AsyncActionState {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const run = useCallback(async <T>(fn: () => Promise<T>): Promise<T | undefined> => {
+  const run = async <T>(fn: () => Promise<T>): Promise<T | undefined> => {
     setLoading(true);
     setError(null);
     try {
@@ -57,9 +57,9 @@ export function useAsyncAction(): AsyncActionState {
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  const clearError = useCallback(() => setError(null), []);
+  const clearError = () => setError(null);
 
   return { run, error, loading, clearError };
 }

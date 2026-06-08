@@ -1,4 +1,5 @@
-import { test, expect } from "../fixtures/test";
+import { test, expect } from "../fixtures/a11y";
+import { MOCK_PLAN_PROMPT } from "../fixtures/mock-prompts";
 
 /**
  * Journey: Leishmania Virulence Factor Discovery — TriTrypDB
@@ -22,7 +23,9 @@ test.describe("Leishmania Virulence Journey", () => {
     workbenchSidebarPage,
     workbenchMainPage,
   }) => {
-    const tritrypGenes = seedData.siteData.tritrypdb.geneIds;
+    const tritrypSiteData = seedData.siteData["tritrypdb"];
+    if (tritrypSiteData === undefined) throw new Error("tritrypdb seed data missing");
+    const tritrypGenes = tritrypSiteData.geneIds;
     const fullCount = tritrypGenes.length;
 
     // ── Setup: Clean stale gene sets for TriTrypDB ───────────────
@@ -55,15 +58,15 @@ test.describe("Leishmania Virulence Journey", () => {
     // ── Phase 2: Strategy Creation ───────────────────────────────
 
     // Planning artifact with GenesByTaxon for L. major Friedlin
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
-    await graphPage.expectCompactView();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
     await chatPage.expectIdle();
 
     // Verify strategy persisted
-    const strategiesResp = await apiClient.get("/api/v1/strategies");
+    const strategiesResp = await apiClient.get("/api/v1/conversations");
     expect(strategiesResp.ok()).toBeTruthy();
     const strategies = await strategiesResp.json();
     expect(strategies.length).toBeGreaterThan(0);
@@ -128,7 +131,7 @@ test.describe("Leishmania Virulence Journey", () => {
     await chatPage.expectIdle();
 
     // Verify conversation has multiple messages
-    const conversations = await apiClient.get("/api/v1/strategies");
+    const conversations = await apiClient.get("/api/v1/conversations");
     expect(conversations.ok()).toBeTruthy();
   });
 });

@@ -1,20 +1,10 @@
-/**
- * Unified step result browsing API.
- *
- * Provides a single set of functions for attributes, records, distributions,
- * analyses, and strategy access — used identically for both experiments and
- * gene sets via the `EntityRef` discriminated union.
- */
+import { queryOptions } from "@tanstack/react-query";
+import { attributesResponseSchema } from "@pathfinder/shared/generated/zod/attributesResponseSchema";
+import { distributionResponseSchema } from "@pathfinder/shared/generated/zod/distributionResponseSchema";
+import { recordDetailResponseSchema } from "@pathfinder/shared/generated/zod/recordDetailResponseSchema";
+import { recordsResponseSchema } from "@pathfinder/shared/generated/zod/recordsResponseSchema";
 
 import { requestJson } from "@/lib/api/http";
-import type {
-  RecordAttribute,
-  RecordDetail,
-  RecordsResponse,
-  DistributionResponse,
-} from "@/lib/types/wdk";
-
-export type { RecordAttribute, RecordDetail, RecordsResponse, DistributionResponse };
 
 export type EntityRef =
   | { type: "experiment"; id: string }
@@ -26,10 +16,8 @@ function basePath(ref: EntityRef): string {
     : `/api/v1/gene-sets/${ref.id}`;
 }
 
-export function getAttributes(
-  ref: EntityRef,
-): Promise<{ attributes: RecordAttribute[]; recordType: string }> {
-  return requestJson(`${basePath(ref)}/results/attributes`);
+export function getAttributes(ref: EntityRef) {
+  return requestJson(attributesResponseSchema, `${basePath(ref)}/results/attributes`);
 }
 
 export function getRecords(
@@ -43,16 +31,18 @@ export function getRecords(
     filterAttribute?: string;
     filterValue?: string;
   },
-): Promise<RecordsResponse> {
+) {
   const query: Record<string, string> = {};
-  if (opts?.offset != null) query.offset = String(opts.offset);
-  if (opts?.limit != null) query.limit = String(opts.limit);
-  if (opts?.sort) query.sort = opts.sort;
-  if (opts?.dir) query.dir = opts.dir;
-  if (opts?.attributes?.length) query.attributes = opts.attributes.join(",");
-  if (opts?.filterAttribute) query.filterAttribute = opts.filterAttribute;
-  if (opts?.filterValue != null) query.filterValue = opts.filterValue;
-  return requestJson<RecordsResponse>(`${basePath(ref)}/results/records`, {
+  if (opts?.offset != null) query["offset"] = String(opts.offset);
+  if (opts?.limit != null) query["limit"] = String(opts.limit);
+  if (opts?.sort != null && opts.sort !== "") query["sort"] = opts.sort;
+  if (opts?.dir != null) query["dir"] = opts.dir;
+  if (opts?.attributes != null && opts.attributes.length > 0)
+    query["attributes"] = opts.attributes.join(",");
+  if (opts?.filterAttribute != null && opts.filterAttribute !== "")
+    query["filterAttribute"] = opts.filterAttribute;
+  if (opts?.filterValue != null) query["filterValue"] = opts.filterValue;
+  return requestJson(recordsResponseSchema, `${basePath(ref)}/results/records`, {
     query,
   });
 }
@@ -60,18 +50,33 @@ export function getRecords(
 export function getRecordDetail(
   ref: EntityRef,
   primaryKey: { name: string; value: string }[],
-): Promise<RecordDetail> {
-  return requestJson<RecordDetail>(`${basePath(ref)}/results/record`, {
+) {
+  return requestJson(recordDetailResponseSchema, `${basePath(ref)}/results/record`, {
     method: "POST",
     body: { primaryKey },
   });
 }
 
-export function getDistribution(
-  ref: EntityRef,
-  attributeName: string,
-): Promise<DistributionResponse> {
-  return requestJson<DistributionResponse>(
+export function getDistribution(ref: EntityRef, attributeName: string) {
+  return requestJson(
+    distributionResponseSchema,
     `${basePath(ref)}/results/distributions/${encodeURIComponent(attributeName)}`,
   );
+}
+
+export function attributesOptions(entityRef: EntityRef) {
+  return queryOptions({
+    queryKey: ["experiments", "attributes", entityRef.type, entityRef.id] as const,
+    queryFn: () => getAttributes(entityRef),
+    staleTime: 60_000,
+  });
+}
+
+export function distributionOptions(entityRef: EntityRef, attr: string) {
+  return queryOptions({
+    queryKey: ["experiments", "distribution", entityRef.type, entityRef.id, attr] as const,
+    queryFn: () => getDistribution(entityRef, attr),
+    staleTime: 60_000,
+    enabled: attr !== "",
+  });
 }

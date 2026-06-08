@@ -18,8 +18,7 @@
     <img src="https://img.shields.io/badge/OpenAPI-6BA539?logo=openapi-initiative&logoColor=white" alt="OpenAPI" />
     <img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker" />
     <img src="https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL" />
-    <img src="https://img.shields.io/badge/Qdrant-FF4F7B?logo=qdrant&logoColor=white" alt="Qdrant" />
-    <img src="https://img.shields.io/badge/OpenAI-412991?logo=openai&logoColor=white" alt="OpenAI" />
+<img src="https://img.shields.io/badge/OpenAI-412991?logo=openai&logoColor=white" alt="OpenAI" />
     <img src="https://img.shields.io/badge/Anthropic-191919?logo=anthropic&logoColor=white" alt="Anthropic" />
     <img src="https://img.shields.io/badge/Gemini-8E75B2?logo=google-gemini&logoColor=white" alt="Google Gemini" />
     <img src="https://img.shields.io/badge/Ollama-000000?logo=ollama&logoColor=white" alt="Ollama" />
@@ -34,7 +33,7 @@ PathFinder’s goal is to make complex query/strategy construction **easier, fas
 
 - **Unified agent** (a single agent that researches, plans, and executes as needed per turn)
 - **Execution with real tools** (build/edit a real strategy graph via validated tool calls)
-- **Catalog grounding** (live WDK catalog + optional Qdrant RAG for fast discovery and examples)
+- **Catalog grounding** (live WDK catalog for discovery and examples)
 
 This project is intended to be integrated with **VEuPathDB systems** in the future once the research prototype is sufficiently mature.
 
@@ -76,26 +75,17 @@ The API streams **Server-Sent Events (SSE)** for:
 
 Key entrypoints:
 
-- API app: `apps/api/src/veupath_chatbot/main.py`
-- Chat orchestration: `apps/api/src/veupath_chatbot/services/chat/orchestrator.py`
-- SSE streaming: `apps/api/src/veupath_chatbot/transport/http/streaming.py`
-- Unified tool registry: `apps/api/src/veupath_chatbot/ai/tools/unified_registry.py`
-- Graph step creation + validation: `apps/api/src/veupath_chatbot/ai/tools/strategy_tools/step_ops.py`
-
-### VEuPathDB + optional RAG
-
-PathFinder can discover catalog/search metadata via:
-
-- **Live WDK** calls (authoritative)
-- **Qdrant RAG** (fast semantic retrieval; may be stale/incomplete)
-
-RAG is controlled by a single setting named `rag_enabled` in `apps/api/config.toml` (see `apps/api/src/veupath_chatbot/platform/config.py`).
+- API app: `apps/api/src/pathfinder/main.py`
+- Chat orchestration: `apps/api/src/pathfinder/services/chat/orchestrator.py`
+- SSE streaming: `apps/api/src/pathfinder/transport/http/streaming.py`
+- Unified tool registry: `apps/api/src/pathfinder/ai/tools/unified_registry.py`
+- Graph step creation + validation: `apps/api/src/pathfinder/ai/tools/strategy_tools/step_ops.py`
 
 ## Running locally
 
 ### Prerequisites
 
-- **Docker** (recommended for Postgres, Qdrant, and the full stack)
+- **Docker** (recommended for Postgres, Redis, and the full stack)
 - **Python 3.14+**
 - **Node.js 24+**
 
@@ -113,32 +103,35 @@ uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 
 ### Configuration
 
-There are two configuration sources for the API:
+There are still two configuration sources for the API:
 
 - **TOML**: `apps/api/config.toml` (checked in)
-- **Environment**: `.env` (not checked in; examples exist)
+- **Environment**: `.env` / `.env.dev` (not checked in; examples exist)
 
-Examples:
+The repo now ships with two explicit profiles:
 
-- `apps/api/.env.example`
-- `apps/web/.env.example`
+- **Strict / production-style**
+  - root env: [`/.env.example`](/Users/ahmedmuharram/repos/pathfinder/.env.example)
+  - compose: [`docker-compose.yml`](/Users/ahmedmuharram/repos/pathfinder/docker-compose.yml)
+  - observability wiring: [`docker-compose.observability.yml`](/Users/ahmedmuharram/repos/pathfinder/docker-compose.observability.yml)
+- **Local development**
+  - root env: [`/.env.dev.example`](/Users/ahmedmuharram/repos/pathfinder/.env.dev.example)
+  - compose: [`docker-compose.dev.yml`](/Users/ahmedmuharram/repos/pathfinder/docker-compose.dev.yml)
+  - observability stack: [`docker-compose.observability.dev.yml`](/Users/ahmedmuharram/repos/pathfinder/docker-compose.observability.dev.yml)
 
-Docker Compose will pick up variables from a repo-root `.env` file (if present) and/or your shell environment. In practice your `.env` should contain **at least**:
+The base profile is intentionally fail-closed. PathFinder will not boot until you explicitly provide:
 
-- **API**
-  - `API_SECRET_KEY` (32+ chars)
-  - At least one LLM provider key:
-    - `OPENAI_API_KEY` — default provider (`gpt-4.1`); also required for RAG embeddings (`text-embedding-3-small`)
-    - `ANTHROPIC_API_KEY` — use with `chat_provider=anthropic` (default model: `claude-sonnet-4-6`)
-    - `GEMINI_API_KEY` — use with `chat_provider=gemini` (default model: `gemini-2.5-pro`)
-    - Ollama (local) — no key needed; set `OLLAMA_BASE_URL` and add models to `ollama_models.yaml`
-- **Web**
-  - `NEXT_PUBLIC_API_URL=http://localhost:8000`
-- **Optional / common**
-  - `DATABASE_URL` (defaults to PostgreSQL on `localhost:5432` if unset)
-  - `QDRANT_URL` / `QDRANT_API_KEY` (only needed if you’re not using the docker-compose defaults)
-  - `OLLAMA_BASE_URL` (default `http://localhost:11434/v1`; use `http://host.docker.internal:11434/v1` when running the API inside Docker)
-  - Startup-ingestion tuning is configured in `apps/api/config.toml` (keys: `rag_startup_*`)
+- `API_SECRET_KEY`
+- `DATABASE_URL`
+- `NEXT_PUBLIC_API_URL`
+- `PATHFINDER_CHAT_PROVIDER=default`
+- a real model backend (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `OLLAMA_BASE_URL`)
+
+Direct app runs have matching examples too:
+
+- API strict/dev: [`apps/api/.env.example`](/Users/ahmedmuharram/repos/pathfinder/apps/api/.env.example), [`apps/api/.env.dev.example`](/Users/ahmedmuharram/repos/pathfinder/apps/api/.env.dev.example)
+- Web strict/dev: [`apps/web/.env.example`](/Users/ahmedmuharram/repos/pathfinder/apps/web/.env.example), [`apps/web/.env.dev.example`](/Users/ahmedmuharram/repos/pathfinder/apps/web/.env.dev.example)
+- Dedicated test profile: [`/.env.test.example`](/Users/ahmedmuharram/repos/pathfinder/.env.test.example)
 
 ### Local models (Ollama)
 
@@ -176,11 +169,13 @@ models:
 
 When running the API inside Docker, set `OLLAMA_BASE_URL=http://host.docker.internal:11434/v1` in your `.env` so the container can reach Ollama on the host.
 
-### Option A: run everything with Docker Compose (recommended)
+### Option A: strict/base Docker Compose
 
 From repo root:
 
 ```bash
+cp .env.example .env
+# fill in .env with real values first
 docker compose up --build
 ```
 
@@ -191,74 +186,155 @@ docker compose up --build
 
 Notes:
 
-- Compose includes **Postgres, Redis, and Qdrant** by default.
+- This profile assumes you configured real infrastructure endpoints and a real model backend.
+- The base compose file does not spin up local Postgres or Redis for you.
 
-### Populate Qdrant (RAG ingestion)
+### Option B: local development profile
 
-PathFinder supports RAG for:
-
-- **WDK catalog** ingestion (record types + searches)
-- **Example plans** ingestion (public strategies → searchable examples)
-
-By default, ingestion runs **automatically in the API at startup** (in the background) when:
-
-- `rag_enabled=true` (default)
-- **`OPENAI_API_KEY` is set** (required for embeddings)
-
-Manual ingestion is usually unnecessary unless you want to reset/rebuild the collections.
+From repo root:
 
 ```bash
-# Full reset + rebuild of Qdrant collections (WDK + example plans)
-docker compose --profile ingest run --rm rag_reindex
+cp .env.dev.example .env.dev
+# fill in a real model backend before starting
+docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
-Notes:
+- Web: `http://localhost:3000`
+- API: `http://localhost:8000`
+- Postgres: `localhost:5432`
+- Redis: `localhost:6379`
 
-- Both jobs require **`OPENAI_API_KEY`** (embeddings).
-- The manual reindex writes a JSONL report under `apps/api/ingest_reports/` (gitignored).
+This is where local-only behavior lives: watch mode and local Postgres/Redis containers. Mock mode is not enabled here.
 
-### Option B: run API + Web directly (no Docker)
+### Option C: test / E2E profile
+
+From repo root:
+
+```bash
+cp .env.test.example .env.test
+docker compose --env-file .env.test -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml up --build
+```
+
+This is the only Docker profile that enables `PATHFINDER_CHAT_PROVIDER=mock`.
+
+### Observability
+
+PathFinder supports two observability modes:
+
+- **SigNoz** — full-stack APM (distributed traces, metrics, logs). UI at `http://localhost:3301`
+- **Langfuse** — LLM observability (prompt traces, token usage, cost tracking). UI at `http://localhost:3100`
+
+PathFinder also ships a SigNoz pack for dashboards and alert intent:
+
+- pack source: [`ops/observability/signoz/pathfinder-observability-pack.json`](/Users/ahmedmuharram/repos/pathfinder/ops/observability/signoz/pathfinder-observability-pack.json)
+- generated dashboards and alert catalog: [`ops/observability/signoz/`](/Users/ahmedmuharram/repos/pathfinder/ops/observability/signoz)
+- dashboard filter glossary: [`ops/observability/signoz/dashboard-filters.md`](/Users/ahmedmuharram/repos/pathfinder/ops/observability/signoz/dashboard-filters.md)
+
+Refresh the generated artifacts with:
+
+```bash
+python3 ops/observability/signoz/render_pack.py
+```
+
+Use the generated dashboard JSON files for direct SigNoz UI import, or the Terraform wrapper in [`ops/observability/signoz/terraform/`](/Users/ahmedmuharram/repos/pathfinder/ops/observability/signoz/terraform) for dashboard provisioning. The alert catalog stays environment-neutral so the same thresholds, labels, and runbooks can be used in local, staging, production, or Cedar-hosted workflows without depending on SigNoz-only routing details.
+
+The local observability profile also provisions explicit UI credentials instead
+of relying on ad hoc first-run setup:
+
+- SigNoz admin user: `SIGNOZ_ROOT_USER_EMAIL` / `SIGNOZ_ROOT_USER_PASSWORD`
+- Langfuse admin user: `LANGFUSE_INIT_USER_EMAIL` / `LANGFUSE_INIT_USER_PASSWORD`
+
+To run a live end-to-end verification against the local stack after it starts:
+
+```bash
+python3 ops/observability/live_smoke_test.py
+```
+
+That smoke test drives one real chat turn through the local API and then checks
+both Langfuse and SigNoz storage directly.
+
+**Production/staging wiring**: point the API at existing observability backends.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+```
+
+Set these explicitly in `.env` when using that overlay:
+
+- `SIGNOZ_OTEL_ENDPOINT`
+- `LANGFUSE_HOST`
+- `LANGFUSE_PUBLIC_KEY`
+- `LANGFUSE_SECRET_KEY`
+
+**Local-development observability**: start a self-hosted Langfuse + SigNoz stack.
+
+```bash
+docker compose --env-file .env.dev \
+  -f docker-compose.yml \
+  -f docker-compose.dev.yml \
+  -f docker-compose.observability.yml \
+  -f docker-compose.observability.dev.yml \
+  up -d
+```
+
+That dev overlay bootstraps a local Langfuse project. Open `http://localhost:3100` and sign in with:
+
+```bash
+email:    dev@pathfinder.local
+password: pathfinder-local-dev
+```
+
+### Option C: run API + Web directly (no Docker)
 
 API:
 
 ```bash
 cd apps/api
+cp .env.dev.example .env
 uv sync --extra dev
-uv run uvicorn veupath_chatbot.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn pathfinder.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-If you’re not running the full stack via Docker Compose, you still need local services:
+If you’re not running the full stack via Docker Compose, start local services with the explicit dev overlay:
 
 ```bash
-docker compose up -d db redis qdrant
+docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up -d db redis
 ```
 
 Web:
 
 ```bash
 cd apps/web
+cp .env.dev.example .env
 yarn install
 yarn dev
 ```
 
-## Testing, linting, typechecking
+## Testing, linting, and code quality
 
-### API (Python)
+Quick reference — see **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** for the full guide (pre-commit hooks, CI pipelines, security scanning, SonarQube, architectural enforcement).
 
 ```bash
+# API
 cd apps/api
-uv run pytest
-uv run ruff check .
-uv run mypy src
+uv run ruff check src/                              # Lint
+uv run mypy --strict src/pathfinder/            # Type check
+uv run pytest src/pathfinder/tests/ -v          # Tests
+uv run pytest --cov=src --cov-report=term-missing    # Coverage
+
+# Web
+cd apps/web
+npx tsc --noEmit                     # Type check
+npx eslint src/                      # Lint
+node scripts/check-boundaries.mjs    # Feature isolation
+npx vitest run                       # Unit tests
+npx playwright test                  # E2E tests
 ```
 
-### Web (TypeScript)
+Pre-commit hooks enforce all of the above automatically — install with:
 
 ```bash
-cd apps/web
-yarn lint
-yarn typecheck
-yarn test
+uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
 ## Documentation

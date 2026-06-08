@@ -1,136 +1,83 @@
-import { useState, useEffect, useCallback } from "react";
-import type { WdkRecord, DistributionResponse } from "@/lib/types/wdk";
+import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
+import type { DistributionResponse } from "@pathfinder/shared/generated/types/DistributionResponse";
 import {
+  distributionOptions,
   getDistribution,
-  getRecords,
   type EntityRef,
 } from "@/features/analysis/api/stepResults";
 import type { DistributionEntry } from "@/features/analysis/components/DistributionExplorer/types";
+import { APIError } from "@/lib/api/http";
 
 export function parseDistribution(raw: DistributionResponse): DistributionEntry[] {
-  if (Array.isArray(raw.histogram)) {
-    const isNumericBinned =
-      raw.histogram.length > 0 && raw.histogram[0].binStart != null;
-    const parsed = raw.histogram
-      .filter((bin) => bin.value > 0)
-      .map((bin) => ({
-        value: bin.binLabel || bin.binStart || "",
-        count: bin.value,
-      }));
-    return isNumericBinned ? parsed : parsed.sort((a, b) => b.count - a.count);
-  }
-
-  const histogram = raw.distribution ?? raw;
-  return Object.entries(histogram)
-    .filter(([key]) => key !== "total" && key !== "attributeName")
-    .map(([value, count]) => ({ value, count: Number(count) || 0 }))
-    .sort((a, b) => b.count - a.count);
+  const firstBinStart = raw.histogram[0]?.binStart ?? "";
+  const isNumericBinned = firstBinStart !== "";
+  const parsed: DistributionEntry[] = raw.histogram
+    .filter((bin) => (bin.value ?? 0) > 0)
+    .map((bin) => {
+      const label = bin.binLabel ?? "";
+      const start = bin.binStart ?? "";
+      return {
+        value: label !== "" ? label : start,
+        count: bin.value ?? 0,
+      };
+    });
+  return isNumericBinned ? parsed : parsed.sort((a, b) => b.count - a.count);
 }
 
-export interface DistributionDataState {
+const EMPTY_DISTRIBUTION: DistributionResponse = {
+  histogram: [],
+  statistics: {
+    subsetSize: 0,
+    subsetMin: null,
+    subsetMax: null,
+    subsetMean: null,
+    numVarValues: 0,
+    numDistinctValues: 0,
+    numDistinctEntityRecords: 0,
+    numMissingCases: 0,
+  },
+};
+
+interface DistributionDataState {
   distribution: DistributionEntry[];
-  loading: boolean;
-  error: string | null;
+  noData: boolean;
   refresh: () => void;
-  modalValue: string | null;
-  modalRecords: WdkRecord[];
-  loadingModal: boolean;
-  handleBarClick: (value: string) => void;
-  closeModal: () => void;
 }
 
 export function useDistributionData(
   entityRef: EntityRef,
   selectedAttr: string,
 ): DistributionDataState {
-  const [distribution, setDistribution] = useState<DistributionEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const [modalValue, setModalValue] = useState<string | null>(null);
-  const [modalRecords, setModalRecords] = useState<WdkRecord[]>([]);
-  const [loadingModal, setLoadingModal] = useState(false);
+  const { enabled: _enabled, ...distOpts } = distributionOptions(entityRef, selectedAttr);
 
-  const fetchDistribution = useCallback(
-    (attrName: string) => {
-      if (!attrName) return;
-      setLoading(true);
-      setError(null);
-
-      getDistribution(entityRef, attrName)
-        .then((raw) => {
-          const entries = parseDistribution(raw);
-          if (entries.length === 0) {
-            setError(
-              "No distribution data available for this attribute. Try a different one.",
-            );
-            setDistribution([]);
-          } else {
-            setDistribution(entries);
-          }
-        })
-        .catch((err) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          const lower = msg.toLowerCase();
-          if (
-            lower.includes("422") ||
-            lower.includes("404") ||
-            lower.includes("not found")
-          ) {
-            setError(
-              "No distribution data available for this attribute. Try a different one.",
-            );
-          } else {
-            setError(msg);
-          }
-        })
-        .finally(() => setLoading(false));
-    },
-    [entityRef],
-  );
-
-  useEffect(() => {
-    if (selectedAttr) fetchDistribution(selectedAttr);
-  }, [selectedAttr, fetchDistribution]);
-
-  const refresh = useCallback(() => {
-    fetchDistribution(selectedAttr);
-  }, [selectedAttr, fetchDistribution]);
-
-  const handleBarClick = useCallback(
-    async (value: string) => {
-      setModalValue(value);
-      setModalRecords([]);
-      setLoadingModal(true);
-
+  const { data } = useSuspenseQuery({
+    ...distOpts,
+    queryFn: async () => {
       try {
-        const { records } = await getRecords(entityRef, {
-          attributes: [selectedAttr, "gene_product"],
-          filterAttribute: selectedAttr,
-          filterValue: value,
-          limit: 500,
-        });
-        setModalRecords(records);
-      } catch {
-        setModalRecords([]);
-      } finally {
-        setLoadingModal(false);
+        return await getDistribution(entityRef, selectedAttr);
+      } catch (err) {
+        if (err instanceof APIError && (err.status === 404 || err.status === 422)) {
+          return EMPTY_DISTRIBUTION;
+        }
+        throw err;
       }
     },
-    [entityRef, selectedAttr],
-  );
+    select: parseDistribution,
+  });
 
-  const closeModal = useCallback(() => setModalValue(null), []);
+  const distribution = data;
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({
+      queryKey: distOpts.queryKey,
+    });
+  };
 
   return {
     distribution,
-    loading,
-    error,
+    noData: distribution.length === 0 && selectedAttr !== "",
     refresh,
-    modalValue,
-    modalRecords,
-    loadingModal,
-    handleBarClick,
-    closeModal,
   };
 }

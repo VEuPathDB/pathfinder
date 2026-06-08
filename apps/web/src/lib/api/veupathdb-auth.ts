@@ -1,6 +1,9 @@
+import { queryOptions } from "@tanstack/react-query";
+import { authStatusResponseSchema } from "@pathfinder/shared/generated/zod/authStatusResponseSchema";
+import { authSuccessResponseSchema } from "@pathfinder/shared/generated/zod/authSuccessResponseSchema";
+
 import { AppError } from "@/lib/errors/AppError";
-import { requestJsonValidated } from "./http";
-import { AuthStatusResponseSchema, AuthSuccessResponseSchema } from "./schemas/auth";
+import { requestJson } from "./http";
 
 // VEuPathDB auth bridge
 
@@ -9,11 +12,16 @@ export async function getVeupathdbAuthStatus(siteId: string): Promise<{
   name?: string | null;
   email?: string | null;
 }> {
-  return await requestJsonValidated(
-    AuthStatusResponseSchema,
+  const raw = await requestJson(
+    authStatusResponseSchema,
     `/api/v1/veupathdb/auth/status`,
     { query: { siteId } },
   );
+  return {
+    signedIn: raw.signedIn,
+    ...(raw.name !== undefined ? { name: raw.name } : {}),
+    ...(raw.email !== undefined ? { email: raw.email } : {}),
+  };
 }
 
 export async function loginVeupathdb(
@@ -24,8 +32,8 @@ export async function loginVeupathdb(
   if (!email || !password) {
     throw new AppError("Email and password are required.", "INVARIANT_VIOLATION");
   }
-  return await requestJsonValidated(
-    AuthSuccessResponseSchema,
+  return await requestJson(
+    authSuccessResponseSchema,
     `/api/v1/veupathdb/auth/login`,
     {
       method: "POST",
@@ -36,8 +44,8 @@ export async function loginVeupathdb(
 }
 
 export async function logoutVeupathdb(siteId: string): Promise<{ success: boolean }> {
-  return await requestJsonValidated(
-    AuthSuccessResponseSchema,
+  return await requestJson(
+    authSuccessResponseSchema,
     `/api/v1/veupathdb/auth/logout`,
     { method: "POST", query: { siteId } },
   );
@@ -48,9 +56,31 @@ export async function logoutVeupathdb(siteId: string): Promise<{ success: boolea
  * Called on page load when the internal token is missing/expired.
  */
 export async function refreshAuth(siteId: string): Promise<{ success: boolean }> {
-  return await requestJsonValidated(
-    AuthSuccessResponseSchema,
+  return await requestJson(
+    authSuccessResponseSchema,
     `/api/v1/veupathdb/auth/refresh`,
     { method: "POST", query: { siteId } },
   );
+}
+
+export function authStatusOptions(siteId: string) {
+  return queryOptions({
+    queryKey: ["auth", "status", siteId] as const,
+    queryFn: () => getVeupathdbAuthStatus(siteId),
+    enabled: siteId !== "",
+  });
+}
+
+export function authRefreshOptions(siteId: string) {
+  return queryOptions({
+    queryKey: ["auth", "refresh", siteId] as const,
+    queryFn: async () => {
+      await refreshAuth(siteId);
+      return { refreshed: true };
+    },
+    staleTime: Infinity,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
 }

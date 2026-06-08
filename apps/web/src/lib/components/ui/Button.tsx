@@ -1,4 +1,4 @@
-import * as React from "react";
+import type { ButtonHTMLAttributes, Ref } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -33,27 +33,27 @@ const buttonVariants = cva(
   },
 );
 
-export interface ButtonProps
+interface ButtonProps
   extends
-    React.ButtonHTMLAttributes<HTMLButtonElement>,
+    ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   loading?: boolean;
+  ref?: Ref<HTMLButtonElement>;
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, loading, disabled, children, ...props }, ref) => (
+function Button({ className, variant, size, loading, disabled, children, ref, ...props }: ButtonProps) {
+  return (
     <button
       className={cn(buttonVariants({ variant, size, className }))}
       ref={ref}
-      disabled={disabled || loading}
-      aria-busy={loading || undefined}
+      disabled={(disabled ?? false) || (loading ?? false)}
+      aria-busy={(loading ?? false) || undefined}
       {...props}
     >
-      {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+      {(loading ?? false) && <Loader2 className="h-4 w-4 animate-spin" />}
       {children}
     </button>
-  ),
-);
-Button.displayName = "Button";
+  );
+}
 
-export { Button, buttonVariants };
+export { Button };

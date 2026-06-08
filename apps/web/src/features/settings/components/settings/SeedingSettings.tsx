@@ -4,9 +4,10 @@
  * SeedingSettings -- seed demo strategies for VEuPathDB databases.
  */
 
-import { useState, useCallback } from "react";
-import { useSessionStore } from "@/state/useSessionStore";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { seedExperiments } from "@/lib/api/experiments";
+import { invalidateUserScopedQueries } from "@/lib/query/invalidateUserScoped";
 import Image from "next/image";
 import { Loader2, FlaskConical } from "lucide-react";
 import { SettingsField } from "./SettingsField";
@@ -51,31 +52,33 @@ const SEED_DATABASES = [
     label: "HostDB",
     description: "Human host immune response",
   },
+  {
+    id: "trichdb",
+    label: "TrichDB",
+    description: "T. vaginalis trichomoniasis",
+  },
   { id: "veupathdb", label: "VEuPathDB", description: "Cross-species portal" },
   { id: "orthomcl", label: "OrthoMCL", description: "Ortholog groups" },
 ] as const;
 
 export function SeedingSettings() {
-  const bumpAuthVersion = useSessionStore((s) => s.bumpAuthVersion);
+  const queryClient = useQueryClient();
 
   const [seedingDb, setSeedingDb] = useState<string | null>(null);
   const [seedStatus, setSeedStatus] = useState<string | null>(null);
 
-  const handleSeed = useCallback(
-    async (siteId?: string) => {
-      setSeedingDb(siteId ?? "all");
-      setSeedStatus("Starting...");
-      try {
-        await seedExperiments((message) => setSeedStatus(message), siteId);
-      } catch (err) {
-        setSeedStatus(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
-      } finally {
-        setSeedingDb(null);
-        bumpAuthVersion();
-      }
-    },
-    [bumpAuthVersion],
-  );
+  const handleSeed = async (siteId?: string) => {
+    setSeedingDb(siteId ?? "all");
+    setSeedStatus("Starting...");
+    try {
+      await seedExperiments((message) => setSeedStatus(message), siteId);
+    } catch (err) {
+      setSeedStatus(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setSeedingDb(null);
+      invalidateUserScopedQueries(queryClient);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -95,7 +98,7 @@ export function SeedingSettings() {
               )}
               {seedingDb === "all" ? "Seeding All..." : "Seed All Databases"}
             </button>
-            {seedStatus && (
+            {seedStatus != null && (
               <span className="text-xs text-muted-foreground">{seedStatus}</span>
             )}
           </div>

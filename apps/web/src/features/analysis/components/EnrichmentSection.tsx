@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { EnrichmentResult } from "@pathfinder/shared";
 import { AlertCircle } from "lucide-react";
 import { Card } from "@/lib/components/ui/Card";
@@ -24,10 +24,7 @@ export function EnrichmentSection({ results }: EnrichmentSectionProps) {
   }
 
   const activeResult = results[activeTab];
-  const filtered = useMemo(
-    () => filterByPThreshold(activeResult?.terms ?? [], pThreshold),
-    [activeResult, pThreshold],
-  );
+  const filtered = filterByPThreshold(activeResult?.terms ?? [], pThreshold);
 
   return (
     <Section title="Enrichment Analysis">
@@ -43,13 +40,13 @@ export function EnrichmentSection({ results }: EnrichmentSectionProps) {
           <PThresholdFilter value={pThreshold} onChange={setPThreshold} />
         </div>
 
-        {activeResult && activeResult.error && (
+        {activeResult?.error != null && (
           <div className="flex items-center gap-2 px-5 py-6 text-xs text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>Analysis failed: {activeResult.error}</span>
           </div>
         )}
-        {activeResult && !activeResult.error && (
+        {activeResult != null && activeResult.error == null && (
           <>
             <SummaryBar result={activeResult} filteredCount={filtered.length} />
             {filtered.length > 0 && <EnrichmentDotPlot terms={filtered} />}
@@ -78,11 +75,11 @@ function SummaryBar({
         <span className="font-medium text-foreground">{filteredCount}</span> significant
         term{filteredCount !== 1 ? "s" : ""}
       </span>
-      {result.totalGenesAnalyzed > 0 && (
-        <span>{fmtCount(result.totalGenesAnalyzed)} genes analyzed</span>
+      {(result.totalGenesAnalyzed ?? 0) > 0 && (
+        <span>{fmtCount(result.totalGenesAnalyzed ?? 0)} genes analyzed</span>
       )}
-      {result.backgroundSize > 0 && (
-        <span>background: {fmtCount(result.backgroundSize)}</span>
+      {(result.backgroundSize ?? 0) > 0 && (
+        <span>background: {fmtCount(result.backgroundSize ?? 0)}</span>
       )}
     </div>
   );

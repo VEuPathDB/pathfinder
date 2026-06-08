@@ -12,6 +12,8 @@ function makeSearchStep(overrides?: Partial<Step>): Step {
     id: "s1",
     displayName: "Gene search",
     searchName: "GenesByKeyword",
+    isBuilt: false,
+    isFiltered: false,
     ...overrides,
   };
 }
@@ -22,6 +24,8 @@ function makeTransformStep(overrides?: Partial<Step>): Step {
     displayName: "Transform step",
     searchName: "GenesByOrthology",
     primaryInputStepId: "s1",
+    isBuilt: false,
+    isFiltered: false,
     ...overrides,
   };
 }
@@ -36,6 +40,8 @@ function makeCombineStep(
     primaryInputStepId: "s1",
     secondaryInputStepId: "s2",
     operator,
+    isBuilt: false,
+    isFiltered: false,
     ...overrides,
   };
 }
@@ -144,7 +150,7 @@ describe("getZeroResultSuggestions", () => {
           makeCombineStep(CombineOperator.COLOCATE),
         );
         expect(suggestions).toContainEqual(
-          expect.stringContaining("increase upstream/downstream"),
+          expect.stringContaining("widen the region offsets"),
         );
       });
     });
@@ -157,7 +163,7 @@ describe("getZeroResultSuggestions", () => {
         const joined = suggestions.join(" ");
         expect(joined).not.toContain("change INTERSECT");
         expect(joined).not.toContain("verify MINUS direction");
-        expect(joined).not.toContain("increase upstream/downstream");
+        expect(joined).not.toContain("widen the region offsets");
       });
     });
   });
@@ -171,6 +177,8 @@ describe("getZeroResultSuggestions", () => {
         kind: "combine",
         primaryInputStepId: "s1",
         secondaryInputStepId: "s2",
+        isBuilt: false,
+        isFiltered: false,
       };
       const suggestions = getZeroResultSuggestions(step);
       // Should include "both input steps" combine generic advice
@@ -192,6 +200,8 @@ describe("getZeroResultSuggestions", () => {
         displayName: "Explicit search",
         kind: "search",
         searchName: "GenesByKeyword",
+        isBuilt: false,
+        isFiltered: false,
       };
       const suggestions = getZeroResultSuggestions(step);
       expect(suggestions).toContainEqual(expect.stringContaining("alternative search"));
@@ -204,6 +214,8 @@ describe("getZeroResultSuggestions", () => {
         kind: "transform",
         searchName: "GenesByOrthology",
         primaryInputStepId: "s1",
+        isBuilt: false,
+        isFiltered: false,
       };
       const suggestions = getZeroResultSuggestions(step);
       expect(suggestions).toContainEqual(

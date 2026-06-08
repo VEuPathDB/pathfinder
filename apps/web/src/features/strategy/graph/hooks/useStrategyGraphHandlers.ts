@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import type { Edge, Node } from "reactflow";
+import { useState } from "react";
+import type { Edge, Node } from "@xyflow/react";
 import type { Step, Strategy } from "@pathfinder/shared";
-import { useStrategyStore } from "@/state/useStrategyStore";
-import { computeNodeDeletionResult } from "@/features/strategy/graph/utils/nodeDeletionLogic";
 import { computeOrthologInsert } from "@/features/strategy/graph/utils/orthologInsert";
+import { useDeleteOperation } from "@/features/strategy/graph/hooks/useDeleteOperation";
+import {
+  useAddStepMutation,
+  useUpdateStepMutation,
+} from "@/features/strategy/mutations";
 
 interface UseStrategyGraphHandlersOptions {
   strategy: Strategy | null;
@@ -18,8 +21,8 @@ interface UseStrategyGraphHandlersOptions {
 }
 
 /**
- * Click, combine, delete, edge-context, and ortholog-transform handlers
- * for the strategy graph.
+ * Click, combine, delete, edge-context, and ortholog-transform handlers for
+ * the strategy graph. All writes go through mutations.
  */
 export function useStrategyGraphHandlers(options: UseStrategyGraphHandlersOptions) {
   const {
@@ -32,10 +35,10 @@ export function useStrategyGraphHandlers(options: UseStrategyGraphHandlersOption
     startCombine,
   } = options;
 
-  const draftStrategy = useStrategyStore((state) => state.strategy);
-  const updateStep = useStrategyStore((state) => state.updateStep);
-  const addStep = useStrategyStore((state) => state.addStep);
-  const removeStep = useStrategyStore((state) => state.removeStep);
+  const conversationId = strategy?.id ?? "";
+  const updateStep = useUpdateStepMutation(conversationId);
+  const deleteOp = useDeleteOperation(conversationId);
+  const addStep = useAddStepMutation(conversationId);
 
   const [edgeMenu, setEdgeMenu] = useState<{
     edge: Edge;
@@ -44,94 +47,69 @@ export function useStrategyGraphHandlers(options: UseStrategyGraphHandlersOption
   } | null>(null);
   const [orthologModalOpen, setOrthologModalOpen] = useState(false);
 
-  const handleNodesDelete = useCallback(
-    (deletedNodes: Node[]) => {
-      if (isCompact || deletedNodes.length === 0) return;
-      const stepsList = draftStrategy?.steps || [];
-      if (stepsList.length === 0) return;
-      const result = computeNodeDeletionResult({
-        steps: stepsList,
-        deletedNodeIds: deletedNodes.map((n) => n.id),
-      });
-      if (result.removeIds.length === 0) return;
+  const handleNodesDelete = (deletedNodes: Node[]) => {
+    if (isCompact || deletedNodes.length === 0) return;
+    const ids = deletedNodes.map((n) => n.id);
+    if (ids.length === 1) {
+      deleteOp.requestDelete(ids[0]!);
+    } else {
+      deleteOp.requestDeleteMany(ids);
+    }
+    if (selectedStep && ids.includes(selectedStep.id)) {
+      setSelectedStep(null);
+    }
+  };
 
-      for (const { stepId, patch } of result.patches) {
-        updateStep(stepId, patch);
-      }
-      for (const stepId of result.removeIds) {
-        removeStep(stepId);
-      }
-      if (selectedStep && result.removeIds.includes(selectedStep.id)) {
-        setSelectedStep(null);
-      }
-    },
-    [
-      draftStrategy?.steps,
-      isCompact,
-      removeStep,
-      selectedStep,
-      updateStep,
-      setSelectedStep,
-    ],
-  );
-
-  const handleStartCombineFromSelection = useCallback(() => {
+  const handleStartCombineFromSelection = () => {
     if (isCompact) return;
     if (selectedNodeIds.length !== 2) return;
-    startCombine(selectedNodeIds[0]!, selectedNodeIds[1]!);
-  }, [isCompact, selectedNodeIds, startCombine]);
+    const first = selectedNodeIds[0];
+    const second = selectedNodeIds[1];
+    if (first != null && second != null) {
+      startCombine(first, second);
+    }
+  };
 
-  const handleStartOrthologTransformFromSelection = useCallback(() => {
+  const handleStartOrthologTransformFromSelection = () => {
     if (isCompact) return;
     if (selectedNodeIds.length !== 1) return;
     setOrthologModalOpen(true);
-  }, [isCompact, selectedNodeIds.length]);
+  };
 
-  const handleOpenDetails = useCallback(
-    (stepId: string) => {
-      const step = editableSteps.find((item) => item.id === stepId);
-      if (step) {
-        setSelectedStep(step);
-      }
-    },
-    [editableSteps, setSelectedStep],
-  );
+  const handleOpenDetails = (stepId: string) => {
+    const step = editableSteps.find((item) => item.id === stepId);
+    if (step) {
+      setSelectedStep(step);
+    }
+  };
 
-  const handleOrthologChoose = useCallback(
-    (
-      search: Parameters<typeof computeOrthologInsert>[0]["search"],
-      options: Parameters<typeof computeOrthologInsert>[0]["options"],
-    ) => {
-      const selectedId = selectedNodeIds[0];
-      if (!selectedId) return;
-      const stepsList = draftStrategy?.steps || strategy?.steps || [];
-      const { newStep, downstreamPatch } = computeOrthologInsert({
-        selectedId,
-        steps: stepsList,
-        strategyRecordType: strategy?.recordType ?? null,
-        search,
-        options,
-        generateId: () => `step_${Math.random().toString(16).slice(2, 10)}`,
+  const handleOrthologChoose = (
+    search: Parameters<typeof computeOrthologInsert>[0]["search"],
+    options: Parameters<typeof computeOrthologInsert>[0]["options"],
+  ) => {
+    const selectedId = selectedNodeIds[0];
+    if (selectedId == null || selectedId === "") return;
+    const stepsList = strategy?.steps ?? [];
+    const { newStep, downstreamPatch } = computeOrthologInsert({
+      selectedId,
+      steps: stepsList,
+      strategyRecordType: strategy?.recordType ?? null,
+      search,
+      options,
+      generateId: () => `step_${Math.random().toString(16).slice(2, 10)}`,
+    });
+
+    addStep.mutate({ step: newStep });
+    if (downstreamPatch) {
+      updateStep.mutate({
+        stepId: downstreamPatch.stepId,
+        patch: downstreamPatch.patch,
       });
+    }
 
-      addStep(newStep);
-      if (downstreamPatch) {
-        updateStep(downstreamPatch.stepId, downstreamPatch.patch);
-      }
-
-      setOrthologModalOpen(false);
-      setSelectedStep(newStep);
-    },
-    [
-      selectedNodeIds,
-      draftStrategy?.steps,
-      strategy?.steps,
-      strategy?.recordType,
-      addStep,
-      updateStep,
-      setSelectedStep,
-    ],
-  );
+    setOrthologModalOpen(false);
+    setSelectedStep(newStep);
+  };
 
   return {
     edgeMenu,
@@ -143,6 +121,11 @@ export function useStrategyGraphHandlers(options: UseStrategyGraphHandlersOption
     handleStartOrthologTransformFromSelection,
     handleOpenDetails,
     handleOrthologChoose,
-    updateStep,
+    /** Single-step patch — wraps useUpdateStepMutation. */
+    updateStep: (stepId: string, patch: Partial<Step>) =>
+      updateStep.mutate({ stepId, patch }),
+    requestDelete: deleteOp.requestDelete,
+    requestDeleteMany: deleteOp.requestDeleteMany,
+    deleteDialogProps: deleteOp.dialogProps,
   } as const;
 }

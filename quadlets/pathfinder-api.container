@@ -1,10 +1,8 @@
 [Unit]
 Description=Pathfinder API server
 After=pathfinder-db.service
-After=pathfinder-redis.service
-After=pathfinder-qdrant.service
 Requires=pathfinder-db.service
-Requires=pathfinder-redis.service
+Wants=pathfinder-worker.service
 
 [Container]
 ContainerName=pathfinder-api
@@ -15,11 +13,17 @@ PublishPort=8000:8000
 
 # API keys and app settings loaded from .env
 EnvironmentFile=%h/.config/pathfinder/.env
+Volume=%h/.local/share/pathfinder/data:/app/apps/api/src/data:Z
 
 # Infrastructure URLs — must use container network hostnames, override .env
 Environment=DATABASE_URL=postgresql+asyncpg://postgres:postgres@pathfinder-db:5432/pathfinder
-Environment=QDRANT_URL=http://pathfinder-qdrant:6333
-Environment=REDIS_URL=redis://pathfinder-redis:6379/0
+
+# Limit ONNX Runtime / OpenMP thread count so the container doesn't saturate all CPU cores.
+# fastembed and PIGuard both use onnxruntime which defaults to nproc threads.
+# Set FASTEMBED_THREADS in .env to override the default of 2 (e.g. FASTEMBED_THREADS=8 on
+# a server where faster cold-start embedding is worth the extra CPU).
+Environment=OMP_NUM_THREADS=16
+Environment=OPENBLAS_NUM_THREADS=16
 # Uncomment to use a local Ollama instance on the host
 # Environment=OLLAMA_BASE_URL=http://host.containers.internal:11434/v1
 

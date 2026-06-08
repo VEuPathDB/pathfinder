@@ -1,0 +1,143 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { ExternalLink, Workflow } from "lucide-react";
+
+import type { Strategy } from "@pathfinder/shared";
+import { Button } from "@/components/ui/button";
+import { CompactStrategyView } from "@/features/strategy/graph/components/CompactStrategyView";
+import { InsertSavedDialog } from "@/features/saved/InsertSavedDialog";
+import { SaveSubstrategyDialog } from "@/features/strategy/editor/SaveSubstrategyDialog";
+import { useSaveSubstrategyMutation } from "@/features/strategy/mutations/useSaveSubstrategyMutation";
+
+import { RailEmptyState, RailPanelShell } from "./RailPanelShell";
+
+interface StrategyPanelProps {
+  strategy: Strategy | null;
+  siteId: string;
+}
+
+const STEP_ROUTE_RE = /\/strategy\/step\/([^/?#]+)/;
+
+export function StrategyPanel({ strategy, siteId }: StrategyPanelProps) {
+  const router = useRouter();
+  const pathname = usePathname() as string | null;
+  const selectedStepId =
+    pathname != null ? (pathname.match(STEP_ROUTE_RE)?.[1] ?? null) : null;
+  const hasSteps = strategy != null && strategy.steps.length > 0;
+
+  const [saveStepId, setSaveStepId] = useState<string | null>(null);
+  const [insertTargetId, setInsertTargetId] = useState<string | null>(null);
+
+  const saveMutation = useSaveSubstrategyMutation({
+    conversationId: strategy?.id ?? "",
+    siteId,
+    onSuccess: () => setSaveStepId(null),
+  });
+
+  const openFullEditor = (): void => {
+    if (strategy == null) return;
+    router.push(`/${siteId}/conversation/${strategy.id}/strategy`);
+  };
+
+  const openStep = (stepId: string): void => {
+    if (strategy == null) return;
+    router.push(`/${siteId}/conversation/${strategy.id}/strategy/step/${stepId}`);
+  };
+
+  const saveTargetStep =
+    saveStepId != null
+      ? (strategy?.steps.find((s) => s.id === saveStepId) ?? null)
+      : null;
+
+  return (
+    <RailPanelShell
+      title="Strategy"
+      headerActions={
+        hasSteps ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={openFullEditor}
+            data-testid="rail-strategy-open"
+            className="h-7 gap-1 px-2 text-xs"
+          >
+            Open
+            <ExternalLink className="size-3" aria-hidden />
+          </Button>
+        ) : null
+      }
+    >
+      {hasSteps ? (
+        <div className="flex h-full flex-col" data-testid="rail-strategy-panel">
+          <div className="min-h-0 flex-1 overflow-auto">
+            <CompactStrategyView
+              strategy={strategy}
+              onStepClick={openStep}
+              selectedStepId={selectedStepId}
+              onSaveStep={setSaveStepId}
+              onInsertSavedAt={setInsertTargetId}
+            />
+          </div>
+          <StrategyFooter strategy={strategy} />
+        </div>
+      ) : (
+        <RailEmptyState
+          icon={<Workflow className="h-8 w-8" aria-hidden />}
+          heading="No strategy built yet"
+          description="The execution agent will build a WDK strategy here once the plan is approved."
+        />
+      )}
+      {strategy != null && (
+        <>
+          <SaveSubstrategyDialog
+            open={saveStepId != null}
+            onOpenChange={(o) => {
+              if (!o) setSaveStepId(null);
+            }}
+            defaultName={
+              saveTargetStep?.displayName ??
+              saveTargetStep?.searchName ??
+              "Saved strategy"
+            }
+            isSaving={saveMutation.isPending}
+            onConfirm={(input) => {
+              if (saveStepId == null) return;
+              saveMutation.mutate({
+                stepId: saveStepId,
+                name: input.name,
+                description: input.description === "" ? null : input.description,
+              });
+            }}
+          />
+          <InsertSavedDialog
+            open={insertTargetId != null}
+            onOpenChange={(o) => {
+              if (!o) setInsertTargetId(null);
+            }}
+            conversationId={strategy.id}
+            siteId={siteId}
+            targetStepId={insertTargetId ?? ""}
+          />
+        </>
+      )}
+    </RailPanelShell>
+  );
+}
+
+interface StrategyFooterProps {
+  strategy: Strategy;
+}
+
+function StrategyFooter({ strategy }: StrategyFooterProps) {
+  const stepCount = strategy.steps.length;
+  return (
+    <div
+      className="border-t border-border px-3 py-2 text-[10px] text-muted-foreground"
+      data-testid="rail-strategy-footer"
+    >
+      {stepCount} {stepCount === 1 ? "step" : "steps"}
+    </div>
+  );
+}

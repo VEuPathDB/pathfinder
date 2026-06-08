@@ -1,37 +1,21 @@
-import { useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { Table } from "@tanstack/react-table";
 import { Button } from "@/lib/components/ui/Button";
+import type { ClassifiedRecord } from "@pathfinder/shared/generated/types/ClassifiedRecord";
 import { PAGE_SIZE_OPTIONS } from "./ResultsTableColumns";
 
-export interface PaginationControlsProps {
-  offset: number;
-  pageSize: number;
+interface PaginationControlsProps {
+  table: Table<ClassifiedRecord>;
   totalCount: number;
   loading: boolean;
-  onOffsetChange: (offset: number) => void;
-  onPageSizeChange: (size: number) => void;
 }
 
-export function PaginationControls({
-  offset,
-  pageSize,
-  totalCount,
-  loading,
-  onOffsetChange,
-  onPageSizeChange,
-}: PaginationControlsProps) {
-  const currentPage = Math.floor(offset / pageSize) + 1;
+export function PaginationControls({ table, totalCount, loading }: PaginationControlsProps) {
+  const { pageIndex, pageSize } = table.getState().pagination;
+  const currentPage = pageIndex + 1;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const hasPrev = offset > 0;
-  const hasNext = offset + pageSize < totalCount;
-
-  const handlePageSizeChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      onPageSizeChange(Number(e.target.value));
-      onOffsetChange(0);
-    },
-    [onPageSizeChange, onOffsetChange],
-  );
+  const hasPrev = pageIndex > 0;
+  const hasNext = (pageIndex + 1) * pageSize < totalCount;
 
   return (
     <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -39,7 +23,10 @@ export function PaginationControls({
         <span>Rows per page</span>
         <select
           value={pageSize}
-          onChange={handlePageSizeChange}
+          onChange={(e) => {
+            table.setPageSize(Number(e.target.value));
+            table.setPageIndex(0);
+          }}
           className="rounded-md border border-border bg-background px-2 py-1 text-xs"
         >
           {PAGE_SIZE_OPTIONS.map((n) => (
@@ -60,7 +47,7 @@ export function PaginationControls({
             size="icon"
             className="h-7 w-7"
             disabled={!hasPrev || loading}
-            onClick={() => onOffsetChange(Math.max(0, offset - pageSize))}
+            onClick={() => table.previousPage()}
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </Button>
@@ -69,7 +56,7 @@ export function PaginationControls({
             size="icon"
             className="h-7 w-7"
             disabled={!hasNext || loading}
-            onClick={() => onOffsetChange(offset + pageSize)}
+            onClick={() => table.nextPage()}
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </Button>

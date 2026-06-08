@@ -2,9 +2,17 @@
  * Gene set API client — CRUD and set-operation endpoints.
  */
 
-import type { EnrichmentResult } from "@pathfinder/shared";
-import { requestJson } from "@/lib/api/http";
-import type { GeneSet } from "../store";
+import { queryOptions } from "@tanstack/react-query";
+import type { EnrichmentResult, GeneSet } from "@pathfinder/shared";
+import { geneSetResponseSchema } from "@pathfinder/shared/generated/zod/geneSetResponseSchema";
+import { z } from "zod";
+
+import { requestJson, requestVoid } from "@/lib/api/http";
+import { enrichmentResultResponseSchema } from "@pathfinder/shared/generated/zod/enrichmentResultResponseSchema";
+
+const EnrichmentResultListSchema = z.array(enrichmentResultResponseSchema);
+
+const GeneSetListSchema = z.array(geneSetResponseSchema);
 import type { StepParameters } from "@/lib/strategyGraph/types";
 
 // ---------------------------------------------------------------------------
@@ -36,7 +44,7 @@ export interface SetOperationRequest {
 
 /** Create a new gene set. */
 export function createGeneSet(req: CreateGeneSetRequest): Promise<GeneSet> {
-  return requestJson<GeneSet>("/api/v1/gene-sets", {
+  return requestJson(geneSetResponseSchema, "/api/v1/gene-sets", {
     method: "POST",
     body: req,
   });
@@ -44,21 +52,21 @@ export function createGeneSet(req: CreateGeneSetRequest): Promise<GeneSet> {
 
 /** List gene sets, optionally filtered by site. */
 export function listGeneSets(siteId?: string): Promise<GeneSet[]> {
-  return requestJson<GeneSet[]>("/api/v1/gene-sets", {
-    query: siteId ? { siteId } : undefined,
+  return requestJson(GeneSetListSchema, "/api/v1/gene-sets", {
+    ...(siteId != null && siteId !== "" ? { query: { siteId } } : {}),
   });
 }
 
 /** Delete a gene set by ID. */
 export function deleteGeneSet(id: string): Promise<void> {
-  return requestJson<void>(`/api/v1/gene-sets/${id}`, {
+  return requestVoid(`/api/v1/gene-sets/${id}`, {
     method: "DELETE",
   });
 }
 
 /** Perform a set operation (intersect, union, minus) across gene sets. */
 export function performSetOperation(req: SetOperationRequest): Promise<GeneSet> {
-  return requestJson<GeneSet>("/api/v1/gene-sets/operations", {
+  return requestJson(geneSetResponseSchema, "/api/v1/gene-sets/operations", {
     method: "POST",
     body: req,
   });
@@ -69,10 +77,10 @@ export function enrichGeneSet(
   id: string,
   types: string[],
 ): Promise<EnrichmentResult[]> {
-  return requestJson<EnrichmentResult[]>(`/api/v1/gene-sets/${id}/enrich`, {
+  return requestJson(EnrichmentResultListSchema, `/api/v1/gene-sets/${id}/enrich`, {
     method: "POST",
     body: { enrichmentTypes: types },
-  });
+  }) as unknown as Promise<EnrichmentResult[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,15 +108,23 @@ export interface CreateFromStrategyArgs {
 export function createGeneSetFromStrategy(
   args: CreateFromStrategyArgs,
 ): Promise<GeneSet> {
-  return createGeneSet({
+  const req: CreateGeneSetRequest = {
     name: args.name,
     source: "strategy",
     geneIds: args.geneIds ?? [],
     siteId: args.siteId,
     wdkStrategyId: args.wdkStrategyId,
-    wdkStepId: args.wdkStepId,
-    searchName: args.searchName,
-    recordType: args.recordType,
-    parameters: args.parameters,
+  };
+  if (args.wdkStepId != null) req.wdkStepId = args.wdkStepId;
+  if (args.searchName != null) req.searchName = args.searchName;
+  if (args.recordType != null) req.recordType = args.recordType;
+  if (args.parameters != null) req.parameters = args.parameters;
+  return createGeneSet(req);
+}
+
+export function geneSetsListOptions(siteId: string) {
+  return queryOptions({
+    queryKey: ["gene-sets", "list", siteId] as const,
+    queryFn: () => listGeneSets(siteId),
   });
 }

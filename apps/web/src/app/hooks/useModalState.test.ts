@@ -48,20 +48,14 @@ describe("useModalState", () => {
     });
   });
 
-  describe("callback stability", () => {
-    it("returns stable callback references across renders", () => {
+  describe("state continuity", () => {
+    it("preserves modal state across rerenders", () => {
       const { result, rerender } = renderHook(() => useModalState());
-      const first = {
-        openSettings: result.current.openSettings,
-        closeSettings: result.current.closeSettings,
-        openGraphEditor: result.current.openGraphEditor,
-        closeGraphEditor: result.current.closeGraphEditor,
-      };
+      act(() => result.current.openSettings());
+      act(() => result.current.openGraphEditor());
       rerender();
-      expect(result.current.openSettings).toBe(first.openSettings);
-      expect(result.current.closeSettings).toBe(first.closeSettings);
-      expect(result.current.openGraphEditor).toBe(first.openGraphEditor);
-      expect(result.current.closeGraphEditor).toBe(first.closeGraphEditor);
+      expect(result.current.showSettings).toBe(true);
+      expect(result.current.graphEditing).toBe(true);
     });
   });
 });

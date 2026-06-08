@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+from uuid import UUID
+
+from pathfinder.platform.pydantic_base import CamelModel
+
+
+class TaskProgressEvent(CamelModel):
+    task_id: UUID
+    percent: float
+    message: str
+    data: dict[str, Any] | None = None
+    emitted_at: datetime
+
+
+class TaskStatusResponse(CamelModel):
+    task_id: UUID
+    tool_name: str
+    status: str
+    estimated_duration_seconds: int
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
+
+
+class TaskListItem(CamelModel):
+    task_id: UUID
+    tool_name: str
+    status: str
+    estimated_duration_seconds: int
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    latest_percent: float | None = None
+    latest_message: str | None = None
+    error: str | None = None
+
+
+class TaskListResponse(CamelModel):
+    tasks: list[TaskListItem]

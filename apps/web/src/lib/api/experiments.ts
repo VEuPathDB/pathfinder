@@ -2,73 +2,62 @@
  * Shared experiment API functions -- used by both workbench and chat features.
  */
 
+import { queryOptions } from "@tanstack/react-query";
 import type { ExperimentSummary } from "@pathfinder/shared";
-import {
-  APIError,
-  buildUrl,
-  getAuthHeaders,
-  requestJsonValidated,
-} from "@/lib/api/http";
-import { ExperimentSummaryListSchema } from "./schemas/experiment";
+import { experimentSummaryResponseSchema } from "@pathfinder/shared/generated/zod/experimentSummaryResponseSchema";
+import { z } from "zod";
+
+import { buildUrl, requestJson } from "@/lib/api/http";
+import { streamTypedEvents } from "@/lib/sse/typedEventStream";
+
+const ExperimentSummaryListSchema = z.array(experimentSummaryResponseSchema);
 
 /** List experiments, optionally filtered by site. */
 export async function listExperiments(
   siteId?: string | null,
 ): Promise<ExperimentSummary[]> {
-  return (await requestJsonValidated(
+  return (await requestJson(
     ExperimentSummaryListSchema,
     "/api/v1/experiments",
-    { query: siteId ? { siteId } : undefined },
-  )) as ExperimentSummary[];
+    siteId != null && siteId !== "" ? { query: { siteId } } : {},
+  ));
+}
+
+export function experimentsListOptions(siteId: string) {
+  return queryOptions({
+    queryKey: ["experiments", "list", siteId] as const,
+    queryFn: () => listExperiments(siteId),
+    staleTime: 30_000,
+    enabled: siteId !== "",
+  });
 }
 
 /**
- * Seed demo strategies via SSE. Calls `onMessage` for each progress event
- * and resolves when the stream ends.
+ * Shape of each decoded event from the `/api/v1/experiments/seed` SSE stream.
+ *
+ * The backend emits typed Pydantic models (``SeedProgress`` / ``SeedStrategyComplete``
+ * / ``SeedItemError`` / ``SeedComplete``) — every variant includes a ``message``
+ * field, which is all this UI surface needs.
+ */
+interface SeedStreamEvent {
+  type: string;
+  message: string;
+}
+
+/**
+ * Seed demo strategies via SSE.  Calls `onMessage` for each progress event
+ * and resolves when the stream emits `[DONE]`.
  */
 export async function seedExperiments(
   onMessage: (message: string) => void,
   siteId?: string,
 ): Promise<void> {
-  const params = siteId ? `?site_id=${siteId}` : "";
+  const params = siteId != null && siteId !== "" ? `?site_id=${siteId}` : "";
   const url = buildUrl(`/api/v1/experiments/seed${params}`);
-  const headers = getAuthHeaders({ accept: "text/event-stream" });
 
-  const response = await fetch(url, {
+  for await (const event of streamTypedEvents<SeedStreamEvent>(url, {
     method: "POST",
-    headers,
-    credentials: "include",
-  });
-
-  if (!response.ok || !response.body) {
-    throw new APIError(`Seed failed: HTTP ${response.status}`, {
-      status: response.status,
-      statusText: response.statusText,
-      url,
-      data: null,
-    });
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      if (!line.startsWith("data:")) continue;
-      try {
-        const data = JSON.parse(line.slice(5).trim());
-        if (data.message) onMessage(data.message);
-      } catch {
-        /* skip malformed SSE frames */
-      }
-    }
+  })) {
+    onMessage(event.message);
   }
 }

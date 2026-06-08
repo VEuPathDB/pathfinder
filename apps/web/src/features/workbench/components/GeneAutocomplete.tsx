@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useOnClickOutside } from "usehooks-ts";
+import { useDebounce } from "use-debounce";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, Search } from "lucide-react";
 import type { GeneSearchResult } from "@pathfinder/shared";
-import { searchGenes } from "@/lib/api/genes";
+import { searchGenes } from "@pathfinder/shared/generated/hooks/useSearchGenes";
 import { Input } from "@/lib/components/ui/Input";
 
 interface GeneAutocompleteProps {
@@ -20,65 +23,49 @@ export function GeneAutocomplete({
   excludeIds,
 }: GeneAutocompleteProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<GeneSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Debounced search
-  useEffect(() => {
-    if (!query.trim() || !siteId) {
-      setResults([]);
-      setOpen(false);
-      return;
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const resp = await searchGenes(siteId, query.trim(), null, 10);
-        const filtered = excludeIds
-          ? resp.results.filter((r) => !excludeIds.has(r.geneId))
-          : resp.results;
-        setResults(filtered);
-        setOpen(filtered.length > 0);
-      } finally {
-        setLoading(false);
-      }
-    }, 300);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query, siteId, excludeIds]);
+  const [debouncedQuery] = useDebounce(query, 300);
+  const trimmedQuery = debouncedQuery.trim();
+
+  const { data: searchResults, isFetching } = useQuery({
+    queryKey: ["genes", "search", siteId, trimmedQuery] as const,
+    queryFn: () => searchGenes(siteId, { q: trimmedQuery, limit: 10 }),
+    enabled: trimmedQuery.length > 0 && siteId !== "",
+    staleTime: 30_000,
+  });
+
+  const results = searchResults == null
+    ? []
+    : excludeIds
+      ? searchResults.results.filter((r) => !excludeIds.has(r.geneId))
+      : searchResults.results;
+
+  const hasResults = trimmedQuery.length > 0 && results.length > 0;
+  const open = hasResults && !dismissed;
+
+  const [prevTrimmedQuery, setPrevTrimmedQuery] = useState(trimmedQuery);
+  if (trimmedQuery !== prevTrimmedQuery) {
+    setPrevTrimmedQuery(trimmedQuery);
+    if (dismissed) setDismissed(false);
+  }
 
   // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  const handleSelect = useCallback(
-    (geneId: string) => {
-      onSelect(geneId);
-      setQuery("");
-      setOpen(false);
-      setResults([]);
-    },
-    [onSelect],
+  useOnClickOutside(dropdownRef as React.RefObject<HTMLElement>, () =>
+    setDismissed(true),
   );
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleSelect = (geneId: string) => {
+    onSelect(geneId);
+    setQuery("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
-      setOpen(false);
+      setDismissed(true);
     }
-  }, []);
+  };
 
   return (
     <div ref={dropdownRef} className="relative">
@@ -92,17 +79,19 @@ export function GeneAutocomplete({
           placeholder={placeholder}
           className="h-7 bg-background pl-7 pr-7 text-xs"
         />
-        {loading && (
+        {isFetching && (
           <Loader2 className="absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin text-muted-foreground" />
         )}
       </div>
 
       {open && results.length > 0 && (
         <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-md border border-border bg-popover shadow-lg animate-hover-card-in">
-          {results.map((gene) => (
+          {results.map((gene: GeneSearchResult) => (
             <button
               key={gene.geneId}
               type="button"
+              data-testid="gene-autocomplete-result"
+              data-gene-id={gene.geneId}
               onClick={() => handleSelect(gene.geneId)}
               className="flex w-full items-start gap-2 px-3 py-2 text-left transition-colors duration-75 hover:bg-accent"
             >
@@ -111,7 +100,7 @@ export function GeneAutocomplete({
                   {gene.geneId}
                 </p>
                 <p className="truncate text-[10px] text-muted-foreground">
-                  {gene.product || "\u2014"}
+                  {gene.product != null && gene.product !== "" ? gene.product : "\u2014"}
                 </p>
                 <p className="truncate text-[10px] italic text-muted-foreground/70">
                   {gene.organism}

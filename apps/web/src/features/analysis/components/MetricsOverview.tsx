@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type {
   ExperimentMetrics,
   RankMetrics,
@@ -34,18 +34,19 @@ function CIBadge({
   robustness?: BootstrapResult | null;
   fmt?: (v: number) => string;
 }) {
-  if (!robustness) return null;
-  const ci = robustness.rankMetricCis?.[ciKey] ?? robustness.metricCis?.[ciKey];
-  if (!ci) return null;
+  const ci = robustness?.rankMetricCis?.[ciKey] ?? robustness?.metricCis?.[ciKey];
+  const lower = ci?.lower;
+  const upper = ci?.upper;
+  if (lower === undefined || upper === undefined) return null;
   return (
     <span className="ml-1.5 text-[10px] text-muted-foreground/70 tabular-nums">
-      [{fmt(ci.lower)}, {fmt(ci.upper)}]
+      [{fmt(lower)}, {fmt(upper)}]
     </span>
   );
 }
 
-function metricValueColor(value: number, raw?: boolean): string {
-  const normalized = raw ? (value + 1) / 2 : value; // MCC is [-1,1]
+function metricValueColor(value: number, raw?: boolean | null): string {
+  const normalized = raw === true ? (value + 1) / 2 : value; // MCC is [-1,1]
   if (normalized >= 0.7) return "text-green-600 dark:text-green-400";
   if (normalized >= 0.4) return "text-amber-600 dark:text-amber-400";
   return "text-red-600 dark:text-red-400";
@@ -62,22 +63,26 @@ export function MetricsOverview({
   const e50 = rankMetrics?.enrichmentAtK?.["50"] ?? null;
   const r50 = rankMetrics?.recallAtK?.["50"] ?? null;
 
-  const radarData = useMemo(
-    () => [
-      { metric: "Sensitivity", value: metrics.sensitivity },
-      { metric: "Specificity", value: metrics.specificity },
-      { metric: "Precision", value: metrics.precision },
-      { metric: "F1", value: metrics.f1Score },
-      { metric: "Bal. Acc.", value: metrics.balancedAccuracy },
-      {
-        metric: "MCC",
-        value: Math.max(0, (metrics.mcc + 1) / 2),
-      },
-    ],
-    [metrics],
-  );
+  const radarData = [
+    { metric: "Sensitivity", value: metrics.sensitivity },
+    { metric: "Specificity", value: metrics.specificity },
+    { metric: "Precision", value: metrics.precision },
+    { metric: "F1", value: metrics.f1Score },
+    { metric: "Bal. Acc.", value: metrics.balancedAccuracy },
+    {
+      metric: "MCC",
+      value: Math.max(0, (metrics.mcc + 1) / 2),
+    },
+  ];
 
-  const primary = [
+  interface MetricRow {
+    label: string;
+    value: number;
+    desc: string;
+    raw?: boolean;
+  }
+
+  const primary: MetricRow[] = [
     {
       label: "Sensitivity",
       value: metrics.sensitivity,
@@ -111,25 +116,25 @@ export function MetricsOverview({
     },
   ];
 
-  const secondary = [
+  const secondary: MetricRow[] = [
     {
       label: "NPV",
-      value: metrics.negativePredictiveValue,
+      value: metrics.negativePredictiveValue ?? 0,
       desc: "TN / (TN + FN) \u2014 negative predictive value",
     },
     {
       label: "FPR",
-      value: metrics.falsePositiveRate,
+      value: metrics.falsePositiveRate ?? 0,
       desc: "FP / (FP + TN) \u2014 false positive rate",
     },
     {
       label: "FNR",
-      value: metrics.falseNegativeRate,
+      value: metrics.falseNegativeRate ?? 0,
       desc: "FN / (FN + TP) \u2014 false negative rate",
     },
     {
       label: "Youden\u2019s J",
-      value: metrics.youdensJ,
+      value: metrics.youdensJ ?? 0,
       raw: true,
       desc: "Sensitivity + Specificity - 1 \u2014 ranges from -1 to 1",
     },
@@ -149,7 +154,7 @@ export function MetricsOverview({
                 <div className="mt-1 font-mono text-2xl font-bold tabular-nums text-foreground">
                   {pct(p50)}
                 </div>
-                <CIBadge ciKey="precision_at_50" robustness={robustness} />
+                <CIBadge ciKey="precision_at_50" robustness={robustness ?? null} />
               </Card>
             )}
             {r50 != null && (
@@ -160,7 +165,7 @@ export function MetricsOverview({
                 <div className="mt-1 font-mono text-2xl font-bold tabular-nums text-foreground">
                   {pct(r50)}
                 </div>
-                <CIBadge ciKey="recall_at_50" robustness={robustness} />
+                <CIBadge ciKey="recall_at_50" robustness={robustness ?? null} />
               </Card>
             )}
             {e50 != null && (
@@ -183,7 +188,7 @@ export function MetricsOverview({
                 </div>
                 <CIBadge
                   ciKey="enrichment_at_50"
-                  robustness={robustness}
+                  robustness={robustness ?? null}
                   fmt={(v) => `${fmtNum(v)}x`}
                 />
               </Card>
@@ -200,6 +205,8 @@ export function MetricsOverview({
               {primary.map((m) => (
                 <div
                   key={m.label}
+                  data-testid="metric-row"
+                  data-metric={m.label}
                   className="flex items-center justify-between border-b border-border px-5 py-2.5 last:border-b-0"
                 >
                   <Tooltip>
@@ -217,7 +224,7 @@ export function MetricsOverview({
                   <span
                     className={`font-mono text-sm font-semibold tabular-nums ${metricValueColor(m.value, m.raw)}`}
                   >
-                    {m.raw ? fmtNum(m.value) : pct(m.value)}
+                    {m.raw === true ? fmtNum(m.value) : pct(m.value)}
                   </span>
                 </div>
               ))}
@@ -243,7 +250,7 @@ export function MetricsOverview({
                       <span
                         className={`font-mono text-sm tabular-nums ${metricValueColor(m.value, m.raw)}`}
                       >
-                        {m.raw ? fmtNum(m.value) : pct(m.value)}
+                        {m.raw === true ? fmtNum(m.value) : pct(m.value)}
                       </span>
                     </div>
                   ))}

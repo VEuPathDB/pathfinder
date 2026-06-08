@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Dna, Play, Loader2 } from "lucide-react";
 import { Button } from "@/lib/components/ui/Button";
 import { EnrichmentSection } from "@/features/analysis";
 import type { EnrichmentResult } from "@pathfinder/shared";
 import { AnalysisPanelContainer } from "../AnalysisPanelContainer";
-import { useWorkbenchStore } from "../../store";
+import { useWorkbenchStore } from "@/state/useWorkbenchStore";
+import { useSessionStore } from "@/state/useSessionStore";
+import { useGeneSetsQuery } from "@/lib/query/hooks/useGeneSetsQuery";
 import { enrichGeneSet } from "../../api/geneSets";
 
 // ---------------------------------------------------------------------------
@@ -28,7 +30,8 @@ type EnrichmentTypeKey = (typeof ENRICHMENT_TYPES)[number]["key"];
 // ---------------------------------------------------------------------------
 
 export function EnrichmentPanel() {
-  const geneSets = useWorkbenchStore((s) => s.geneSets);
+  const selectedSite = useSessionStore((s) => s.selectedSite);
+  const { data: geneSets = [] } = useGeneSetsQuery(selectedSite);
   const activeSetId = useWorkbenchStore((s) => s.activeSetId);
   const activeSet = geneSets.find((gs) => gs.id === activeSetId);
 
@@ -39,7 +42,7 @@ export function EnrichmentPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const toggleType = useCallback((key: EnrichmentTypeKey) => {
+  const toggleType = (key: EnrichmentTypeKey) => {
     setSelectedTypes((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -49,9 +52,9 @@ export function EnrichmentPanel() {
       }
       return next;
     });
-  }, []);
+  };
 
-  const handleRun = useCallback(async () => {
+  const handleRun = async () => {
     if (!activeSet || selectedTypes.size === 0) return;
     setLoading(true);
     setError(null);
@@ -65,7 +68,7 @@ export function EnrichmentPanel() {
     } finally {
       setLoading(false);
     }
-  }, [activeSet, selectedTypes]);
+  };
 
   return (
     <AnalysisPanelContainer
@@ -100,7 +103,9 @@ export function EnrichmentPanel() {
         <div className="flex items-center gap-3">
           <Button
             size="sm"
-            onClick={handleRun}
+            onClick={() => {
+              void handleRun();
+            }}
             disabled={loading || !activeSet || selectedTypes.size === 0}
           >
             {loading ? (
@@ -118,12 +123,16 @@ export function EnrichmentPanel() {
           )}
         </div>
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error != null && error !== "" && (
+          <p className="text-xs text-destructive">{error}</p>
+        )}
 
         {/* Results */}
-        {results && results.length > 0 && <EnrichmentSection results={results} />}
+        {results != null && results.length > 0 && (
+          <EnrichmentSection results={results} />
+        )}
 
-        {results && results.length === 0 && (
+        {results?.length === 0 && (
           <p className="py-4 text-center text-xs text-muted-foreground">
             No enrichment results returned. Try different enrichment types.
           </p>

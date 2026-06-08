@@ -26,7 +26,7 @@ export function ParamNameSelect({
     return (
       <div className="flex h-8 items-center rounded-md border border-input bg-background px-2.5 text-xs text-muted-foreground">
         <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-        Loading parameters…
+        Loading parameters...
       </div>
     );
   }
@@ -52,7 +52,7 @@ export function ParamNameSelect({
       <option value="">{placeholder ?? "Select parameter..."}</option>
       {paramSpecs.map((s) => (
         <option key={s.name} value={s.name}>
-          {s.displayName || s.name}
+          {s.displayName != null && s.displayName !== "" ? s.displayName : s.name}
         </option>
       ))}
     </select>

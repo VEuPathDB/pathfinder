@@ -3,47 +3,20 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 // Mock the http module before importing the module under test
 vi.mock("@/lib/api/http", () => ({
   requestJson: vi.fn(),
-  requestJsonValidated: vi.fn(),
   buildUrl: vi.fn((path: string) => `http://localhost:8000${path}`),
-  getAuthHeaders: vi.fn((opts?: { accept?: string }) => ({
-    ...(opts?.accept ? { Accept: opts.accept } : {}),
-  })),
-  APIError: class APIError extends Error {
-    status: number;
-    statusText: string;
-    url: string;
-    data: unknown;
-    constructor(
-      message: string,
-      args: { status: number; statusText: string; url: string; data: unknown },
-    ) {
-      super(message);
-      this.name = "APIError";
-      this.status = args.status;
-      this.statusText = args.statusText;
-      this.url = args.url;
-      this.data = args.data;
-    }
-  },
 }));
 
 import { listExperiments, seedExperiments } from "./experiments";
-import { requestJsonValidated, buildUrl, getAuthHeaders } from "@/lib/api/http";
+import { requestJson, buildUrl } from "@/lib/api/http";
 import type { ExperimentSummary } from "@pathfinder/shared";
 
-const mockRequestJsonValidated = vi.mocked(requestJsonValidated);
+const mockRequestJson = vi.mocked(requestJson);
 const mockBuildUrl = vi.mocked(buildUrl);
-const mockGetAuthHeaders = vi.mocked(getAuthHeaders);
 
 beforeEach(() => {
-  mockRequestJsonValidated.mockReset();
+  mockRequestJson.mockReset();
   mockBuildUrl.mockReset();
-  mockGetAuthHeaders.mockReset();
-  // Restore default implementations
   mockBuildUrl.mockImplementation((path: string) => `http://localhost:8000${path}`);
-  mockGetAuthHeaders.mockImplementation((opts?: { accept?: string }) => ({
-    ...(opts?.accept ? { Accept: opts.accept } : {}),
-  }));
   vi.restoreAllMocks();
 });
 
@@ -81,24 +54,24 @@ const summaryFixture: ExperimentSummary = {
 
 describe("listExperiments", () => {
   it("sends GET to /api/v1/experiments without query when no siteId", async () => {
-    mockRequestJsonValidated.mockResolvedValue([summaryFixture]);
+    mockRequestJson.mockResolvedValue([summaryFixture]);
 
     const result = await listExperiments();
 
-    expect(mockRequestJsonValidated).toHaveBeenCalledWith(
+    expect(mockRequestJson).toHaveBeenCalledWith(
       expect.anything(),
       "/api/v1/experiments",
-      { query: undefined },
+      {},
     );
     expect(result).toEqual([summaryFixture]);
   });
 
   it("includes siteId in query when provided", async () => {
-    mockRequestJsonValidated.mockResolvedValue([]);
+    mockRequestJson.mockResolvedValue([]);
 
     await listExperiments("plasmodb");
 
-    expect(mockRequestJsonValidated).toHaveBeenCalledWith(
+    expect(mockRequestJson).toHaveBeenCalledWith(
       expect.anything(),
       "/api/v1/experiments",
       { query: { siteId: "plasmodb" } },
@@ -106,19 +79,19 @@ describe("listExperiments", () => {
   });
 
   it("passes null siteId without query (treats null like undefined)", async () => {
-    mockRequestJsonValidated.mockResolvedValue([]);
+    mockRequestJson.mockResolvedValue([]);
 
     await listExperiments(null);
 
-    expect(mockRequestJsonValidated).toHaveBeenCalledWith(
+    expect(mockRequestJson).toHaveBeenCalledWith(
       expect.anything(),
       "/api/v1/experiments",
-      { query: undefined },
+      {},
     );
   });
 
   it("returns empty array when no experiments exist", async () => {
-    mockRequestJsonValidated.mockResolvedValue([]);
+    mockRequestJson.mockResolvedValue([]);
 
     const result = await listExperiments("toxodb");
     expect(result).toEqual([]);
@@ -129,14 +102,14 @@ describe("listExperiments", () => {
       summaryFixture,
       { ...summaryFixture, id: "exp-2", name: "Second Experiment" },
     ];
-    mockRequestJsonValidated.mockResolvedValue(multiple);
+    mockRequestJson.mockResolvedValue(multiple);
 
     const result = await listExperiments();
     expect(result).toHaveLength(2);
   });
 
   it("propagates API errors", async () => {
-    mockRequestJsonValidated.mockRejectedValue(new Error("Unauthorized"));
+    mockRequestJson.mockRejectedValue(new Error("Unauthorized"));
 
     await expect(listExperiments()).rejects.toThrow("Unauthorized");
   });
@@ -176,11 +149,12 @@ describe("seedExperiments", () => {
     } as unknown as Response;
   }
 
-  it("parses SSE data lines and calls onMessage for each message", async () => {
+  it("parses typed SSE frames and calls onMessage for each event's message", async () => {
     const chunks = [
-      'data: {"message": "Starting seed..."}\n',
-      'data: {"message": "Created strategy 1"}\n',
-      'data: {"message": "Done"}\n',
+      'event: seed_progress\ndata: {"type":"seed_progress","phase":"starting","message":"Starting seed..."}\n\n',
+      'event: seed_strategy_complete\ndata: {"type":"seed_strategy_complete","current":1,"total":1,"name":"s","wdkStrategyId":"1","elapsed":0.2,"message":"Created strategy 1"}\n\n',
+      'event: seed_complete\ndata: {"type":"seed_complete","total":1,"strategiesCreated":1,"controlSetsCreated":1,"failed":0,"message":"Done"}\n\n',
+      "data: [DONE]\n\n",
     ];
 
     vi.stubGlobal(
@@ -194,9 +168,12 @@ describe("seedExperiments", () => {
     expect(messages).toEqual(["Starting seed...", "Created strategy 1", "Done"]);
   });
 
-  it("handles multi-chunk SSE data split across read boundaries", async () => {
-    // Data line split across two chunks
-    const chunks = ['data: {"messag', 'e": "Hello world"}\n'];
+  it("handles frames split across chunk boundaries", async () => {
+    const chunks = [
+      'event: seed_progress\ndata: {"type":"seed_progress","phase":"starting","message',
+      '":"Hello world"}\n\n',
+      "data: [DONE]\n\n",
+    ];
 
     vi.stubGlobal(
       "fetch",
@@ -209,31 +186,11 @@ describe("seedExperiments", () => {
     expect(messages).toEqual(["Hello world"]);
   });
 
-  it("skips non-data lines (comments, empty lines)", async () => {
+  it("skips malformed JSON frames", async () => {
     const chunks = [
-      ": this is a comment\n",
-      "\n",
-      'data: {"message": "real message"}\n',
-      "event: custom\n",
-      "\n",
-    ];
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => makeFetchResponse(true, 200, makeReadableStream(chunks))),
-    );
-
-    const messages: string[] = [];
-    await seedExperiments((msg) => messages.push(msg));
-
-    expect(messages).toEqual(["real message"]);
-  });
-
-  it("skips malformed JSON in data lines", async () => {
-    const chunks = [
-      "data: not valid json\n",
-      'data: {"message": "good"}\n',
-      "data: {broken\n",
+      "event: seed_progress\ndata: not valid json\n\n",
+      'event: seed_progress\ndata: {"type":"seed_progress","phase":"starting","message":"good"}\n\n',
+      "data: [DONE]\n\n",
     ];
 
     vi.stubGlobal(
@@ -247,46 +204,27 @@ describe("seedExperiments", () => {
     expect(messages).toEqual(["good"]);
   });
 
-  it("skips data objects without a message field", async () => {
-    const chunks = [
-      'data: {"status": "ok"}\n',
-      'data: {"message": "has message"}\n',
-      'data: {"progress": 0.5}\n',
-    ];
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => makeFetchResponse(true, 200, makeReadableStream(chunks))),
-    );
-
-    const messages: string[] = [];
-    await seedExperiments((msg) => messages.push(msg));
-
-    expect(messages).toEqual(["has message"]);
-  });
-
-  it("throws APIError when response is not ok", async () => {
+  it("throws when response is not ok", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => makeFetchResponse(false, 500, null)),
     );
 
-    await expect(seedExperiments(() => {})).rejects.toThrow("Seed failed: HTTP 500");
+    await expect(seedExperiments(() => {})).rejects.toThrow(/stream failed: 500/);
   });
 
-  it("throws APIError when response body is null", async () => {
+  it("throws when response body is null", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => makeFetchResponse(true, 200, null)),
     );
 
-    // ok=true but body=null should still throw because of the !response.body check
-    await expect(seedExperiments(() => {})).rejects.toThrow("Seed failed: HTTP 200");
+    await expect(seedExperiments(() => {})).rejects.toThrow(/no response body/);
   });
 
-  it("calls fetch with correct method, headers, and credentials", async () => {
+  it("calls fetch with POST and credentials:include", async () => {
     const fetchSpy = vi.fn(async () =>
-      makeFetchResponse(true, 200, makeReadableStream([])),
+      makeFetchResponse(true, 200, makeReadableStream(["data: [DONE]\n\n"])),
     );
     vi.stubGlobal("fetch", fetchSpy);
 
@@ -301,10 +239,12 @@ describe("seedExperiments", () => {
     );
   });
 
-  it("handles an empty stream gracefully", async () => {
+  it("handles a stream with only [DONE]", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => makeFetchResponse(true, 200, makeReadableStream([]))),
+      vi.fn(async () =>
+        makeFetchResponse(true, 200, makeReadableStream(["data: [DONE]\n\n"])),
+      ),
     );
 
     const messages: string[] = [];
@@ -313,9 +253,14 @@ describe("seedExperiments", () => {
     expect(messages).toEqual([]);
   });
 
-  it("handles multiple data lines in a single chunk", async () => {
+  it("handles multiple events concatenated in a single chunk", async () => {
     const chunks = [
-      'data: {"message": "one"}\ndata: {"message": "two"}\ndata: {"message": "three"}\n',
+      [
+        'event: seed_progress\ndata: {"type":"seed_progress","phase":"starting","message":"one"}\n\n',
+        'event: seed_progress\ndata: {"type":"seed_progress","phase":"starting","message":"two"}\n\n',
+        'event: seed_progress\ndata: {"type":"seed_progress","phase":"starting","message":"three"}\n\n',
+        "data: [DONE]\n\n",
+      ].join(""),
     ];
 
     vi.stubGlobal(
@@ -327,5 +272,19 @@ describe("seedExperiments", () => {
     await seedExperiments((msg) => messages.push(msg));
 
     expect(messages).toEqual(["one", "two", "three"]);
+  });
+
+  it("forwards site_id as a query parameter when provided", async () => {
+    const fetchSpy = vi.fn(async () =>
+      makeFetchResponse(true, 200, makeReadableStream(["data: [DONE]\n\n"])),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await seedExperiments(() => {}, "plasmodb");
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/experiments/seed?site_id=plasmodb",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

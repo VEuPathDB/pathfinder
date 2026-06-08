@@ -1,7 +1,8 @@
-import { test, expect } from "../fixtures/test";
+import { test, expect } from "../fixtures/a11y";
 import { clearAllGeneSets } from "../fixtures/api-client";
+import { MOCK_PLAN_PROMPT } from "../fixtures/mock-prompts";
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
+const BASE_URL = process.env["PLAYWRIGHT_BASE_URL"] ?? "http://localhost:3000";
 
 /**
  * Journey: Full Researcher Lifecycle — PlasmoDB (Complete Arc)
@@ -56,17 +57,17 @@ test.describe("Full Researcher Lifecycle", () => {
     await chatPage.expectIdle();
 
     // Chat round 3 — trigger planning artifact
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
-    // Apply strategy — real GenesByTaxon search stored
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
-    await graphPage.expectCompactView();
+    // Approve the presented plan so execution builds the strategy.
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
 
     // Verify strategy exists via API — use captured ID for isolation
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
-    const stratResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const stratResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(stratResp.ok()).toBeTruthy();
     const latestStrategy = await stratResp.json();
     expect(latestStrategy.steps.length).toBeGreaterThan(0);
@@ -209,7 +210,7 @@ test.describe("Full Researcher Lifecycle", () => {
     await expect(page.getByTestId("message-composer")).toBeVisible();
 
     // Verify conversations still exist in sidebar
-    await expect(sidebarPage.items.first()).toBeVisible({ timeout: 15_000 });
+    await sidebarPage.expectAtLeastOneConversation();
 
     // Send final message
     await chatPage.send("Summarize my findings from the resistance gene analysis");

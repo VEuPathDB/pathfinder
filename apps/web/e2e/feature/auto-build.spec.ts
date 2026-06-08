@@ -1,4 +1,9 @@
 import { test, expect } from "../fixtures/test";
+import {
+  MOCK_DELEGATION_DRAFT_PROMPT,
+  MOCK_DELEGATION_PROMPT,
+  MOCK_PLAN_PROMPT,
+} from "../fixtures/mock-prompts";
 
 /**
  * Auto-build E2E tests.
@@ -22,16 +27,16 @@ test.describe("Auto-Build Pipeline", () => {
     chatPage,
     apiClient,
   }) => {
-    // "create step" keyword -> MockEngine returns create_step(GenesByTaxon)
-    // -> do_function_call fires -> auto-build pushes to WDK -> wdkStrategyId set
-    await chatPage.send("create step");
+    await chatPage.send(MOCK_PLAN_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
     await chatPage.expectAssistantMessage(/\[mock\]/i);
     await chatPage.expectIdle();
 
     // API: Strategy has a real wdkStrategyId (auto-build ran against real WDK)
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
-    const resp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const resp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(resp.ok()).toBeTruthy();
     const strategy = await resp.json();
     expect(strategy.wdkStrategyId).toBeTruthy();
@@ -43,12 +48,14 @@ test.describe("Auto-Build Pipeline", () => {
     chatPage,
     apiClient,
   }) => {
-    await chatPage.send("create step");
+    await chatPage.send(MOCK_PLAN_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
     await chatPage.expectAssistantMessage(/\[mock\]/i);
     await chatPage.expectIdle();
 
     const strategyId = chatPage.lastStrategyId;
-    const resp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const resp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     const strategy = await resp.json();
 
     // Steps persisted with real WDK search names and parameters
@@ -66,7 +73,9 @@ test.describe("Auto-Build Pipeline", () => {
     chatPage,
     apiClient,
   }) => {
-    await chatPage.send("create step");
+    await chatPage.send(MOCK_PLAN_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
     await chatPage.expectAssistantMessage(/\[mock\]/i);
     await chatPage.expectIdle();
 
@@ -96,12 +105,14 @@ test.describe("Auto-Build Pipeline", () => {
     chatPage,
     apiClient,
   }) => {
-    await chatPage.send("create step");
+    await chatPage.send(MOCK_PLAN_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
     await chatPage.expectAssistantMessage(/\[mock\]/i);
     await chatPage.expectIdle();
 
     const strategyId = chatPage.lastStrategyId;
-    const stratResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const stratResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     const strategy = await stratResp.json();
 
     // The strategy should have a result count from WDK
@@ -122,12 +133,14 @@ test.describe("Auto-Build Pipeline", () => {
     chatPage,
     graphPage,
   }) => {
-    await chatPage.send("create step");
+    await chatPage.send(MOCK_PLAN_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
     await chatPage.expectIdle();
 
     // Graph must be visible with at least one step pill
-    await graphPage.expectCompactView();
-    const pillCount = await graphPage.stepPills.count();
+    await graphPage.expectRailPanel();
+    const pillCount = await graphPage.railStepRows.count();
     expect(pillCount).toBeGreaterThan(0);
   });
 });
@@ -144,16 +157,15 @@ test.describe("Delegation Auto-Build Pipeline", () => {
     chatPage,
     apiClient,
   }) => {
-    // "delegation" keyword -> MockEngine returns delegate_strategy_subtasks
-    // -> real delegation orchestrator -> sub-kanis with MockEngine -> create_step
-    // -> do_function_call -> auto-build -> real WDK strategy
-    await chatPage.send("delegation");
+    await chatPage.send(MOCK_DELEGATION_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
     await chatPage.expectAssistantMessage(/\[mock\]/i, { timeout: 60_000 });
     await chatPage.expectIdle();
 
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
-    const resp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const resp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     expect(resp.ok()).toBeTruthy();
     const strategy = await resp.json();
 
@@ -169,7 +181,9 @@ test.describe("Delegation Auto-Build Pipeline", () => {
     chatPage,
     apiClient,
   }) => {
-    await chatPage.send("delegation");
+    await chatPage.send(MOCK_DELEGATION_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
     await chatPage.expectAssistantMessage(/\[mock\]/i, { timeout: 60_000 });
     await chatPage.expectIdle();
 
@@ -186,10 +200,12 @@ test.describe("Delegation Auto-Build Pipeline", () => {
   });
 
   test("delegation graph appears during streaming", async ({ chatPage, graphPage }) => {
-    await chatPage.send("delegation");
-    // Graph should appear DURING streaming (before message_end)
-    await graphPage.expectCompactView();
-    const pillCount = await graphPage.stepPills.count();
+    await chatPage.send(MOCK_DELEGATION_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
+    // Graph should appear during execution streaming (before message_end).
+    await graphPage.expectRailPanel();
+    const pillCount = await graphPage.railStepRows.count();
     expect(pillCount).toBeGreaterThan(0);
   });
 });
@@ -206,16 +222,13 @@ test.describe("Planning Artifact Pipeline", () => {
     chatPage,
     apiClient,
   }) => {
-    // "artifact graph" -> MockEngine returns save_planning_artifact tool call
-    // -> real tool execution -> planningArtifact in tool result
-    // -> tool_result_to_events extracts it -> planning_artifact SSE event
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
     // Verify the planning artifact data via API
     const strategyId = chatPage.lastStrategyId;
     expect(strategyId).toBeTruthy();
-    const resp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const resp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     // Strategy should exist (plan is populated when the user clicks Apply,
     // not when the artifact is first emitted via tool call).
     expect(resp.ok()).toBeTruthy();
@@ -224,20 +237,18 @@ test.describe("Planning Artifact Pipeline", () => {
   test("artifact graph apply creates real WDK strategy", async ({
     chatPage,
     graphPage,
-    page,
     apiClient,
   }) => {
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
-    // Click "Apply to Strategy" — this creates steps from the plan
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
-    await graphPage.expectCompactView();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
     await chatPage.expectIdle();
 
     // After apply, strategy should have steps with real search names
     const strategyId = chatPage.lastStrategyId;
-    const resp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const resp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     const strategy = await resp.json();
     expect(strategy.steps.length).toBeGreaterThan(0);
     expect(strategy.steps[0].searchName).toBe("GenesByTaxon");
@@ -261,7 +272,7 @@ test.describe("Mock Engine Response Correctness", () => {
     // no tool calls, no strategy updates, no graph changes.
     // (We verify no graph appears by checking the assistant message content
     // rather than DB state, since DB state can leak from prior serial suites.)
-    const text = await chatPage.assistantMessages.last().textContent();
+    const text = await chatPage.lastAssistantMessageText();
     expect(text).toContain("[mock]");
     expect(text).toContain("hello world");
   });
@@ -269,8 +280,7 @@ test.describe("Mock Engine Response Correctness", () => {
   test("delegation draft produces planning artifact not delegation", async ({
     chatPage,
   }) => {
-    // "delegation draft" should trigger save_planning_artifact, not delegation
-    await chatPage.send("delegation draft");
+    await chatPage.send(MOCK_DELEGATION_DRAFT_PROMPT);
     await chatPage.expectPlanningArtifact();
     await chatPage.expectIdle();
   });
@@ -289,19 +299,24 @@ test.describe("Mock Engine Response Correctness", () => {
     chatPage,
     page,
   }) => {
-    // "create step" triggers a real tool call that produces
-    // tool_call_start and tool_call_end SSE events
-    await chatPage.send("create step");
+    await chatPage.send(MOCK_PLAN_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
     await chatPage.expectIdle();
 
-    // The thinking panel should show the tool call
-    const thinkingButton = page.getByText("Thought").first();
-    if (await thinkingButton.isVisible().catch(() => false)) {
-      await thinkingButton.click();
-      // Tool call name should appear in thinking details
-      await expect(page.getByText(/create_step/i).first()).toBeVisible({
-        timeout: 5_000,
-      });
+    // The thinking panel may or may not render in mock mode; the mock plan
+    // flow produces at most one finished reasoning block. If a single one
+    // exists, expand it and verify a tool call name appears.
+    const thinkingTrigger = page
+      .getByTestId("reasoning-trigger")
+      .filter({ hasText: /Thought/ });
+    const triggerCount = await thinkingTrigger.count();
+    if (triggerCount === 1) {
+      await thinkingTrigger.click();
+      const toolCallText = page.getByText(
+        /create_leaf_step|create_plan|get_search_overview/i,
+      );
+      await expect(toolCallText).not.toHaveCount(0, { timeout: 5_000 });
     }
   });
 });
@@ -319,14 +334,16 @@ test.describe("Auto-Build Persistence", () => {
     page,
     apiClient,
   }) => {
-    await chatPage.send("create step");
+    await chatPage.send(MOCK_PLAN_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
     await chatPage.expectAssistantMessage(/\[mock\]/i);
     await chatPage.expectIdle();
 
     const strategyId = chatPage.lastStrategyId;
 
     // Verify strategy has real WDK data BEFORE reload.
-    const preResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const preResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     const preBuild = await preResp.json();
     expect(preBuild.wdkStrategyId).toBeTruthy();
     expect(preBuild.steps.length).toBeGreaterThan(0);
@@ -340,7 +357,7 @@ test.describe("Auto-Build Persistence", () => {
     });
 
     // API: wdkStrategyId and steps unchanged after reload.
-    const postResp = await apiClient.get(`/api/v1/strategies/${strategyId}`);
+    const postResp = await apiClient.get(`/api/v1/conversations/${strategyId}`);
     const postBuild = await postResp.json();
     expect(postBuild.wdkStrategyId).toBe(wdkId);
     expect(postBuild.steps.length).toBe(stepCount);
@@ -352,7 +369,9 @@ test.describe("Auto-Build Persistence", () => {
     page,
     apiClient,
   }) => {
-    await chatPage.send("create step");
+    await chatPage.send(MOCK_PLAN_PROMPT);
+    await chatPage.expectPlanningArtifact();
+    await chatPage.approvePlan();
     await chatPage.expectIdle();
 
     // Check gene set exists before reload

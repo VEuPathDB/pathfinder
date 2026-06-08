@@ -6,13 +6,23 @@ export class ChatPage {
   readonly sendButton: Locator;
   readonly stopButton: Locator;
   readonly newChatButton: Locator;
+  readonly refreshConversationsButton: Locator;
+  readonly planArtifact: Locator;
+  readonly decisionPresented: Locator;
+  readonly approvePlanButton: Locator;
+  readonly denyPlanButton: Locator;
 
   constructor(private page: Page) {
     this.composer = page.getByTestId("message-composer");
     this.messageInput = page.getByTestId("message-input");
     this.sendButton = page.getByTestId("send-button");
     this.stopButton = page.getByTestId("stop-button");
-    this.newChatButton = page.getByRole("button", { name: "New Chat" });
+    this.newChatButton = page.getByRole("button", { name: "New chat" });
+    this.refreshConversationsButton = page.getByTestId("conversations-refresh-button");
+    this.planArtifact = page.getByTestId("data-plan-artifact");
+    this.decisionPresented = page.getByTestId("data-decision-presented");
+    this.approvePlanButton = page.getByTestId("plan-approve");
+    this.denyPlanButton = page.getByTestId("plan-deny");
   }
 
   async goto() {
@@ -24,67 +34,111 @@ export class ChatPage {
   lastStrategyId: string | null = null;
 
   /** Start a fresh conversation so the test is isolated from prior state. */
-  async newChat() {
-    // Wait for the POST that creates the new strategy to complete.
-    // Set up the response listener BEFORE clicking (per Playwright docs).
-    const strategyCreated = this.page.waitForResponse(
-      (resp) =>
-        resp.url().includes("/strategies/open") &&
-        resp.request().method() === "POST" &&
-        resp.ok(),
+  async newChat(siteId: string = "veupathdb") {
+    const baseUrl = new URL(this.page.url()).origin;
+    const selectedSite = siteId;
+
+    const strategyCreated = await this.page.context().request.post(
+      `${baseUrl}/api/v1/conversations/open`,
+      {
+        data: { siteId: selectedSite },
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+      },
     );
-    await this.newChatButton.click();
-    const resp = await strategyCreated;
-    // Capture the strategy ID from the response for test isolation.
-    try {
-      const body = await resp.json();
-      this.lastStrategyId = body?.strategyId ?? body?.id ?? null;
-    } catch {
-      this.lastStrategyId = null;
+
+    if (!strategyCreated.ok()) {
+      const failureBody = await strategyCreated.text().catch(() => "");
+      throw new Error(
+        `openStrategy failed: ${strategyCreated.status()} ${failureBody}`.trim(),
+      );
     }
-    // Now the new conversation exists — wait for the UI to settle.
-    await expect(this.sendButton).toBeVisible({ timeout: 10_000 });
+
+    const body = (await strategyCreated.json()) as {
+      conversationId?: string;
+      strategyId?: string;
+      id?: string;
+    };
+    const strategyId =
+      body.conversationId ?? body.strategyId ?? body.id ?? null;
+    if (strategyId == null || strategyId === "") {
+      throw new Error("openStrategy returned no conversationId");
+    }
+    this.lastStrategyId = strategyId;
+
+    await this.refreshConversationsButton.click();
+    const conversationItem = this.page.locator(
+      `[data-conversation-id="${strategyId}"]`,
+    ).first();
+    await expect(conversationItem).toBeVisible({ timeout: 10_000 });
+    await conversationItem.click();
+
+    await expect(this.composer).toBeVisible({ timeout: 10_000 });
+    await expect(this.userMessages).toHaveCount(0, { timeout: 10_000 });
     await expect(this.assistantMessages).toHaveCount(0, { timeout: 10_000 });
   }
 
   async send(message: string) {
-    // Retry fill if a background re-render (e.g. conversation fetch completing)
-    // remounts the textarea and clears the text before we can click send.
     await expect(async () => {
       await this.messageInput.fill(message);
       await expect(this.sendButton).toBeEnabled();
-    }).toPass({ timeout: 10_000 });
-    await this.sendButton.click();
+      await this.sendButton.click({ trial: false, timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
   }
 
   async stopStreaming() {
     await this.stopButton.click();
   }
 
-  /** Get all assistant message bubbles. */
-  get assistantMessages(): Locator {
-    return this.page.getByTestId("assistant-message");
+  async openPlanRail() {
+    const trigger = this.page
+      .locator('[aria-label="Right rail"]')
+      .getByRole("button", { name: /^(Open|Close) Plan$/ });
+    await expect(trigger).toBeVisible({ timeout: 30_000 });
+    if ((await trigger.getAttribute("aria-pressed")) !== "true") {
+      await trigger.click();
+      await expect(trigger).toHaveAttribute("aria-pressed", "true", { timeout: 5_000 });
+    }
   }
 
-  /** Get the nth assistant message (0-indexed). */
+  async approvePlan() {
+    await this.openPlanRail();
+    await expect(this.approvePlanButton).toBeVisible({ timeout: 60_000 });
+    await this.approvePlanButton.click();
+  }
+
+  async denyPlan() {
+    await this.openPlanRail();
+    await expect(this.denyPlanButton).toBeVisible({ timeout: 60_000 });
+    await this.denyPlanButton.click();
+  }
+
+  /** Last (most recent) plan artifact rendered inline in any assistant message. */
+  get lastPlanArtifact(): Locator {
+    return this.planArtifact.last();
+  }
+
+  get assistantMessages(): Locator {
+    return this.page.locator(".is-assistant");
+  }
+
   assistantMessage(index: number): Locator {
     return this.assistantMessages.nth(index);
   }
 
-  /** Get all user message bubbles. */
   get userMessages(): Locator {
-    return this.page.getByTestId("user-message");
+    return this.page.locator(".is-user");
   }
 
   // ── Assertions ──────────────────────────────────────────────────
 
-  async expectIdle() {
-    await expect(this.sendButton).toBeVisible({ timeout: 15_000 });
-    await expect(this.stopButton).not.toBeVisible();
+  async expectIdle(timeout = 60_000) {
+    await expect(this.sendButton).toBeVisible({ timeout });
+    await expect(this.messageInput).toBeEditable({ timeout });
   }
 
   async expectStreaming() {
-    await expect(this.stopButton).toBeVisible({ timeout: 10_000 });
+    // While streaming the Send button is disabled.
+    await expect(this.sendButton).toBeDisabled({ timeout: 10_000 });
   }
 
   /**
@@ -114,6 +168,14 @@ export class ChatPage {
     await expect(this.assistantMessages).toHaveCount(count);
   }
 
+  /** Text content of the most recently rendered assistant message. */
+  async lastAssistantMessageText(): Promise<string> {
+    return this.assistantMessages.evaluateAll((els) => {
+      const last = els[els.length - 1];
+      return last?.textContent ?? "";
+    });
+  }
+
   async expectDelegationDraft() {
     await expect(this.page.getByTestId("delegation-draft-details")).toBeVisible({
       timeout: 30_000,
@@ -121,20 +183,41 @@ export class ChatPage {
   }
 
   async expectPlanningArtifact() {
-    // Planning artifacts show "Apply to strategy" buttons.
-    await expect(
-      this.page.getByRole("button", { name: /apply to strategy/i }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(this.planArtifact.first()).toBeVisible({ timeout: 60_000 });
+    await this.openPlanRail();
+    await expect(this.approvePlanButton).toBeVisible({ timeout: 60_000 });
   }
 
+  /** Assert at least one user-blocking question (from a scoping AWAITING_USER outcome). */
+  async expectClarifyingQuestions(pattern: RegExp = /clarify|which|what evidence|how strict/i) {
+    await this.expectAssistantMessage(pattern, { timeout: 60_000 });
+  }
+
+  /** Assert the turn ended waiting on the user (composer idle, no streaming). */
+  async expectAwaitingUser() {
+    await this.expectIdle();
+  }
+
+  /** Assert a verification success digest is visible (typed by characteristic phrases). */
+  async expectVerificationSuccess(
+    pattern: RegExp = /verified end-to-end|verification passed|root size|candidate drug targets/i,
+  ) {
+    await this.expectAssistantMessage(pattern, { timeout: 90_000 });
+  }
+
+  /** Assert a verification failure digest is visible (any failed-leaf signal). */
+  async expectVerificationFeedback(
+    pattern: RegExp = /returned 0|root size is 0|too narrow|loosen/i,
+  ) {
+    await this.expectAssistantMessage(pattern, { timeout: 90_000 });
+  }
+
+
+  /** Compatibility alias for the rail-based step list (replaces compact view). */
   async expectCompactStrategyView() {
-    // Compact strategy view renders step pills inside a border-t container.
-    // Matches either real step names (e.g. "All ... genes") or mock labels.
-    await expect(
-      this.page
-        .locator("[data-testid='compact-strategy-view'], [data-testid='step-pill']")
-        .first(),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(this.page.getByTestId("compact-strategy-view")).toBeVisible({
+      timeout: 30_000,
+    });
   }
 
   async expectSendDisabled() {

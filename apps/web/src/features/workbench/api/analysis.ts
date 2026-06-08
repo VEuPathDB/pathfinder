@@ -1,77 +1,40 @@
-import type {
-  CrossValidationResult,
-  EnrichmentAnalysisType,
-  EnrichmentResult,
-} from "@pathfinder/shared";
+import type { EnrichmentAnalysisType } from "@pathfinder/shared";
+import { crossValidationResultResponseSchema } from "@pathfinder/shared/generated/zod/crossValidationResultResponseSchema";
+import { enrichmentCompareResultSchema } from "@pathfinder/shared/generated/zod/enrichmentCompareResultSchema";
+import { enrichmentResultResponseSchema } from "@pathfinder/shared/generated/zod/enrichmentResultResponseSchema";
+import { overlapResultSchema } from "@pathfinder/shared/generated/zod/overlapResultSchema";
+import type { CrossValidationResultResponse } from "@pathfinder/shared/generated/types/CrossValidationResultResponse";
+import type { EnrichmentCompareResult } from "@pathfinder/shared/generated/types/EnrichmentCompareResult";
+import type { EnrichmentResultResponse } from "@pathfinder/shared/generated/types/EnrichmentResultResponse";
+import type { OverlapResult } from "@pathfinder/shared/generated/types/OverlapResult";
+import { z } from "zod";
+
 import { requestJson } from "@/lib/api/http";
 
-// Re-export shared types and functions from lib/api so workbench consumers
-// that already import from this barrel continue to work.
-export type {
-  CustomEnrichmentResult,
-  ThresholdSweepPoint,
-  ThresholdSweepResult,
-  NumericSweepRequest,
-  CategoricalSweepRequest,
-  SweepRequest,
-  ThresholdSweepProgress,
-  ThresholdSweepCallbacks,
-} from "@/lib/api/analysis";
+const EnrichmentResultListSchema = z.array(enrichmentResultResponseSchema);
 
-export { runCustomEnrichment, streamThresholdSweep } from "@/lib/api/analysis";
+export type { OverlapResult, EnrichmentCompareResult };
 
 export async function runCrossValidation(
   experimentId: string,
   kFolds: number,
-): Promise<CrossValidationResult> {
-  return await requestJson(`/api/v1/experiments/${experimentId}/cross-validate`, {
-    method: "POST",
-    body: { kFolds },
-  });
+): Promise<CrossValidationResultResponse> {
+  return await requestJson(
+    crossValidationResultResponseSchema,
+    `/api/v1/experiments/${experimentId}/cross-validate`,
+    { method: "POST", body: { kFolds } },
+  );
 }
 
 export async function runEnrichment(
   experimentId: string,
   enrichmentTypes: EnrichmentAnalysisType[],
-): Promise<EnrichmentResult[]> {
-  return await requestJson(`/api/v1/experiments/${experimentId}/enrich`, {
-    method: "POST",
-    body: { enrichmentTypes },
-  });
-}
-
-export interface OverlapResult {
-  experimentIds: string[];
-  experimentLabels: Record<string, string>;
-  pairwise: {
-    experimentA: string;
-    experimentB: string;
-    labelA: string;
-    labelB: string;
-    sizeA: number;
-    sizeB: number;
-    intersection: number;
-    union: number;
-    jaccard: number;
-    sharedGenes: string[];
-    uniqueA: string[];
-    uniqueB: string[];
-  }[];
-  perExperiment: {
-    experimentId: string;
-    label: string;
-    totalGenes: number;
-    uniqueGenes: number;
-    sharedGenes: number;
-  }[];
-  universalGenes: string[];
-  totalUniqueGenes: number;
-  geneMembership: {
-    geneId: string;
-    foundIn: number;
-    totalExperiments: number;
-    experiments: string[];
-  }[];
+): Promise<EnrichmentResultResponse[]> {
+  return await requestJson(
+    EnrichmentResultListSchema,
+    `/api/v1/experiments/${experimentId}/enrich`,
+    { method: "POST", body: { enrichmentTypes } },
+  );
 }
 
 export async function computeOverlap(
@@ -79,37 +42,28 @@ export async function computeOverlap(
   opts?: { orthologAware?: boolean },
 ): Promise<OverlapResult> {
   const query: Record<string, string> = {};
-  if (opts?.orthologAware) query.orthologAware = "true";
-  return await requestJson<OverlapResult>("/api/v1/experiments/overlap", {
+  if (opts?.orthologAware === true) query["orthologAware"] = "true";
+  const hasQuery = Object.keys(query).length > 0;
+  return await requestJson(overlapResultSchema, "/api/v1/experiments/overlap", {
     method: "POST",
     body: { experimentIds },
-    query: Object.keys(query).length > 0 ? query : undefined,
+    ...(hasQuery ? { query } : {}),
   });
-}
-
-export interface EnrichmentCompareResult {
-  experimentIds: string[];
-  experimentLabels: Record<string, string>;
-  rows: {
-    termKey: string;
-    termName: string;
-    analysisType: string;
-    scores: Record<string, number | null>;
-    maxScore: number;
-    experimentCount: number;
-  }[];
-  totalTerms: number;
 }
 
 export async function compareEnrichment(
   experimentIds: string[],
   analysisType?: string,
 ): Promise<EnrichmentCompareResult> {
-  return await requestJson<EnrichmentCompareResult>(
+  return await requestJson(
+    enrichmentCompareResultSchema,
     "/api/v1/experiments/enrichment-compare",
     {
       method: "POST",
-      body: { experimentIds, ...(analysisType ? { analysisType } : {}) },
+      body: {
+        experimentIds,
+        ...(analysisType != null && analysisType !== "" ? { analysisType } : {}),
+      },
     },
   );
 }

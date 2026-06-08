@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type { EnrichmentTerm } from "@pathfinder/shared";
 import {
   BarChart,
@@ -34,11 +33,16 @@ interface DotChartDatum {
 // Custom bar shape (circle instead of rectangle)
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function DotShape(props: any) {
+function DotShape(props: {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  payload?: DotChartDatum;
+}) {
   const { x = 0, y = 0, width = 0, height = 0, payload } = props;
-  if (!payload) return null;
-  const d = payload as DotChartDatum;
+  if (payload == null) return null;
+  const d = payload;
 
   return (
     <circle
@@ -62,7 +66,7 @@ function DotPlotTooltip({
   active?: boolean;
   payload?: Array<{ payload: DotChartDatum }>;
 }) {
-  if (!active || !payload?.[0]) return null;
+  if (active !== true || payload?.[0] == null) return null;
   const d = payload[0].payload;
   return (
     <div className="rounded border border-border bg-card px-3 py-2 text-xs shadow-lg">
@@ -133,7 +137,7 @@ interface EnrichmentDotPlotProps {
 }
 
 export function EnrichmentDotPlot({ terms }: EnrichmentDotPlotProps) {
-  const { data, maxGeneCount } = useMemo(() => {
+  const { data, maxGeneCount } = (() => {
     const top = [...terms]
       .sort((a, b) => a.pValue - b.pValue)
       .slice(0, MAX_CHART_TERMS)
@@ -155,7 +159,7 @@ export function EnrichmentDotPlot({ terms }: EnrichmentDotPlotProps) {
       }),
       maxGeneCount: maxGC,
     };
-  }, [terms]);
+  })();
 
   const chartHeight = Math.max(data.length * 28 + 40, 140);
 

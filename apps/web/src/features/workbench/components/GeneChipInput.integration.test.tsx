@@ -18,13 +18,23 @@ const storeState: Record<string, unknown> = {
   geneSets: [] as GeneSet[],
 };
 
-vi.mock("../store", () => ({
+vi.mock("@/state/useWorkbenchStore", () => ({
   useWorkbenchStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector(storeState),
 }));
-vi.mock("../store/useWorkbenchStore", () => ({
-  useWorkbenchStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(storeState),
+
+vi.mock("@/state/useSessionStore", () => ({
+  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      selectedSite: "PlasmoDB",
+    }),
+}));
+
+vi.mock("@/lib/query/hooks/useGeneSetsQuery", () => ({
+  useGeneSetsQuery: () => ({
+    data: storeState["geneSets"] as GeneSet[],
+    isPending: false,
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -34,9 +44,12 @@ vi.mock("../store/useWorkbenchStore", () => ({
 const mockSearchGenes = vi.fn();
 const mockResolveGeneIds = vi.fn();
 
-vi.mock("@/lib/api/genes", () => ({
+vi.mock("@pathfinder/shared/generated/hooks/useSearchGenes", () => ({
   searchGenes: (...args: unknown[]) => mockSearchGenes(...args),
-  resolveGeneIds: (...args: unknown[]) => mockResolveGeneIds(...args),
+}));
+
+vi.mock("@pathfinder/shared/generated/hooks/useResolveGenes", () => ({
+  resolveGenes: (...args: unknown[]) => mockResolveGeneIds(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -69,7 +82,7 @@ function makeGeneSet(overrides: Partial<GeneSet> = {}): GeneSet {
 
 describe("GeneChipInput integration", () => {
   beforeEach(() => {
-    storeState.geneSets = [];
+    storeState["geneSets"] = [];
     mockSearchGenes.mockResolvedValue({ results: [], total: 0 });
     mockResolveGeneIds.mockResolvedValue({ resolved: [], unresolved: [] });
   });
@@ -121,7 +134,7 @@ describe("GeneChipInput integration", () => {
       />,
     );
 
-    // After debounce (500ms), resolveGeneIds fires and chip transitions to verified
+    // After debounce (500ms), resolveGenes fires and chip transitions to verified
     await waitFor(
       () => {
         const chip = screen.getByText("PF3D7_0100100").closest("[data-gene-chip]");
@@ -215,7 +228,7 @@ describe("GeneChipInput integration", () => {
   });
 
   it("GeneSetPicker adds genes from a gene set", () => {
-    storeState.geneSets = [makeGeneSet()];
+    storeState["geneSets"] = [makeGeneSet()];
 
     const onChange = vi.fn();
     render(

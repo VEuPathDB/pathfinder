@@ -1,6 +1,7 @@
 import { Loader2 } from "lucide-react";
 import { Modal } from "@/lib/components/Modal";
-import type { RecordAttribute, WdkRecord } from "@/lib/types/wdk";
+import type { RecordAttribute } from "@pathfinder/shared/generated/types/RecordAttribute";
+import type { ClassifiedRecord } from "@pathfinder/shared/generated/types/ClassifiedRecord";
 import type { DistributionEntry } from "./types";
 
 // --- Bar list ---
@@ -75,7 +76,7 @@ interface DrillDownModalProps {
   onClose: () => void;
   selectedAttr: string;
   attributes: RecordAttribute[];
-  records: WdkRecord[];
+  records: ClassifiedRecord[];
   loading: boolean;
 }
 
@@ -89,7 +90,7 @@ function DrillDownModal({
 }: DrillDownModalProps) {
   const displayName =
     attributes.find((a) => a.name === selectedAttr)?.displayName ?? selectedAttr;
-  const hasClassifications = records.some((r) => r._classification != null);
+  const hasClassifications = records.some((r) => r.classification != null);
 
   return (
     <Modal
@@ -136,13 +137,13 @@ function DrillDownModal({
                       <td className="px-3 py-1.5 font-mono">{rawId}</td>
                       <td
                         className="max-w-xs truncate px-3 py-1.5"
-                        title={rec.attributes.gene_product ?? ""}
+                        title={String(rec.attributes["gene_product"] ?? "")}
                       >
-                        {rec.attributes.gene_product ?? "\u2014"}
+                        {String(rec.attributes["gene_product"] ?? "\u2014")}
                       </td>
                       {hasClassifications && (
                         <td className="px-3 py-1.5">
-                          {rec._classification ?? "\u2014"}
+                          {rec.classification ?? "\u2014"}
                         </td>
                       )}
                     </tr>
@@ -171,7 +172,7 @@ interface DistributionChartProps {
   selectedAttr: string;
   attributes: RecordAttribute[];
   modalValue: string | null;
-  modalRecords: WdkRecord[];
+  modalRecords: ClassifiedRecord[];
   loadingModal: boolean;
   onBarClick: (value: string) => void;
   onCloseModal: () => void;

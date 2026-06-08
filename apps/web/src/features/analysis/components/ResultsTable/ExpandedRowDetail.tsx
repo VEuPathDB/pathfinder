@@ -1,10 +1,10 @@
 import { Loader2, X } from "lucide-react";
-import type { RecordDetail } from "@/lib/types/wdk";
+import type { RecordDetailResponse } from "@pathfinder/shared/generated/types/RecordDetailResponse";
 import { AttributeValueRich } from "./ResultsTableColumns";
 
-export interface ExpandedRowDetailProps {
+interface ExpandedRowDetailProps {
   pk: string;
-  detail: RecordDetail | null;
+  detail: RecordDetailResponse | null;
   error: string | null;
   loading: boolean;
   onClose: () => void;
@@ -43,9 +43,9 @@ export function ExpandedRowDetail({
       {loading ? (
         <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading details…
+          Loading details...
         </div>
-      ) : error ? (
+      ) : error != null ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3">
           <p className="text-sm text-destructive">{error}</p>
         </div>

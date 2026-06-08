@@ -1,5 +1,7 @@
 import type { z } from "zod";
 
+import { getConfiguredServerApiBaseUrl } from "@/lib/config/apiBase";
+
 export class SchemaValidationError extends Error {
   url: string;
   issues: unknown[];
@@ -49,14 +51,10 @@ function getApiBaseUrl(): string {
     return window.location.origin;
   }
   // Server-side (SSR / route handlers): reach the API directly.
-  const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  return base.replace(/\/+$/, "");
+  return getConfiguredServerApiBaseUrl();
 }
 
-export function buildUrl(
-  path: string,
-  query?: Record<string, string | number | boolean | null | undefined>,
-): string {
+export function buildUrl(path: string, query?: Record<string, unknown>): string {
   const base = getApiBaseUrl();
   const url =
     path.startsWith("http://") || path.startsWith("https://")
@@ -77,15 +75,18 @@ export function getAuthHeaders(opts?: {
   extra?: Record<string, string>;
 }): Record<string, string> {
   return {
-    ...(opts?.accept ? { Accept: opts.accept } : {}),
-    ...(opts?.contentType ? { "Content-Type": opts.contentType } : {}),
+    "X-Requested-With": "XMLHttpRequest",
+    ...(opts?.accept != null && opts.accept !== "" ? { Accept: opts.accept } : {}),
+    ...(opts?.contentType != null && opts.contentType !== ""
+      ? { "Content-Type": opts.contentType }
+      : {}),
     ...(opts?.extra ?? {}),
   };
 }
 
-async function parseResponseBody(resp: Response): Promise<unknown> {
-  const contentType = resp.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
+export async function parseResponseBody(resp: Response): Promise<unknown> {
+  const contentType = resp.headers.get("content-type") ?? "";
+  if (contentType.includes("json")) {
     try {
       return await resp.json();
     } catch {
@@ -99,56 +100,60 @@ async function parseResponseBody(resp: Response): Promise<unknown> {
   }
 }
 
-export async function requestJson<T>(
-  path: string,
-  args?: {
-    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-    query?: Record<string, string | number | boolean | null | undefined>;
-    body?: unknown;
-    headers?: Record<string, string>;
-    signal?: AbortSignal;
-  },
-): Promise<T> {
+type RequestArgs = {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  query?: Record<string, string | number | boolean | null | undefined>;
+  body?: unknown;
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+};
+
+export function extractErrorMessage(data: unknown): string | null {
+  if (typeof data !== "object" || data === null || !("detail" in data)) return null;
+  const detail = (data as { detail: unknown }).detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((e: unknown) =>
+        typeof e === "object" && e != null && "msg" in e
+          ? String((e as { msg: unknown }).msg)
+          : String(e),
+      )
+      .join("; ");
+  }
+  return String(detail);
+}
+
+async function fetchJsonRaw(path: string, args?: RequestArgs): Promise<unknown> {
   const method = args?.method ?? "GET";
   const url = buildUrl(path, args?.query);
 
-  const hasBody = args && "body" in args && args.body !== undefined;
+  const hasBody = args != null && "body" in args && args.body !== undefined;
   const headers: Record<string, string> = {
     ...getAuthHeaders({
       accept: "application/json",
-      contentType: hasBody ? "application/json" : undefined,
+      ...(hasBody ? { contentType: "application/json" } : {}),
     }),
     ...(args?.headers ?? {}),
   };
 
-  const resp = await fetch(url, {
+  const fetchOpts: RequestInit = {
     method,
     headers,
-    body: hasBody ? JSON.stringify(args?.body ?? null) : undefined,
-    signal: args?.signal,
-    // Cookie auth is the public API contract; include it for browser + SSR.
     credentials: "include",
-  });
+  };
+  if (hasBody) {
+    const body = args.body;
+    fetchOpts.body = JSON.stringify(body ?? null);
+  }
+  if (args?.signal != null) fetchOpts.signal = args.signal;
+  const resp = await fetch(url, fetchOpts);
 
   const data = await parseResponseBody(resp);
 
   if (!resp.ok) {
-    let msg = `HTTP ${resp.status} ${resp.statusText}`;
-    if (typeof data === "object" && data !== null && "detail" in data) {
-      const detail = (data as { detail: unknown }).detail;
-      if (typeof detail === "string") {
-        msg = detail;
-      } else if (Array.isArray(detail)) {
-        // FastAPI validation errors: [{loc, msg, type}, ...]
-        msg = detail
-          .map((e) =>
-            typeof e === "object" && e && "msg" in e ? String(e.msg) : String(e),
-          )
-          .join("; ");
-      } else {
-        msg = String(detail);
-      }
-    }
+    const msg =
+      extractErrorMessage(data) ?? `HTTP ${resp.status} ${resp.statusText}`;
     throw new APIError(msg, {
       status: resp.status,
       statusText: resp.statusText,
@@ -157,41 +162,83 @@ export async function requestJson<T>(
     });
   }
 
-  return data as T;
+  return data;
 }
 
 /**
- * Like `requestJson`, but validates the response against a Zod schema.
+ * Fetch JSON from the API and validate the response against a Zod schema.
  *
- * Usage:
- *   const strategy = await requestJsonValidated(StrategySchema, `/api/v1/strategies/${id}`);
- *
- * On validation failure a `SchemaValidationError` is thrown with the Zod issues
- * attached.  In development mode the issues are also logged to console.warn so
- * you notice contract drift without crashing the UI during early adoption.
+ * Every JSON API call goes through this function — there is no unvalidated
+ * path. On validation failure a `SchemaValidationError` is thrown.
  */
-export async function requestJsonValidated<T>(
+export async function requestJson<T>(
   schema: z.ZodType<T>,
   path: string,
-  args?: {
-    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-    query?: Record<string, string | number | boolean | null | undefined>;
-    body?: unknown;
-    headers?: Record<string, string>;
-    signal?: AbortSignal;
-  },
+  args?: RequestArgs,
 ): Promise<T> {
-  const raw = await requestJson<unknown>(path, args);
+  const raw = await fetchJsonRaw(path, args);
   const result = schema.safeParse(raw);
   if (!result.success) {
     const url = buildUrl(path, args?.query);
     const issues = result.error.issues;
     if (process.env.NODE_ENV === "development") {
-      console.warn(`[SchemaValidation] ${path} response failed validation:`, issues);
+      console.error(`[SchemaValidation] ${path} failed:`, issues, "raw:", raw);
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem("__schema_errors");
+          const log = JSON.parse(stored ?? "[]") as unknown[];
+          log.push({ path, issues, raw, ts: Date.now() });
+          localStorage.setItem("__schema_errors", JSON.stringify(log.slice(-10)));
+        } catch {
+          // ignore
+        }
+      }
     }
     throw new SchemaValidationError(url, issues);
   }
   return result.data;
+}
+
+/**
+ * Fire-and-forget API call for DELETE / void endpoints.
+ *
+ * Throws `APIError` on non-2xx responses but does not parse or validate
+ * the response body.
+ */
+export async function requestVoid(path: string, args?: RequestArgs): Promise<void> {
+  const method = args?.method ?? "GET";
+  const url = buildUrl(path, args?.query);
+
+  const hasBody = args != null && "body" in args && args.body !== undefined;
+  const headers: Record<string, string> = {
+    ...getAuthHeaders({
+      accept: "application/json",
+      ...(hasBody ? { contentType: "application/json" } : {}),
+    }),
+    ...(args?.headers ?? {}),
+  };
+
+  const fetchOpts: RequestInit = {
+    method,
+    headers,
+    credentials: "include",
+  };
+  if (hasBody) fetchOpts.body = JSON.stringify(args.body ?? null);
+  if (args?.signal != null) fetchOpts.signal = args.signal;
+
+  const resp = await fetch(url, fetchOpts);
+
+  if (!resp.ok) {
+    const data = await parseResponseBody(resp);
+    const msg =
+      extractErrorMessage(data) ?? `HTTP ${resp.status} ${resp.statusText}`;
+    throw new APIError(msg, {
+      status: resp.status,
+      statusText: resp.statusText,
+      url,
+      data,
+    });
+  }
 }
 
 /**
@@ -210,18 +257,16 @@ export async function requestBlob(
   const method = args?.method ?? "GET";
   const url = buildUrl(path, args?.query);
 
-  const hasBody = args && "body" in args && args.body !== undefined;
+  const hasBody = args != null && "body" in args && args.body !== undefined;
   const headers: Record<string, string> = {
-    ...getAuthHeaders({
-      contentType: hasBody ? "application/json" : undefined,
-    }),
+    ...getAuthHeaders(hasBody ? { contentType: "application/json" } : {}),
     ...(args?.headers ?? {}),
   };
 
   const resp = await fetch(url, {
     method,
     headers,
-    body: hasBody ? JSON.stringify(args?.body ?? null) : undefined,
+    ...(hasBody ? { body: JSON.stringify(args.body ?? null) } : {}),
     credentials: "include",
   });
 

@@ -136,7 +136,7 @@ src/
 
 **Feature isolation:** Each feature (`chat`, `strategy`, `analysis`, `workbench`, `sidebar`, `sites`, `settings`) is self-contained with its own components, hooks, services, and utilities. Cross-feature imports go through `lib/` or `state/`. Feature-specific stores (workbench) live inside their feature directory.
 
-**Real API + mock LLM for E2E:** Playwright tests call live VEuPathDB APIs for gene searches, enrichment, catalog browsing. Only the LLM chat call is mocked (via `PATHFINDER_CHAT_PROVIDER=mock`). This catches real integration bugs that unit tests with mocked APIs would miss. Worker isolation uses `/dev/login?user_id=worker-{N}` so parallel workers don't interfere.
+**Real API + test-only mock LLM for E2E:** Playwright tests call live VEuPathDB APIs for gene searches, enrichment, catalog browsing. Only the LLM chat call is mocked, and only through the dedicated test profile (`PATHFINDER_CHAT_PROVIDER=mock`). This catches real integration bugs that unit tests with mocked APIs would miss. Worker isolation uses `/dev/login?user_id=worker-{N}` so parallel workers don't interfere.
 
 **SSE over WebSocket:** Chat streaming uses Server-Sent Events (unidirectional server→client) rather than WebSockets. Messages are sent via POST; responses stream via SSE. This is simpler (HTTP/1.1 compatible, no upgrade handshake) and matches the request→stream response pattern. Next.js has compression disabled (`compress: false`) to ensure SSE events flush immediately.
 
@@ -148,12 +148,13 @@ The web app uses Next rewrites to proxy to the backend (see `next.config.js`), s
 
 Required env:
 
-- `NEXT_PUBLIC_API_URL` (see `.env.example`)
+- `NEXT_PUBLIC_API_URL` (required; see `.env.example` or `.env.dev.example`)
 
 ### Run locally
 
 ```bash
 cd apps/web
+cp .env.dev.example .env
 yarn install
 yarn dev
 ```
@@ -183,4 +184,14 @@ PathFinder uses a 3-tier Playwright E2E test architecture:
 
 **Page Objects** (`e2e/pages/`) encapsulate selectors and interactions. **Fixtures** handle auth, API setup, and test data seeding.
 
-All tests use real VEuPathDB APIs. Only the LLM is mocked via `PATHFINDER_CHAT_PROVIDER=mock`.
+All tests use real VEuPathDB APIs. Only the LLM is mocked via the dedicated test profile.
+
+Start the local E2E stack with the dedicated test profile:
+
+```bash
+docker compose --env-file .env.test \
+  -f ../../docker-compose.yml \
+  -f ../../docker-compose.dev.yml \
+  -f ../../docker-compose.e2e.yml \
+  up -d --build api web
+```

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { z } from "zod";
 
-import { APIError, buildUrl, getAuthHeaders, requestJson } from "./http";
+import { MISSING_API_URL_MESSAGE } from "@/lib/config/apiBase";
+
+import { APIError, buildUrl, getAuthHeaders, requestJson, requestVoid } from "./http";
 
 function makeHeaders(init: Record<string, string>) {
   const normalized = new Map<string, string>();
@@ -48,7 +51,7 @@ describe("lib/api/http", () => {
   });
 
   it("buildUrl uses NEXT_PUBLIC_API_URL and encodes query params", () => {
-    process.env.NEXT_PUBLIC_API_URL = "http://localhost:8000///";
+    process.env["NEXT_PUBLIC_API_URL"] = "http://localhost:8000///";
     const url = buildUrl("/api/v1/sites", {
       siteId: "plasmodb",
       recordType: "gene",
@@ -62,21 +65,26 @@ describe("lib/api/http", () => {
     );
   });
 
+  it("buildUrl throws when NEXT_PUBLIC_API_URL is missing on the server", () => {
+    delete process.env["NEXT_PUBLIC_API_URL"];
+    expect(() => buildUrl("/api/v1/sites")).toThrow(MISSING_API_URL_MESSAGE);
+  });
+
   it("getAuthHeaders includes optional accept/content-type", () => {
     const headers = getAuthHeaders({
       accept: "application/json",
       contentType: "application/json",
       extra: { "x-test": "1" },
     });
-    expect(headers.Accept).toBe("application/json");
+    expect(headers["Accept"]).toBe("application/json");
     expect(headers["Content-Type"]).toBe("application/json");
     expect(headers["x-test"]).toBe("1");
     // Auth is handled via httpOnly cookies — no Authorization header
-    expect(headers.Authorization).toBeUndefined();
+    expect(headers["Authorization"]).toBeUndefined();
   });
 
-  it("requestJson returns parsed JSON on success", async () => {
-    process.env.NEXT_PUBLIC_API_URL = "http://localhost:8000";
+  it("requestJson validates response against schema", async () => {
+    process.env["NEXT_PUBLIC_API_URL"] = "http://localhost:8000";
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -90,12 +98,34 @@ describe("lib/api/http", () => {
       ),
     );
 
-    const data = await requestJson<{ hello: string }>("/api/v1/health");
+    const schema = z.object({ hello: z.string() });
+    const data = await requestJson(schema, "/api/v1/health");
     expect(data).toEqual({ hello: "world" });
   });
 
+  it("requestJson throws SchemaValidationError on invalid response", async () => {
+    process.env["NEXT_PUBLIC_API_URL"] = "http://localhost:8000";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        makeResponse({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { "content-type": "application/json" },
+          json: { hello: 42 },
+        }),
+      ),
+    );
+
+    const schema = z.object({ hello: z.string() });
+    await expect(requestJson(schema, "/api/v1/health")).rejects.toThrow(
+      "validation failed",
+    );
+  });
+
   it("requestJson throws APIError with server 'detail' message", async () => {
-    process.env.NEXT_PUBLIC_API_URL = "http://localhost:8000";
+    process.env["NEXT_PUBLIC_API_URL"] = "http://localhost:8000";
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -109,7 +139,7 @@ describe("lib/api/http", () => {
       ),
     );
 
-    await expect(requestJson("/api/v1/private")).rejects.toMatchObject({
+    await expect(requestJson(z.unknown(), "/api/v1/private")).rejects.toMatchObject({
       name: "APIError",
       message: "No auth",
       status: 401,
@@ -117,7 +147,7 @@ describe("lib/api/http", () => {
   });
 
   it("requestJson throws APIError with generic message when no JSON detail", async () => {
-    process.env.NEXT_PUBLIC_API_URL = "http://localhost:8000";
+    process.env["NEXT_PUBLIC_API_URL"] = "http://localhost:8000";
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -132,7 +162,7 @@ describe("lib/api/http", () => {
     );
 
     try {
-      await requestJson("/api/v1/broken");
+      await requestJson(z.unknown(), "/api/v1/broken");
       expect.unreachable();
     } catch (e) {
       expect(e).toBeInstanceOf(APIError);
@@ -140,5 +170,41 @@ describe("lib/api/http", () => {
       expect((e as APIError).status).toBe(500);
       expect((e as APIError).url).toContain("/api/v1/broken");
     }
+  });
+
+  it("requestVoid resolves on success", async () => {
+    process.env["NEXT_PUBLIC_API_URL"] = "http://localhost:8000";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        makeResponse({ ok: true, status: 204, statusText: "No Content", headers: {} }),
+      ),
+    );
+    await expect(
+      requestVoid("/api/v1/thing", { method: "DELETE" }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("requestVoid throws APIError on failure", async () => {
+    process.env["NEXT_PUBLIC_API_URL"] = "http://localhost:8000";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        makeResponse({
+          ok: false,
+          status: 404,
+          statusText: "Not Found",
+          headers: { "content-type": "application/json" },
+          json: { detail: "Not found" },
+        }),
+      ),
+    );
+    await expect(
+      requestVoid("/api/v1/missing", { method: "DELETE" }),
+    ).rejects.toMatchObject({
+      name: "APIError",
+      message: "Not found",
+      status: 404,
+    });
   });
 });

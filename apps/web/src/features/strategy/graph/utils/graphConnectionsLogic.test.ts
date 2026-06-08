@@ -1,9 +1,8 @@
 import { describe, expect, test } from "vitest";
-import type { Connection, Edge } from "reactflow";
+import type { Connection } from "@xyflow/react";
 import type { Step } from "@pathfinder/shared";
 import {
   buildGraphIndices,
-  edgeToInputPatch,
   getConnectionEffect,
   inferCombineRecordTypeOrMismatch,
   isUpstream,
@@ -21,8 +20,8 @@ function step(partial: Partial<Step> & { id: string }): Step {
     searchName: partial.searchName,
     primaryInputStepId: partial.primaryInputStepId,
     secondaryInputStepId: partial.secondaryInputStepId,
-    resultCount: partial.resultCount,
-    validationError: partial.validationError,
+    estimatedSize: partial.estimatedSize,
+    validation: partial.validation,
     wdkStepId: partial.wdkStepId,
     colocationParams: partial.colocationParams,
   } as Step;
@@ -80,7 +79,7 @@ describe("graphConnectionsLogic", () => {
     const steps = [
       step({ id: "root" }),
       // Target must already be a transform/combine node to accept a primary input.
-      step({ id: "t", kind: "transform", primaryInputStepId: undefined }),
+      step({ id: "t", kind: "transform", primaryInputStepId: null }),
     ];
     const idx = buildGraphIndices(steps);
     const conn = { source: "root", target: "t", targetHandle: "left" } as Connection;
@@ -141,31 +140,6 @@ describe("graphConnectionsLogic", () => {
       sourceId: "r1",
       targetId: "r2",
     });
-  });
-
-  test("edgeToInputPatch detaches primary/secondary by handle or id suffix", () => {
-    expect(edgeToInputPatch({ targetHandle: "left" } as Edge)).toEqual({
-      primaryInputStepId: undefined,
-    });
-    expect(edgeToInputPatch({ targetHandle: "left-secondary" } as Edge)).toEqual({
-      secondaryInputStepId: undefined,
-      operator: undefined,
-      colocationParams: undefined,
-    });
-    expect(edgeToInputPatch({ id: "a-b-primary" } as Edge)).toEqual({
-      primaryInputStepId: undefined,
-    });
-    expect(edgeToInputPatch({ id: "a-b-secondary" } as Edge)).toEqual({
-      secondaryInputStepId: undefined,
-    });
-    expect(edgeToInputPatch({ id: "weird" } as Edge)).toBeNull();
-  });
-
-  test("edgeToInputPatch clears operator and colocationParams when secondary edge removed", () => {
-    const patch = edgeToInputPatch({ targetHandle: "left-secondary" } as Edge);
-    expect(patch).toHaveProperty("operator", undefined);
-    expect(patch).toHaveProperty("colocationParams", undefined);
-    expect(patch).toHaveProperty("secondaryInputStepId", undefined);
   });
 
   test("inferCombineRecordTypeOrMismatch detects real mismatch and infers recordType", () => {

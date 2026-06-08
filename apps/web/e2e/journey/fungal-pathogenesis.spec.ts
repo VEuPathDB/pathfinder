@@ -1,4 +1,5 @@
-import { test, expect } from "../fixtures/test";
+import { test, expect } from "../fixtures/a11y";
+import { MOCK_PLAN_PROMPT } from "../fixtures/mock-prompts";
 
 /**
  * Journey: Fungal Pathogenesis — FungiDB
@@ -22,7 +23,9 @@ test.describe("Fungal Pathogenesis Journey", () => {
     workbenchSidebarPage,
     workbenchMainPage,
   }) => {
-    const fungiGenes = seedData.siteData.fungidb.geneIds;
+    const fungiSiteData = seedData.siteData["fungidb"];
+    if (fungiSiteData === undefined) throw new Error("fungidb seed data missing");
+    const fungiGenes = fungiSiteData.geneIds;
     const fullCount = fungiGenes.length;
 
     // ── Setup: Clean stale gene sets for FungiDB ─────────────────
@@ -63,15 +66,15 @@ test.describe("Fungal Pathogenesis Journey", () => {
 
     // ── Phase 2: Strategy Creation ───────────────────────────────
 
-    await chatPage.send("artifact graph");
+    await chatPage.send(MOCK_PLAN_PROMPT);
     await chatPage.expectPlanningArtifact();
 
-    await page.getByRole("button", { name: /apply to strategy/i }).click();
-    await graphPage.expectCompactView();
+    await chatPage.approvePlan();
+    await graphPage.expectRailPanel();
     await chatPage.expectIdle();
 
     // Verify strategy persisted
-    const strategiesResp = await apiClient.get("/api/v1/strategies");
+    const strategiesResp = await apiClient.get("/api/v1/conversations");
     expect(strategiesResp.ok()).toBeTruthy();
 
     // ── Phase 3: Workbench — Gene Sets ───────────────────────────

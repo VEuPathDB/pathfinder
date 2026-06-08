@@ -4,22 +4,30 @@
 # and maps the DB to port 5433 to avoid conflicts with local PostgreSQL.
 #
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
+#   docker compose --env-file .env.test \
+#     -f docker-compose.yml \
+#     -f docker-compose.dev.yml \
+#     -f docker-compose.e2e.yml \
+#     up -d --build api web
 #   cd apps/web && yarn test:e2e
 
 services:
   api:
     environment:
+      API_ENV: test
       PATHFINDER_CHAT_PROVIDER: mock
-      RAG_ENABLED: "false"
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/pathfinder
-      REDIS_URL: redis://redis:6379/1
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health/ready || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 10s
+
+  worker:
+    environment:
+      API_ENV: test
+      PATHFINDER_CHAT_PROVIDER: mock
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/pathfinder
 
   db:
     ports:

@@ -1,3 +1,11 @@
+# Test credentials
+.env.test
+
+# Mutation-testing scratch
+.stryker-tmp/
+mutants/
+.mutmut-cache/
+
 # Dependencies
 node_modules/
 .yarn/*
@@ -16,7 +24,6 @@ downloads/
 eggs/
 .eggs/
 lib64/
-parts/
 sdist/
 var/
 wheels/
@@ -33,8 +40,13 @@ env/
 # IDE
 .idea/
 .vscode/
+.codex/
 .cursor/
 .claude/
+.superpowers/
+.hypothesis/
+docs/superpowers/
+CLAUDE.md
 *.swp
 *.swo
 *~
@@ -42,6 +54,7 @@ env/
 
 # Environment
 .env
+.env.dev
 .env.local
 .env.*.local
 ollama_models.yaml
@@ -53,6 +66,12 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# SonarQube / SonarScanner
+.scannerwork/
+.sonarqube/
+.sonar/
+sonar-report.json
 
 # Playwright
 apps/web/playwright-report/
@@ -94,6 +113,11 @@ quadlets/*.d/
 # Generated
 packages/shared-ts/dist/
 packages/shared-py/dist/
+
+# Runtime cache (persisted via volume mount, not committed)
+apps/api/src/data/catalogs/
+apps/api/src/data/embeddings/
+apps/api/src/pathfinder/data/
 
 # WDK - Repository cloned for local development
 WDK-master/

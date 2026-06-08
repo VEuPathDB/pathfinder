@@ -1,20 +1,20 @@
 ## Pathfinder API (`apps/api`)
 
-FastAPI backend for PathFinder. It exposes a streaming chat API (SSE) that runs a unified **tool-calling agent**, persists conversations/strategies, and integrates with **VEuPathDB/WDK** plus optional **Qdrant RAG**.
+FastAPI backend for PathFinder. It exposes a streaming chat API (SSE) that runs a unified **tool-calling agent**, persists conversations/strategies, and integrates with **VEuPathDB/WDK**.
 
 ### Key entrypoints
 
-- **App**: `src/veupath_chatbot/main.py`
-- **Chat SSE endpoint**: `src/veupath_chatbot/transport/http/routers/chat.py` (`POST /api/v1/chat`)
-- **Chat orchestration**: `src/veupath_chatbot/services/chat/orchestrator.py`
-- **Streaming implementation**: `src/veupath_chatbot/transport/http/streaming.py`
-- **Unified agent**: `src/veupath_chatbot/ai/agents/executor.py` (`PathfinderAgent`)
-- **Agent factory**: `src/veupath_chatbot/ai/agents/factory.py`
+- **App**: `src/pathfinder/main.py`
+- **Chat SSE endpoint**: `src/pathfinder/transport/http/routers/chat.py` (`POST /api/v1/chat`)
+- **Chat orchestration**: `src/pathfinder/services/chat/orchestrator.py`
+- **Streaming implementation**: `src/pathfinder/transport/http/streaming.py`
+- **Unified agent**: `src/pathfinder/ai/agents/executor.py` (`PathfinderAgent`)
+- **Agent factory**: `src/pathfinder/ai/agents/factory.py`
 
 ### Package structure
 
 ```
-src/veupath_chatbot/
+src/pathfinder/
   ai/                        # Agent construction and orchestration
     agents/                  #   Unified PathfinderAgent, subtask agent, factory
     models/                  #   Model catalog: provider mappings, reasoning config
@@ -27,8 +27,6 @@ src/veupath_chatbot/
       strategy_tools/        #     Strategy graph mutation tools (step_ops, graph_ops, etc.)
       unified_registry.py    #     Unified tool registry mixin
       catalog_tools.py       #     Catalog browsing tools
-      catalog_registry.py    #     Catalog tool registry
-      catalog_rag_tools.py   #     RAG-backed catalog search
       conversation_tools.py  #     Conversation management tools
       execution_tools.py     #     Strategy execution tools
       export_tools.py        #     Data export tools
@@ -43,9 +41,6 @@ src/veupath_chatbot/
     research/                #   Citation extraction and research helpers
     strategy/                #   Strategy AST, compilation, explanation, metadata, validation
   integrations/              # External service clients
-    embeddings/              #   OpenAI embedding client
-    vectorstore/             #   Qdrant wrapper, collections, ingestion pipeline
-      ingest/                #     WDK catalog + public strategy ingestion
     veupathdb/               #   WDK HTTP client (cookie-based auth)
       strategy_api/          #     Strategy CRUD, steps, reports, helpers
   jobs/                      # Background tasks (startup ingestion)
@@ -135,7 +130,7 @@ src/veupath_chatbot/
 
 **Unified agent**:
 
-There is a single `PathfinderAgent` that has access to all tools -- strategy construction, catalog browsing, RAG retrieval, gene lookup, research, artifacts, and more. The model decides autonomously when to research vs. execute, with no separate plan/execute mode selection. Complex goals can still be decomposed into sub-tasks via the `ai/orchestration/` layer, which coordinates multiple sub-agents (SubKani) to build multi-step strategies.
+There is a single `PathfinderAgent` that has access to all tools -- strategy construction, catalog browsing, gene lookup, research, artifacts, and more. The model decides autonomously when to research vs. execute, with no separate plan/execute mode selection. Complex goals can still be decomposed into sub-tasks via the `ai/orchestration/` layer, which coordinates multiple sub-agents (SubKani) to build multi-step strategies.
 
 **Persistence**:
 
@@ -159,24 +154,24 @@ Settings are loaded from:
 Common env vars:
 
 - `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` if using those providers)
-- `API_SECRET_KEY` (32+ chars)
-- `DATABASE_URL` (defaults to PostgreSQL on `localhost:5432` if unset)
-- `DEFAULT_MODEL_ID`, `DEFAULT_REASONING_EFFORT` (optional; defaults are `openai/gpt-4.1` and `medium`)
-- `QDRANT_URL`, `QDRANT_API_KEY` (optional; compose sets container-friendly defaults)
-- Startup-ingestion tuning lives in `config.toml` (keys: `rag_startup_*`)
-
+- `API_SECRET_KEY` (32+ chars; required in every profile)
+- `DATABASE_URL` and `REDIS_URL` (required; no implicit localhost defaults)
+- `PATHFINDER_CHAT_PROVIDER=default` for normal runs
+- `PATHFINDER_CHAT_PROVIDER=mock` is allowed only in the dedicated test profile
+- `DEFAULT_PROVIDER` and `DEFAULT_TIER` choose the base model preset when using real providers
 ### Run locally (no Docker)
 
 Start local dependencies (recommended):
 
 ```bash
-docker compose up -d db qdrant
+docker compose --env-file .env.dev -f ../../docker-compose.yml -f ../../docker-compose.dev.yml up -d db redis
 ```
 
 ```bash
 cd apps/api
+cp .env.dev.example .env
 uv sync --extra dev
-uv run uvicorn veupath_chatbot.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn pathfinder.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 API will be available at:
@@ -205,22 +200,6 @@ uv run mypy src
 
 ### Persistence & migrations (current state)
 
-- Uses SQLAlchemy async sessions (`src/veupath_chatbot/persistence/session.py`).
+- Uses SQLAlchemy async sessions (`src/pathfinder/persistence/session.py`).
 - Dev defaults to **PostgreSQL** (to match Docker/production).
 - Uses **Alembic** for schema migrations (see `alembic/versions/`). Initial schema is also bootstrapped via `create_all` for development convenience.
-
-### RAG / Qdrant
-
-RAG retrieval is implemented (catalog + example plans). When `rag_enabled=true` (default; configured in `config.toml`),
-the API starts incremental ingestion in the background on startup **if `OPENAI_API_KEY` is set**.
-
-To force a full reset + rebuild via Docker Compose:
-
-```bash
-docker compose --profile ingest run --rm rag_reindex
-```
-
-Notes:
-
-- Startup ingestion requires **`OPENAI_API_KEY`** (embeddings). If missing, the API will run but RAG will stay empty.
-- Manual reindex writes a JSONL report under `apps/api/ingest_reports/` (gitignored).

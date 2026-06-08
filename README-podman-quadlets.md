@@ -33,6 +33,8 @@ touch ollama_models.yaml
 # Install JS dependencies (required by the web image build context)
 yarn
 
+yarn workspace @pathfinder/shared generate
+
 podman build -t pathfinder-api:latest -f apps/api/Dockerfile .
 
 podman build -t pathfinder-web:latest -f apps/web/Dockerfile \
@@ -51,7 +53,17 @@ cp .env ~/.config/pathfinder/.env
 # Edit as needed — at minimum set an LLM provider API key
 ```
 
-## 3. Install the quadlet files
+## 3. Create required host directories
+
+The API container bind-mounts a data directory that must exist on the host
+before the container starts — Podman will not create it automatically, and
+the service will fail with a cryptic error if it is missing:
+
+```bash
+mkdir -p ~/.local/share/pathfinder/data
+```
+
+## 4. Install the quadlet files
 
 Symlink the quadlet files (and any local drop-in directories) into the
 systemd user directory:
@@ -60,7 +72,7 @@ systemd user directory:
 mkdir -p ~/.config/containers/systemd
 ln -sf "$PWD"/quadlets/*.{container,volume,network} ~/.config/containers/systemd/
 
-# Also link any drop-in override directories you've created (see §8)
+# Also link any drop-in override directories you've created (see §9)
 for d in quadlets/*.d; do
   [ -d "$d" ] && ln -sfn "$PWD/$d" ~/.config/containers/systemd/
 done
@@ -68,7 +80,7 @@ done
 systemctl --user daemon-reload
 ```
 
-## 4. Start the stack
+## 5. Start the stack
 
 Kill the docker compose stack if it's running.
 
@@ -81,16 +93,16 @@ systemctl --user start pathfinder-web
 Or start everything explicitly:
 
 ```bash
-systemctl --user start pathfinder-db pathfinder-redis pathfinder-qdrant pathfinder-api pathfinder-web
+systemctl --user start pathfinder-db pathfinder-api pathfinder-web
 ```
 
-## 5. Check status
+## 6. Check status
 
 ```bash
-systemctl --user status pathfinder-db pathfinder-redis pathfinder-qdrant pathfinder-api pathfinder-web
+systemctl --user status pathfinder-db pathfinder-api pathfinder-web
 ```
 
-## 6. View logs
+## 7. View logs
 
 ```bash
 # Follow API logs
@@ -100,15 +112,15 @@ journalctl --user -u pathfinder-api -f
 journalctl --user -u 'pathfinder-*' -n 100
 ```
 
-## 7. Enable on boot
+## 8. Enable on boot
 
 With linger enabled, services with `WantedBy=default.target` start at boot:
 
 ```bash
-systemctl --user enable pathfinder-db pathfinder-redis pathfinder-qdrant pathfinder-api pathfinder-web
+systemctl --user enable pathfinder-db pathfinder-api pathfinder-web
 ```
 
-## 8. Local overrides (drop-in directories)
+## 9. Local overrides (drop-in directories)
 
 Use systemd-style drop-in directories to override settings without editing
 the version-controlled quadlet files. Create a `.d` directory named after
@@ -153,7 +165,7 @@ override *adds* to the base values. To replace a value, first clear it with
 an empty assignment (`PublishPort=`), then set the new value on the next
 line.
 
-## 9. Rebuild images after code changes
+## 10. Rebuild images after code changes
 
 ```bash
 podman build -t pathfinder-api:latest -f apps/api/Dockerfile .
@@ -164,51 +176,37 @@ podman build -t pathfinder-web:latest -f apps/web/Dockerfile \
 systemctl --user restart pathfinder-web
 ```
 
-## 10. Stop everything
+## 11. Stop everything
 
 ```bash
-systemctl --user stop pathfinder-web pathfinder-api pathfinder-qdrant pathfinder-redis pathfinder-db
+systemctl --user stop pathfinder-web pathfinder-api pathfinder-db
 ```
 
-## 11. Remove persistent data
+## 12. Remove persistent data
 
 ```bash
-podman volume rm pathfinder-postgres-data pathfinder-redis-data pathfinder-qdrant-data
+podman volume rm pathfinder-postgres-data
 ```
 
-## 12. Re-index Qdrant (RAG ingestion)
-
-By default, the API runs incremental ingestion automatically at startup when
-`rag_enabled=true` and `OPENAI_API_KEY` is set. Manual re-indexing is only
-needed when you want to **reset and fully rebuild** the Qdrant collections.
-
-Requires `pathfinder-qdrant` to be running. Run from the project root so the
-report output path resolves correctly:
+**Beta sites:** if your `VEUPATHDB_SITES_CONFIG` points at `beta-sites.yaml`,
+many WDK endpoints require authentication. Add both variables to
+`~/.config/pathfinder/.env`:
 
 ```bash
-mkdir -p apps/api/ingest_reports
-
-podman run --rm \
-  --network pathfinder \
-  --env-file ~/.config/pathfinder/.env \
-  -e DATABASE_URL=postgresql+asyncpg://postgres:postgres@pathfinder-db:5432/pathfinder \
-  -e QDRANT_URL=http://pathfinder-qdrant:6333 \
-  -v "$PWD/apps/api/ingest_reports:/reports:Z" \
-  -w /app/apps/api \
-  localhost/pathfinder-api:latest \
-  /bin/sh -lc "uv run python -m veupath_chatbot.services.vectorstore.ingest.wdk_catalog --sites all --reset && \
-               uv run python -m veupath_chatbot.services.vectorstore.ingest.public_strategies --sites all --reset --report-path /reports/ingest_public_strategies_report.jsonl"
+# Note: path is inside the container, not on the host
+VEUPATHDB_SITES_CONFIG=/app/apps/api/src/veupath_chatbot/integrations/veupathdb/beta-sites.yaml
+VEUPATHDB_AUTH_TOKEN=your_api_key_here
 ```
 
-Both jobs require `OPENAI_API_KEY` (used for embeddings). The second job writes
-a JSONL report to `apps/api/ingest_reports/` (gitignored).
+Logged-in users can find their API key at their VEuPathDB profile page under
+**Service Access** — for example:
+`https://beta.plasmodb.org/plasmo.beta/app/user/profile#serviceAccess`
+(any component site works).
 
 ## Services overview
 
 | Service | Image | Published port | Depends on |
 |---------|-------|---------------|------------|
-| pathfinder-db | postgres:16-alpine | — (internal) | — |
-| pathfinder-redis | redis:7-alpine | — (internal) | — |
-| pathfinder-qdrant | qdrant/qdrant:latest | — (internal) | — |
-| pathfinder-api | localhost/pathfinder-api:latest | 8000 | db, redis |
+| pathfinder-db | pgvector/pgvector:pg16 | — (internal) | — |
+| pathfinder-api | localhost/pathfinder-api:latest | 8000 | db |
 | pathfinder-web | localhost/pathfinder-web:latest | 3000 | api |

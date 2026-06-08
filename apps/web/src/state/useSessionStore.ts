@@ -1,146 +1,132 @@
 /**
- * Session state store (user, selected site)
+ * Session state store — selected site, strategy tracking, auth state.
+ *
+ * Persists site selection and per-site strategy IDs via Zustand persist
+ * middleware. Transient state (auth, streaming, signals) stays memory-only.
  */
 
-import { create } from "zustand";
+import { createPersistedStore } from "./middleware";
+import { useStrategyStore } from "./strategy/store";
+import { useWorkbenchStore } from "./useWorkbenchStore";
 import type { NodeSelection } from "@/lib/types/nodeSelection";
+import type {
+  GeneSetPart,
+  OptimizationSnapshot,
+  ProblemFramePart,
+} from "@pathfinder/shared";
 
 interface SessionState {
   selectedSite: string;
-  selectedSiteDisplayName: string;
   strategyId: string | null;
-  veupathdbSignedIn: boolean;
-  veupathdbName: string | null;
+  /** Maps siteId -> last-used strategyId for cross-site restore. */
+  strategyBySite: Record<string, string>;
   chatIsStreaming: boolean;
 
-  /** Monotonic counter; bump to tell sidebar to reload chat preview. */
   chatPreviewVersion: number;
-  /** Transient node selection payload from graph -> chat. */
   pendingAskNode: NodeSelection | null;
-  /** Prefill content for the message composer. */
   composerPrefill: { message: string } | null;
+  /** Text that the next-mounted ChatThread should auto-submit. */
+  pendingUserSubmission: { conversationId: string; content: string } | null;
+  /** Bumped to force a ChatThread remount after revert. */
+  chatResetCounter: number;
 
-  /** Whether the VEuPathDB auth token has been refreshed in this session. */
-  authRefreshed: boolean;
-  /** True after the first auth status check has completed. Used to avoid showing sign-in UI before we know. */
-  authStatusKnown: boolean;
-  /** Monotonic counter; bumped on login/refresh so hooks can retry on auth changes. */
-  authVersion: number;
+  // Stream-derived session state (from chat data-* parts)
+  problemFrame: ProblemFramePart | null;
+  lastGeneSet: GeneSetPart | null;
+  optimizationProgress: OptimizationSnapshot | null;
 
   setSelectedSite: (siteId: string) => void;
-  setSelectedSiteInfo: (siteId: string, displayName: string) => void;
+  /** Switch site with full cleanup — clears strategy data and resets workbench. */
+  switchSite: (siteId: string) => void;
   setStrategyId: (id: string | null) => void;
-  setVeupathdbAuth: (signedIn: boolean, name?: string | null) => void;
   setChatIsStreaming: (value: boolean) => void;
 
-  // Signal setters
   bumpChatPreviewVersion: () => void;
-  bumpAuthVersion: () => void;
   setPendingAskNode: (payload: NodeSelection | null) => void;
   setComposerPrefill: (payload: { message: string } | null) => void;
-  setAuthRefreshed: (value: boolean) => void;
-  setAuthStatusKnown: (value: boolean) => void;
-  /** Clear all auth state — forces the login modal to appear. */
-  forceSignOut: () => void;
+  setPendingUserSubmission: (
+    payload: { conversationId: string; content: string } | null,
+  ) => void;
+  bumpChatResetCounter: () => void;
+
+  // Stream-derived session setters (from chat data-* parts)
+  setProblemFrame: (frame: ProblemFramePart) => void;
+  recordGeneSet: (set: GeneSetPart) => void;
+  setOptimizationProgress: (snapshot: OptimizationSnapshot) => void;
 }
 
-const SELECTED_SITE_KEY = "pathfinder-selected-site";
-const SELECTED_SITE_DISPLAY_KEY = "pathfinder-selected-site-display";
-const STRATEGY_ID_KEY_PREFIX = "pathfinder-strategy-id:";
+export const useSessionStore = createPersistedStore<SessionState>(
+  "SessionStore",
+  (set, get) => ({
+    selectedSite: "veupathdb",
+    strategyId: null,
+    strategyBySite: {},
+    chatIsStreaming: false,
 
-const getInitialSelectedSite = () => {
-  if (typeof window === "undefined") return "veupathdb";
-  return window.localStorage.getItem(SELECTED_SITE_KEY) || "veupathdb";
-};
+    chatPreviewVersion: 0,
+    pendingAskNode: null,
+    composerPrefill: null,
+    pendingUserSubmission: null,
+    chatResetCounter: 0,
 
-const getInitialSelectedSiteDisplayName = () => {
-  if (typeof window === "undefined") return "VEuPathDB";
-  return window.localStorage.getItem(SELECTED_SITE_DISPLAY_KEY) || "VEuPathDB";
-};
+    problemFrame: null,
+    lastGeneSet: null,
+    optimizationProgress: null,
 
-const getInitialStrategyId = () => {
-  if (typeof window === "undefined") return null;
-  const site = getInitialSelectedSite();
-  return window.localStorage.getItem(`${STRATEGY_ID_KEY_PREFIX}${site}`);
-};
+    setSelectedSite: (siteId) =>
+      set((s) => {
+        if (s.selectedSite === siteId) return s;
+        return {
+          selectedSite: siteId,
+          strategyId: s.strategyBySite[siteId] ?? null,
+        };
+      }),
 
-export const useSessionStore = create<SessionState>()((set, get) => ({
-  selectedSite: getInitialSelectedSite(),
-  selectedSiteDisplayName: getInitialSelectedSiteDisplayName(),
-  strategyId: getInitialStrategyId(),
-  veupathdbSignedIn: false,
-  veupathdbName: null,
-  chatIsStreaming: false,
+    switchSite: (siteId) => {
+      if (get().selectedSite === siteId) return;
+      set({ selectedSite: siteId, strategyId: null });
+      useStrategyStore.getState().clear();
+      useWorkbenchStore.getState().reset();
+    },
 
-  // Signals
-  chatPreviewVersion: 0,
-  pendingAskNode: null,
-  composerPrefill: null,
-  authRefreshed: false,
-  authStatusKnown: false,
-  authVersion: 0,
+    setStrategyId: (id) => {
+      const site = get().selectedSite;
+      set((s) => {
+        if (s.strategyId === id && s.strategyBySite[site] === id) return s;
+        const next = { ...s.strategyBySite };
+        if (id !== null) {
+          next[site] = id;
+        } else {
+          delete next[site];
+        }
+        return { strategyId: id, strategyBySite: next };
+      });
+    },
 
-  setSelectedSite: (siteId) => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(SELECTED_SITE_KEY, siteId);
-    }
-    set((s) => {
-      if (s.selectedSite === siteId) return { selectedSite: siteId };
-      // Restore last-used strategy for the new site.
-      const restored =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem(`${STRATEGY_ID_KEY_PREFIX}${siteId}`)
-          : null;
-      return { selectedSite: siteId, strategyId: restored };
-    });
-  },
-  setSelectedSiteInfo: (siteId, displayName) => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(SELECTED_SITE_KEY, siteId);
-      window.localStorage.setItem(SELECTED_SITE_DISPLAY_KEY, displayName);
-    }
-    set((s) => {
-      if (s.selectedSite === siteId) {
-        return { selectedSite: siteId, selectedSiteDisplayName: displayName };
-      }
-      const restored =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem(`${STRATEGY_ID_KEY_PREFIX}${siteId}`)
-          : null;
-      return {
-        selectedSite: siteId,
-        selectedSiteDisplayName: displayName,
-        strategyId: restored,
-      };
-    });
-  },
-  setStrategyId: (id) => {
-    const site = get().selectedSite;
-    if (typeof window !== "undefined") {
-      if (id) {
-        window.localStorage.setItem(`${STRATEGY_ID_KEY_PREFIX}${site}`, id);
-      } else {
-        window.localStorage.removeItem(`${STRATEGY_ID_KEY_PREFIX}${site}`);
-      }
-    }
-    set({ strategyId: id });
-  },
-  setVeupathdbAuth: (signedIn, name = null) =>
-    set({ veupathdbSignedIn: signedIn, veupathdbName: name }),
-  setChatIsStreaming: (value) => set({ chatIsStreaming: value }),
+    setChatIsStreaming: (value) =>
+      set((s) => (s.chatIsStreaming === value ? s : { chatIsStreaming: value })),
 
-  // Signal setters
-  bumpChatPreviewVersion: () =>
-    set((s) => ({ chatPreviewVersion: s.chatPreviewVersion + 1 })),
-  bumpAuthVersion: () => set((s) => ({ authVersion: s.authVersion + 1 })),
-  setPendingAskNode: (payload) => set({ pendingAskNode: payload }),
-  setComposerPrefill: (payload) => set({ composerPrefill: payload }),
-  setAuthRefreshed: (value) => set({ authRefreshed: value }),
-  setAuthStatusKnown: (value) => set({ authStatusKnown: value }),
-  forceSignOut: () =>
-    set({
-      veupathdbSignedIn: false,
-      veupathdbName: null,
-      authRefreshed: false,
+    bumpChatPreviewVersion: () =>
+      set((s) => ({ chatPreviewVersion: s.chatPreviewVersion + 1 })),
+    setPendingAskNode: (payload) =>
+      set((s) => (s.pendingAskNode === payload ? s : { pendingAskNode: payload })),
+    setComposerPrefill: (payload) =>
+      set((s) => (s.composerPrefill === payload ? s : { composerPrefill: payload })),
+    setPendingUserSubmission: (payload) =>
+      set({ pendingUserSubmission: payload }),
+    bumpChatResetCounter: () =>
+      set((s) => ({ chatResetCounter: s.chatResetCounter + 1 })),
+
+    setProblemFrame: (frame) => set({ problemFrame: frame }),
+    recordGeneSet: (geneSet) => set({ lastGeneSet: geneSet }),
+    setOptimizationProgress: (snapshot) => set({ optimizationProgress: snapshot }),
+  }),
+  {
+    name: "pathfinder-session",
+    partialize: (s) => ({
+      selectedSite: s.selectedSite,
+      strategyId: s.strategyId,
+      strategyBySite: s.strategyBySite,
     }),
-}));
+  },
+);

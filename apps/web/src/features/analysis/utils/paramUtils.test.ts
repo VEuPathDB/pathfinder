@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import type { ParamSpec, OptimizeSpec } from "@pathfinder/shared";
+import { describe, it, expect } from "vitest";
+import type { ParamSpec } from "@pathfinder/shared";
 import {
   flattenVocab,
   isOptimizable,
@@ -201,9 +201,7 @@ describe("isParamEmpty", () => {
 
   it("returns true when value is null-ish (cast to string check)", () => {
     // The function checks value == null first
-    expect(
-      isParamEmpty(makeSpec({ name: "a", type: "string" }), null as unknown as string),
-    ).toBe(true);
+    expect(isParamEmpty(makeSpec({ name: "a", type: "string" }), null)).toBe(true);
   });
 });
 
